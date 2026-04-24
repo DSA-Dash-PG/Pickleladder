@@ -180,7 +180,8 @@ async function createSeason(){const n=document.getElementById('fSN')?.value?.tri
 async function createSessionAction(){
   const l=gL();const s=gS();if(!l||!s)return;
   const courtNames=getFormCourtNames();
-  const ss={id:uid(),date:document.getElementById('fSD')?.value||new Date().toISOString().split('T')[0],
+  const ladderName=document.getElementById('fSName')?.value?.trim()||'';
+  const ss={id:uid(),name:ladderName,date:document.getElementById('fSD')?.value||new Date().toISOString().split('T')[0],
     config:{courts:formCourtCount,rounds:parseInt(document.getElementById('fSR')?.value)||6,roundMin:parseInt(document.getElementById('fSM')?.value)||12,scoreMode:document.getElementById('fSO')?.value||'points',place:document.getElementById('fSP')?.value||'',startTime:document.getElementById('fST')?.value||'',courtNames},
     rounds:[],currentRound:-1,started:false,finished:false,createdAt:Date.now()};
   s.sessions.push(ss);await save(l);activeSessionId=ss.id;view='session';tab='roster';render();
@@ -196,9 +197,10 @@ async function reshuffleRound(){const l=gL();const ss=gSS();if(!l||!ss||!confirm
 // Rename / edit names
 async function renameLadder(){const l=gL();if(!l)return;const n=prompt('Ladder name:',l.name);if(n&&n.trim()){l.name=n.trim();await save(l)}}
 async function renameSeason(){const l=gL();const s=gS();if(!l||!s)return;const n=prompt('Season name:',s.name);if(n&&n.trim()){s.name=n.trim();await save(l)}}
-async function editSessionDate(){const l=gL();const ss=gSS();if(!l||!ss)return;const d=prompt('Session date (YYYY-MM-DD):',ss.date);if(d&&d.trim()){ss.date=d.trim();await save(l)}}
+async function editSessionDate(){const l=gL();const ss=gSS();if(!l||!ss)return;const d=prompt('Date (YYYY-MM-DD):',ss.date);if(d&&d.trim()){ss.date=d.trim();await save(l)}}
 async function editSessionTime(){const l=gL();const ss=gSS();if(!l||!ss)return;const t=prompt('Start time (HH:MM, 24hr):',ss.config.startTime||'');if(t!==null){ss.config.startTime=t.trim();await save(l)}}
 async function editSessionPlace(){const l=gL();const ss=gSS();if(!l||!ss)return;const p=prompt('Location:',ss.config.place||'');if(p!==null){ss.config.place=p.trim();await save(l)}}
+async function editSessionName(){const l=gL();const ss=gSS();if(!l||!ss)return;const n=prompt('Ladder name:',ss.name||'');if(n!==null){ss.name=n.trim();await save(l)}}
 
 function go(v,t){view=v;if(t)tab=t;viewingRound=-1;if(v==='newSession')formCourtCount=4;render();if(v==='newSession')setTimeout(updateCourtInputs,10)}
 function selectLadder(id){activeLadderId=id;activeSessionId=null;view='dashboard';tab='overview';viewingRound=-1;render()}
@@ -220,11 +222,12 @@ function render(){
   </header><div class="content">`;
 
   // Forms
-  if(view==='newLadder')h+=`<div class="card fu"><h2 class="card-t">Create Ladder</h2><input id="fLN" class="inp" placeholder="Ladder name" autofocus><div class="btn-row"><button class="bg-btn" onclick="go('dashboard','overview')">Cancel</button><button class="bp" onclick="createLadder()">Create</button></div></div>`;
+  if(view==='newLadder')h+=`<div class="card fu"><h2 class="card-t">Create League</h2><input id="fLN" class="inp" placeholder="League name" autofocus><div class="btn-row"><button class="bg-btn" onclick="go('dashboard','overview')">Cancel</button><button class="bp" onclick="createLadder()">Create</button></div></div>`;
   else if(view==='newSeason')h+=`<div class="card fu"><h2 class="card-t">New Season</h2><input id="fSN" class="inp" placeholder="Season name (e.g. Summer 2026)" autofocus><div class="btn-row"><button class="bg-btn" onclick="go('dashboard','overview')">Cancel</button><button class="bp" onclick="createSeason()">Create Season</button></div></div>`;
   else if(view==='newSession'){
     const td=new Date().toISOString().split('T')[0];
-    h+=`<div class="card fu"><h2 class="card-t">New Session</h2><div style="display:flex;flex-direction:column;gap:10px">
+    h+=`<div class="card fu"><h2 class="card-t">New Ladder</h2><div style="display:flex;flex-direction:column;gap:10px">
+      <div><label class="lbl">Ladder Name</label><input id="fSName" class="inp" placeholder="e.g. Friday Night Lights Mix Ladder 040626" autofocus></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label class="lbl">Date</label><input id="fSD" class="inp" type="date" value="${td}"></div><div><label class="lbl">Start Time</label><input id="fST" class="inp" type="time" value="15:00"></div></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div><label class="lbl">Courts</label><select id="fSC" class="inp" onchange="updateCourtInputs()">${[2,3,4,5,6,7,8,10,12].map(n=>`<option value="${n}"${n===4?' selected':''}>${n}</option>`).join('')}</select></div>
@@ -234,13 +237,13 @@ function render(){
       </div>
       <div id="courtNamesContainer"></div>
       <input id="fSP" class="inp" placeholder="Location (optional)">
-    </div><div class="btn-row"><button class="bg-btn" onclick="go('dashboard','overview')">Cancel</button><button class="bp" onclick="createSessionAction()">Create Session</button></div></div>`;
+    </div><div class="btn-row"><button class="bg-btn" onclick="go('dashboard','overview')">Cancel</button><button class="bp" onclick="createSessionAction()">Create Ladder</button></div></div>`;
   }
 
   // No ladder
   else if(!l){
-    if(ladders.length===0&&!isAdmin)h+=`<div style="text-align:center;padding:70px 20px" class="fu"><div class="hdr-logo" style="width:56px;height:56px;border-radius:14px;display:inline-flex;margin-bottom:16px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="2" y1="12" x2="22" y2="12"/></svg></div><h2 class="heading" style="font-size:1.5rem;color:var(--green);margin-bottom:8px">Pickle Friends</h2><p class="subtext" style="margin-bottom:28px;line-height:1.6;max-width:320px;margin-left:auto;margin-right:auto">Pickleball ladder play — automatic lineups, live scoring, and season stats.</p><p class="subtext">No active ladders yet. Check back soon!</p></div>`;
-    else if(isAdmin)h+=`<div style="text-align:center;padding:40px 20px" class="fu"><h2 class="heading" style="font-size:1.2rem;color:var(--green);margin-bottom:12px">No Ladders</h2><button class="bp" onclick="go('newLadder')" style="padding:14px 32px">Create Your First Ladder</button></div>`;
+    if(ladders.length===0&&!isAdmin)h+=`<div style="text-align:center;padding:70px 20px" class="fu"><div class="hdr-logo" style="width:56px;height:56px;border-radius:14px;display:inline-flex;margin-bottom:16px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="2" y1="12" x2="22" y2="12"/></svg></div><h2 class="heading" style="font-size:1.5rem;color:var(--green);margin-bottom:8px">Pickle Friends</h2><p class="subtext" style="margin-bottom:28px;line-height:1.6;max-width:320px;margin-left:auto;margin-right:auto">Pickleball ladder play — automatic lineups, live scoring, and season stats.</p><p class="subtext">No active leagues yet. Check back soon!</p></div>`;
+    else if(isAdmin)h+=`<div style="text-align:center;padding:40px 20px" class="fu"><h2 class="heading" style="font-size:1.2rem;color:var(--green);margin-bottom:12px">No Leagues</h2><button class="bp" onclick="go('newLadder')" style="padding:14px 32px">Create Your First League</button></div>`;
   }
 
   // Dashboard
@@ -263,8 +266,8 @@ function render(){
   h+=`<div class="admin-footer">`;
   if(isAdmin){
     h+=`<div class="admin-bar-bottom">ADMIN MODE</div><div style="display:flex;flex-direction:column;gap:8px">`;
-    if(view==='dashboard'&&s){h+=`<button class="bp full" onclick="go('newSession')">New Session</button><button class="bg-btn full" onclick="go('newSeason')">New Season</button><button class="bp full" onclick="go('newLadder')">New Ladder</button><button class="bg-btn full" onclick="renameLadder()">Rename Ladder</button>`;if(l.seasons.length>1)h+=`<div style="margin-top:4px"><label class="lbl">Switch Season</label><select class="inp" onchange="gL().activeSeason=this.value;save(gL())">${l.seasons.map(x=>`<option value="${x.id}"${x.id===l.activeSeason?' selected':''}>${x.name}</option>`).join('')}</select></div>`;h+=`<button class="bd full" style="margin-top:8px" onclick="deleteLadderAction()">Delete Ladder</button>`}
-    else if(!l||!s)h+=`<button class="bp full" onclick="go('newLadder')">New Ladder</button>`;
+    if(view==='dashboard'&&s){h+=`<button class="bp full" onclick="go('newSession')">New Ladder</button><button class="bg-btn full" onclick="go('newSeason')">New Season</button><button class="bp full" onclick="go('newLadder')">New League</button><button class="bg-btn full" onclick="renameLadder()">Rename League</button>`;if(l.seasons.length>1)h+=`<div style="margin-top:4px"><label class="lbl">Switch Season</label><select class="inp" onchange="gL().activeSeason=this.value;save(gL())">${l.seasons.map(x=>`<option value="${x.id}"${x.id===l.activeSeason?' selected':''}>${x.name}</option>`).join('')}</select></div>`;h+=`<button class="bd full" style="margin-top:8px" onclick="deleteLadderAction()">Delete League</button>`}
+    else if(!l||!s)h+=`<button class="bp full" onclick="go('newLadder')">New League</button>`;
     h+=`</div><button class="admin-lock-btn unlocked" onclick="lockAdmin()" style="margin-top:12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Lock Admin</button>`;
   } else {
     h+=`<button class="admin-lock-btn" onclick="openPin()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><line x1="12" y1="15" x2="12" y2="18"/></svg> Admin</button>`;
@@ -272,17 +275,23 @@ function render(){
   h+=`</div></div>`;
   app.innerHTML=h;
 
-  // Trigger court name inputs after DOM is ready for new session form
+  // Post-render hooks
   if(view==='newSession')setTimeout(updateCourtInputs,0);
+  // Initialize tracker chart if stats tab is active and canvas exists
+  if(tab==='stats')setTimeout(tkRenderChart,10);
 }
 
 // ── OVERVIEW ──
 function rOverview(l,s,stats){
-  let h=`<div class="card fu" style="border-color:var(--green-bd)"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div class="overline">Current Season</div><h2 class="heading" style="font-size:1.2rem;color:var(--green)">${s.name}${isAdmin?` <button class="edit-btn" onclick="renameSeason()" style="font-size:.7rem;vertical-align:middle">Edit</button>`:''}</h2><div class="subtext" style="font-size:.78rem;margin-top:4px">${s.sessions.length} session${s.sessions.length!==1?'s':''} · ${l.players.length} players</div></div></div></div>`;
-  if(stats.some(x=>x.w+x.l+x.t>0))h+=`<div class="chip-grid fu">${[{l:'Sessions',v:s.sessions.filter(x=>x.started).length},{l:'Games',v:Math.floor(stats.reduce((a,x)=>a+x.w+x.l+x.t,0)/2)},{l:'Players',v:l.players.length},{l:'High Pts',v:stats.reduce((m,x)=>Math.max(m,x.pf),0)}].map(c=>`<div class="chip"><div class="chip-n">${c.v}</div><div class="chip-l">${c.l}</div></div>`).join('')}</div>`;
-  h+=`<div class="card fu"><h3 class="card-t">Sessions</h3>`;
-  if(!s.sessions.length)h+='<p class="subtext" style="text-align:center;padding:20px">No sessions scheduled yet.</p>';
-  else h+=[...s.sessions].reverse().map(x=>{const st=x.finished?'<span class="pill ok">Complete</span>':x.started?`<span class="pill live"><span class="dot"></span>Rd ${x.currentRound+1}</span>`:'<span class="pill draft">Upcoming</span>';const ts=x.config.startTime?` · ${formatTime12(x.config.startTime)}`:'';return`<button class="sc" onclick="openSession('${x.id}')"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:600;font-size:.88rem">${fmtDate(x.date)}${ts}</div><div class="subtext" style="font-size:.72rem;margin-top:2px">${x.config.courts} courts · ${x.config.rounds} rds${x.config.place?' · '+x.config.place:''}</div></div>${st}</div></button>`}).join('');
+  let h=`<div class="card fu" style="border-color:var(--green-bd)"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div class="overline">Current Season</div><h2 class="heading" style="font-size:1.2rem;color:var(--green)">${s.name}${isAdmin?` <button class="edit-btn" onclick="renameSeason()" style="font-size:.7rem;vertical-align:middle">Edit</button>`:''}</h2><div class="subtext" style="font-size:.78rem;margin-top:4px">${s.sessions.length} ladder${s.sessions.length!==1?'s':''} · ${l.players.length} players</div></div></div></div>`;
+  if(stats.some(x=>x.w+x.l+x.t>0))h+=`<div class="chip-grid fu">${[{l:'Ladders',v:s.sessions.filter(x=>x.started).length},{l:'Games',v:Math.floor(stats.reduce((a,x)=>a+x.w+x.l+x.t,0)/2)},{l:'Players',v:l.players.length},{l:'High Pts',v:stats.reduce((m,x)=>Math.max(m,x.pf),0)}].map(c=>`<div class="chip"><div class="chip-n">${c.v}</div><div class="chip-l">${c.l}</div></div>`).join('')}</div>`;
+  h+=`<div class="card fu"><h3 class="card-t">Ladders</h3>`;
+  if(!s.sessions.length)h+='<p class="subtext" style="text-align:center;padding:20px">No ladders scheduled yet.</p>';
+  else h+=[...s.sessions].reverse().map(x=>{
+    const st=x.finished?'<span class="pill ok">Complete</span>':x.started?`<span class="pill live"><span class="dot"></span>Rd ${x.currentRound+1}</span>`:'<span class="pill draft">Upcoming</span>';
+    const ts=x.config.startTime?` · ${formatTime12(x.config.startTime)}`:'';
+    const displayName=x.name||fmtDate(x.date);
+    return`<button class="sc" onclick="openSession('${x.id}')"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:700;font-size:.9rem">${displayName}</div><div class="subtext" style="font-size:.72rem;margin-top:2px">${fmtDate(x.date)}${ts} · ${x.config.courts} courts · ${x.config.rounds} rds${x.config.place?' · '+x.config.place:''}</div></div>${st}</div></button>`}).join('');
   h+='</div>';return h;
 }
 
@@ -296,7 +305,8 @@ function rPlayers(l,showAdd,ss){
   h+='</div>';
   if(ss){
     const edB=(fn)=>isAdmin?`<button class="edit-btn" onclick="${fn}" style="font-size:.68rem;margin-left:6px">Edit</button>`:'';
-    h+=`<div class="card fu"><h3 class="card-t">Session Config</h3>${[
+    h+=`<div class="card fu"><h3 class="card-t">Ladder Config</h3>${[
+      ['Name',ss.name||'Untitled',edB("editSessionName()")],
       ['Courts',ss.config.courtNames?.join(', ')||ss.config.courts,''],
       ['Rounds',ss.config.rounds,''],
       ['Time',ss.config.roundMin+' min',''],
@@ -312,7 +322,7 @@ function rPlayers(l,showAdd,ss){
 // ── PLAY ──
 function rPlay(l,ss){
   const nC=ss.config.courts;
-  if(!ss.started)return`<div class="card fu" style="text-align:center;padding:28px"><h3 class="heading" style="font-size:1.05rem;color:var(--green);margin-bottom:6px">Session — ${fmtDate(ss.date)}</h3><p class="subtext" style="margin-bottom:2px">${l.players.length} players · ${nC} courts · ${ss.config.rounds} rounds</p>${ss.config.startTime?`<p class="subtext" style="margin-bottom:2px">${formatTime12(ss.config.startTime)}${ss.config.place?' · '+ss.config.place:''}</p>`:''}${isAdmin?(l.players.length>=4?'<button class="bp full" style="padding:14px;font-size:.92rem;margin-top:14px" onclick="startSessionAction()">Generate Lineups & Start</button>':'<p style="color:var(--warn);font-size:.82rem;margin-top:10px">Add at least 4 players first.</p>'):'<p class="subtext" style="margin-top:10px">Lineups will appear when the session starts.</p>'}</div>`;
+  if(!ss.started)return`<div class="card fu" style="text-align:center;padding:28px"><h3 class="heading" style="font-size:1.05rem;color:var(--green);margin-bottom:6px">${ss.name||'Ladder'}</h3><p class="subtext" style="margin-bottom:2px">${fmtDate(ss.date)}${ss.config.startTime?' · '+formatTime12(ss.config.startTime):''}</p><p class="subtext" style="margin-bottom:2px">${l.players.length} players · ${nC} courts · ${ss.config.rounds} rounds</p>${ss.config.place?`<p class="subtext" style="font-size:.76rem;margin-bottom:14px">${ss.config.place}</p>`:''}${isAdmin?(l.players.length>=4?'<button class="bp full" style="padding:14px;font-size:.92rem;margin-top:14px" onclick="startSessionAction()">Generate Lineups & Start</button>':'<p style="color:var(--warn);font-size:.82rem;margin-top:10px">Add at least 4 players first.</p>'):'<p class="subtext" style="margin-top:10px">Lineups will appear when the ladder starts.</p>'}</div>`;
 
   // Determine which round we're viewing
   const isCurrent = viewingRound===-1||viewingRound===ss.currentRound;
@@ -371,24 +381,195 @@ function rPlay(l,ss){
   });
 
   // Round controls (admin, current round only)
-  if(isAdmin&&isCurrent)h+=`<div style="display:flex;gap:8px;margin-top:4px"><button class="bg-btn" style="flex:1" onclick="reshuffleRound()">Reshuffle</button><button class="bp" style="flex:2" onclick="nextRound()">${ss.currentRound>=ss.config.rounds-1?'Finish Session':'Next Round'}</button></div>`;
+  if(isAdmin&&isCurrent)h+=`<div style="display:flex;gap:8px;margin-top:4px"><button class="bg-btn" style="flex:1" onclick="reshuffleRound()">Reshuffle</button><button class="bp" style="flex:2" onclick="nextRound()">${ss.currentRound>=ss.config.rounds-1?'Finish Ladder':'Next Round'}</button></div>`;
 
   // Back to current round button when viewing previous
   if(!isCurrent)h+=`<div style="margin-top:10px"><button class="bp full" onclick="viewRound(-1)">Back to Current Round (Rd ${ss.currentRound+1})</button></div>`;
 
-  if(ss.finished)h+=`<div class="card fu" style="margin-top:14px;text-align:center;border-color:var(--green-bd);padding:22px"><h3 class="heading" style="font-size:1rem;color:var(--green);margin-bottom:4px">Session Complete</h3><p class="subtext">Check the Stats tab for results.</p></div>`;
+  if(ss.finished)h+=`<div class="card fu" style="margin-top:14px;text-align:center;border-color:var(--green-bd);padding:22px"><h3 class="heading" style="font-size:1rem;color:var(--green);margin-bottom:4px">Ladder Complete</h3><p class="subtext">Check the Stats tab for results.</p></div>`;
   return h;
 }
 
 // ── STATS ──
+// Tracker chart state
+let tkMode='top50', tkPickerOpen=false, tkPicked=new Set(), tkChart=null;
+const tkPalette=['#1a7a5c','#2a9d8f','#d4a030','#c0392b','#534AB7','#D85A30','#1D9E75','#993556','#3266ad','#73726c','#5DCAA5','#ED93B1'];
+const tkDashes=[[],[5,5],[2,3],[8,4],[4,2,1,2],[1,4],[6,3],[3,6],[10,3],[2,6],[6,2],[4,4]];
+
+function tkSetMode(m){tkMode=m;tkPicked.clear();render();setTimeout(tkRenderChart,10)}
+function tkTogglePicker(){tkPickerOpen=!tkPickerOpen;render();setTimeout(tkRenderChart,10)}
+function tkTogglePlayer(id){if(tkPicked.has(id))tkPicked.delete(id);else tkPicked.add(id);render();setTimeout(tkRenderChart,10)}
+
+function tkRenderChart(){
+  const canvas=document.getElementById('tkCanvas');if(!canvas||!window.Chart)return;
+  const l=gL();const ss=gSS();const s=gS();if(!l)return;
+  const sessions=ss?[ss]:(s?s.sessions:[]);
+  const stats=calcStats(sessions,l.players);
+  const withHist=stats.filter(x=>x.courtHist.length>0);
+  if(!withHist.length)return;
+
+  // Rank by avg court position
+  const ranked=[...withHist].sort((a,b)=>{
+    const aa=a.courtHist.reduce((s,c)=>s+c.court,0)/a.courtHist.length;
+    const bb=b.courtHist.reduce((s,c)=>s+c.court,0)/b.courtHist.length;
+    return bb-aa;
+  });
+
+  // Filter visible
+  let visible;
+  if(tkPicked.size>0) visible=ranked.filter(p=>tkPicked.has(p.id));
+  else if(tkMode==='top50') visible=ranked.slice(0,Math.ceil(ranked.length/2));
+  else visible=ranked;
+
+  // Update count
+  const countEl=document.getElementById('tkCount');
+  if(countEl)countEl.textContent=`Showing ${visible.length} of ${ranked.length}`;
+
+  // Update picker btn
+  const pickerBtn=document.getElementById('tkPickerBtn');
+  if(pickerBtn)pickerBtn.classList.toggle('has-picks',tkPicked.size>0);
+
+  // Determine court names and max
+  const maxC=ss?.config?.courts||l.seasons?.flatMap(se=>se.sessions).reduce((m,x)=>Math.max(m,x.config?.courts||4),4)||4;
+  const courtNames=ss?.config?.courtNames||defaultCourtNames(maxC);
+
+  // Build round labels
+  const maxRounds=Math.max(...visible.map(p=>p.courtHist.length));
+  const roundLabels=Array.from({length:maxRounds},(_,i)=>'Rd '+(i+1));
+
+  // Build datasets
+  const datasets=visible.map((p,i)=>{
+    const ci=ranked.indexOf(p)%tkPalette.length;
+    return{
+      label:'#'+(l.players.findIndex(x=>x.id===p.id)+1)+' '+p.name,
+      data:p.courtHist.map(ch=>ch.court-1),
+      borderColor:tkPalette[ci],
+      backgroundColor:tkPalette[ci]+'15',
+      borderWidth:2.5,
+      borderDash:tkDashes[ci%tkDashes.length],
+      pointRadius:5,
+      pointBackgroundColor:tkPalette[ci],
+      pointBorderColor:'#fff',
+      pointBorderWidth:2,
+      pointHoverRadius:7,
+      tension:.25,
+      fill:false,
+    };
+  });
+
+  if(tkChart)tkChart.destroy();
+  tkChart=new Chart(canvas,{
+    type:'line',
+    data:{labels:roundLabels,datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'#fff',titleColor:'#1a2e23',bodyColor:'#3d5a4a',
+          borderColor:'rgba(0,0,0,0.06)',borderWidth:1,padding:10,cornerRadius:8,
+          callbacks:{
+            label:function(ctx){
+              const courtIdx=ctx.raw;
+              const name=courtNames[maxC-1-courtIdx]||String.fromCharCode(65+maxC-1-courtIdx);
+              return ctx.dataset.label+': Court '+name;
+            }
+          }
+        }
+      },
+      scales:{
+        y:{
+          min:0,max:maxC-1,
+          ticks:{
+            stepSize:1,
+            callback:function(v){const idx=maxC-1-v;return courtNames[idx]||String.fromCharCode(65+idx);},
+            color:'rgba(0,0,0,0.35)',
+            font:{size:12,weight:'500',family:"'Sora',sans-serif"},
+          },
+          grid:{color:'rgba(0,0,0,0.04)',lineWidth:0.5},
+          border:{display:false},
+        },
+        x:{
+          ticks:{color:'rgba(0,0,0,0.35)',font:{size:11,family:"'DM Sans',sans-serif"},autoSkip:false},
+          grid:{display:false},border:{display:false},
+        },
+      },
+      layout:{padding:{top:4,right:8}},
+    },
+  });
+
+  // Metrics
+  const metricsEl=document.getElementById('tkMetrics');
+  if(metricsEl&&visible.length>0){
+    const startEnd=visible.map(p=>({p,start:p.courtHist[0]?.court||0,end:p.courtHist[p.courtHist.length-1]?.court||0}));
+    startEnd.forEach(x=>x.diff=x.end-x.start);
+    const climber=startEnd.reduce((best,x)=>x.diff>best.diff?x:best,startEnd[0]);
+    const dropper=startEnd.reduce((worst,x)=>x.diff<worst.diff?x:worst,startEnd[0]);
+    const pnC=l.players.findIndex(x=>x.id===climber.p.id)+1;
+    const pnD=l.players.findIndex(x=>x.id===dropper.p.id)+1;
+    const startC=courtNames[maxC-climber.start]||'?';
+    const endC=courtNames[maxC-climber.end]||'?';
+    const startD=courtNames[maxC-dropper.start]||'?';
+    const endD=courtNames[maxC-dropper.end]||'?';
+
+    metricsEl.innerHTML=`
+      <div class="tk-metric"><div class="tk-metric-label">Biggest climber</div>
+        <div class="tk-metric-val">#${pnC} ${climber.p.name}</div>
+        <div class="tk-metric-sub" style="color:${climber.diff>0?'var(--green)':'var(--muted)'}">Ct ${startC} → Ct ${endC} (${climber.diff>0?'+':''}${climber.diff})</div></div>
+      <div class="tk-metric"><div class="tk-metric-label">Biggest drop</div>
+        <div class="tk-metric-val">#${pnD} ${dropper.p.name}</div>
+        <div class="tk-metric-sub" style="color:${dropper.diff<0?'var(--loss)':'var(--muted)'}">Ct ${startD} → Ct ${endD} (${dropper.diff>0?'+':''}${dropper.diff})</div></div>`;
+  }
+
+  // Legend
+  const legendEl=document.getElementById('tkLegend');
+  if(legendEl){
+    legendEl.innerHTML=visible.map((p,i)=>{
+      const ci=ranked.indexOf(p)%tkPalette.length;
+      const pn=l.players.findIndex(x=>x.id===p.id)+1;
+      return`<span class="tk-legend-item"><span class="tk-legend-swatch" style="background:${tkPalette[ci]}"></span>#${pn} ${p.name}</span>`;
+    }).join('');
+  }
+
+  // Chips
+  const chipEl=document.getElementById('tkChips');
+  if(chipEl){
+    chipEl.innerHTML=ranked.map(p=>{
+      const pn=l.players.findIndex(x=>x.id===p.id)+1;
+      return`<button class="tk-chip${tkPicked.has(p.id)?' on':''}" onclick="tkTogglePlayer('${p.id}')">#${pn} ${p.name}</button>`;
+    }).join('');
+  }
+}
+
 function rStats(stats,season,l,ss){
   const has=stats.length>0&&stats.some(s=>s.w+s.l+s.t>0);let h='';
+
+  // Summary chips
   if(has){const ac=stats.filter(s=>s.w+s.l+s.t>0);h+=`<div class="chip-grid fu">${[{l:'Players',v:ac.length},{l:'Games',v:Math.floor(stats.reduce((a,x)=>a+x.w+x.l+x.t,0)/2)},{l:'Avg Pts',v:ac.length?Math.round(stats.reduce((a,x)=>a+x.pf,0)/ac.length):0},{l:'High Pts',v:stats.reduce((m,x)=>Math.max(m,x.pf),0)}].map(c=>`<div class="chip"><div class="chip-n">${c.v}</div><div class="chip-l">${c.l}</div></div>`).join('')}</div>`}
-  h+=`<div class="card fu"><h3 class="card-t">${ss?`Results — ${fmtDate(ss.date)}`:'Season Standings'}</h3>`;
+
+  // Standings table
+  h+=`<div class="card fu"><h3 class="card-t">${ss?(ss.name||fmtDate(ss.date)):'Season Standings'}</h3>`;
   if(!has)h+='<p class="subtext" style="text-align:center;padding:20px">No scored games yet.</p>';
   else{h+=`<div style="overflow-x:auto;margin:0 -18px;padding:0 18px"><table class="st"><thead><tr>${['#','Player','W','L','T','W%','+','–','±'].map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>`;stats.filter(s=>s.w+s.l+s.t>0).forEach((s,i)=>{const d=s.pf-s.pa,gp=s.w+s.l+s.t,wr=gp?Math.round(s.w/gp*100):0;const pn=l.players.findIndex(p=>p.id===s.id);h+=`<tr><td class="${i<3?'rt':''}">${['1st','2nd','3rd'][i]||(i+1)}</td><td style="font-weight:600"><span style="font-family:'Sora',sans-serif;color:var(--green);font-weight:700;font-size:.72rem;margin-right:4px">#${pn>=0?pn+1:'?'}</span>${s.name}</td><td class="at">${s.w}</td><td class="rdt">${s.l}</td><td class="amt">${s.t}</td><td style="font-weight:600;color:${wr>=60?'var(--green)':wr<=40?'var(--loss)':'var(--text)'}">${wr}%</td><td>${s.pf}</td><td>${s.pa}</td><td style="font-weight:700;color:${d>=0?'var(--green)':'var(--loss)'}">${d>0?'+':''}${d}</td></tr>`});h+='</tbody></table></div>'}
   h+='</div>';
-  if(has){const maxC=ss?.config?.courts||l.seasons?.flatMap(se=>se.sessions).reduce((m,x)=>Math.max(m,x.config?.courts||4),4)||4;h+=`<div class="card fu"><h3 class="card-t">Player Journey</h3><p class="subtext" style="font-size:.7rem;margin-bottom:14px">Court position each round</p>`;stats.filter(s=>s.courtHist.length>0).slice(0,12).forEach(s=>{const pn=l.players.findIndex(p=>p.id===s.id);h+=`<div style="margin-bottom:16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="font-family:'Sora',sans-serif;color:var(--green);font-weight:700;font-size:.72rem">#${pn>=0?pn+1:'?'}</span><span style="font-weight:600;font-size:.82rem">${s.name}</span><span class="subtext" style="font-size:.64rem">${s.w}W ${s.l}L</span></div><div style="display:flex;gap:2px;align-items:flex-end">${s.courtHist.map((ch,ci)=>{const pct=(ch.court/maxC)*100;const r=s.roundRes[ci];return`<div style="flex:1;text-align:center;min-width:0"><div style="height:${Math.max(6,pct*.55)}px;background:${r?.won?'var(--green)':r?.tied?'var(--tie)':'var(--loss)'};border-radius:3px 3px 0 0;opacity:.75"></div><div style="font-size:.5rem;color:var(--muted);margin-top:1px;font-weight:600">${cName(ch.court,ss||{config:{courts:maxC}})}</div></div>`}).join('')}</div></div>`});h+='</div>'}
+
+  // ── PLAYER TRACKER CHART ──
+  if(has&&stats.some(s=>s.courtHist.length>0)){
+    h+=`<div class="card fu"><h3 class="card-t">Player Tracker</h3>
+      <div class="tk-controls">
+        <div class="tk-toggle"><button class="${tkMode==='top50'&&tkPicked.size===0?'active':''}" onclick="tkSetMode('top50')">Top 50%</button><button class="${tkMode==='all'&&tkPicked.size===0?'active':''}" onclick="tkSetMode('all')">All</button></div>
+        <button class="tk-picker-btn${tkPicked.size>0?' has-picks':''}" id="tkPickerBtn" onclick="tkTogglePicker()">Pick players</button>
+        <span class="tk-count" id="tkCount"></span>
+      </div>
+      <div class="tk-player-list${tkPickerOpen?' open':''}" id="tkChips"></div>
+      <div class="tk-legend" id="tkLegend"></div>
+      <div style="position:relative;width:100%;height:260px"><canvas id="tkCanvas" role="img" aria-label="Player court position tracker across rounds">Player tracker chart.</canvas></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px" id="tkMetrics"></div>
+    </div>`;
+  }
+
+  // Podium
   if(has&&stats.length>=3){h+=`<div class="card fu"><h3 class="card-t">Podium</h3><div style="display:flex;gap:12px;justify-content:center;align-items:flex-end;padding:18px 0">${[{i:1,l:'2nd',h:70},{i:0,l:'1st',h:90},{i:2,l:'3rd',h:55}].map(p=>{const x=stats[p.i];if(!x)return'';const d=x.pf-x.pa;const pn=l.players.findIndex(q=>q.id===x.id);return`<div style="text-align:center;flex:1"><div style="font-family:'Sora',sans-serif;font-size:.64rem;color:var(--green);font-weight:700;margin-bottom:4px;letter-spacing:1px">${p.l}</div><div class="pod" style="padding-top:${p.h*.25}px"><div style="font-weight:700;font-size:.82rem">#${pn>=0?pn+1:'?'} ${x.name}</div><div class="subtext" style="font-size:.64rem;margin-top:2px">${x.w}W · ${d>0?'+':''}${d}</div></div></div>`}).join('')}</div></div>`}
   return h;
 }
@@ -396,7 +577,7 @@ function rStats(stats,season,l,ss){
 // ── RULES ──
 function rRules(ss){
   const nC=ss.config.courts;const names=ss.config.courtNames||defaultCourtNames(nC);
-  return`<div class="card fu"><h3 class="card-t">Session Format</h3>${[['Round Time',ss.config.roundMin+' min'],['Courts',names.join(', ')],['Rounds',ss.config.rounds],['Start',ss.config.startTime?formatTime12(ss.config.startTime):'—'],['Scoring',ss.config.scoreMode==='points'?'Points':'Win / Loss'],['Location',ss.config.place||'—']].map(([k,v])=>`<div class="cfg-row"><span class="subtext">${k}</span><span style="font-weight:600">${v}</span></div>`).join('')}</div>
+  return`<div class="card fu"><h3 class="card-t">Ladder Format</h3>${[['Round Time',ss.config.roundMin+' min'],['Courts',names.join(', ')],['Rounds',ss.config.rounds],['Start',ss.config.startTime?formatTime12(ss.config.startTime):'—'],['Scoring',ss.config.scoreMode==='points'?'Points':'Win / Loss'],['Location',ss.config.place||'—']].map(([k,v])=>`<div class="cfg-row"><span class="subtext">${k}</span><span style="font-weight:600">${v}</span></div>`).join('')}</div>
   <div class="card fu"><h3 class="card-t">Movement Rules</h3><div class="rt-text"><p><strong style="color:var(--green)">Winners</strong> move up one court</p><p><strong style="color:var(--loss)">Losers</strong> move down one court</p><p>Partners split and play with new partners each round</p><p><strong style="color:var(--tie)">Ties</strong> — all players stay on the same court</p></div></div>
   <div class="card fu"><h3 class="card-t">How to Win</h3><div class="rt-text"><p>The player with the <strong>most cumulative points</strong> at the end of all rounds wins</p><p>Tiebreaker: point differential (points scored minus points allowed)</p><p>All rounds count equally — every point matters</p></div></div>
   <div class="card fu"><h3 class="card-t">Each Round</h3><div class="rt-text"><p>Play the full round duration regardless of score</p><p>When the timer sounds, finish the rally in progress</p><p>If tied when time expires, the game is a tie</p><p>Receiving team makes line calls</p></div></div>`;

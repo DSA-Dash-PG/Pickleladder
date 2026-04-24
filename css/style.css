@@ -196,4 +196,25 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .pin-key.cancel{color:var(--muted);font-size:.78rem;font-family:'DM Sans',sans-serif}
 .pin-err{color:var(--danger);font-size:.78rem;font-weight:600;margin-top:12px;min-height:20px}
 
+/* ─── PLAYER TRACKER ─── */
+.tk-controls{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
+.tk-toggle{display:flex;border-radius:var(--rx);overflow:hidden;border:1px solid var(--border-s)}
+.tk-toggle button{padding:6px 14px;font-size:.72rem;font-weight:600;border:none;cursor:pointer;background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;transition:all .15s}
+.tk-toggle button.active{background:var(--green-pale);color:var(--green)}
+.tk-picker-btn{padding:6px 12px;font-size:.72rem;font-weight:600;border:1px solid var(--border-s);border-radius:var(--rx);background:transparent;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s}
+.tk-picker-btn.has-picks{background:var(--green-pale);color:var(--green);border-color:var(--green-bd)}
+.tk-player-list{display:flex;flex-wrap:wrap;gap:6px;max-height:0;overflow:hidden;transition:max-height .3s ease;margin-bottom:0}
+.tk-player-list.open{max-height:300px;overflow-y:auto;padding-bottom:8px;margin-bottom:8px}
+.tk-chip{padding:4px 10px;border-radius:20px;font-size:.7rem;font-weight:500;cursor:pointer;border:1px solid var(--border-s);background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;transition:all .12s;white-space:nowrap}
+.tk-chip.on{background:var(--green-pale);color:var(--green);border-color:var(--green-bd)}
+.tk-chip:hover{border-color:var(--green-bd)}
+.tk-legend{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;font-size:.7rem;color:var(--muted)}
+.tk-legend-item{display:flex;align-items:center;gap:4px}
+.tk-legend-swatch{width:12px;height:3px;border-radius:1px;flex-shrink:0}
+.tk-count{font-size:.68rem;color:var(--muted-lt);margin-left:auto}
+.tk-metric{background:var(--bg-subtle);border-radius:var(--rx);padding:12px}
+.tk-metric-label{font-size:.72rem;color:var(--muted)}
+.tk-metric-val{font-size:.92rem;font-weight:600;margin-top:2px}
+.tk-metric-sub{font-size:.7rem;margin-top:2px}
+
 @media(max-width:400px){.chip-grid{grid-template-columns:repeat(2,1fr)}.court-map{grid-template-columns:1fr}}
