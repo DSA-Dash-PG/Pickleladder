@@ -4,13 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pickle Friends</title>
-  <meta name="description" content="Pickleball ladder play with automatic lineups, live scoring, and season stats.">
+  <meta name="description" content="Pickleball ladder play — automatic lineups, live scoring, season stats.">
   <meta name="theme-color" content="#1a7a5c">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect x='10' y='20' width='80' height='60' rx='10' fill='%231a7a5c'/><line x1='50' y1='20' x2='50' y2='80' stroke='%23fff' stroke-width='3'/><line x1='10' y1='50' x2='90' y2='50' stroke='%23fff' stroke-width='3'/></svg>">
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-
 <div id="app">
   <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#f6f2ec">
     <div style="text-align:center">
@@ -45,10 +44,7 @@
     <div class="modal-title">Edit Player</div>
     <div style="margin-bottom:10px"><label class="lbl">Name</label><input id="edName" class="inp"></div>
     <div style="margin-bottom:10px"><label class="lbl">Gender</label><select id="edGender" class="inp"><option value="M">M</option><option value="F">F</option></select></div>
-    <div class="btn-row">
-      <button class="bg" onclick="closeEditModal()">Cancel</button>
-      <button class="bp" onclick="saveEditPlayer()">Save</button>
-    </div>
+    <div class="btn-row"><button class="bg-btn" onclick="closeEditModal()">Cancel</button><button class="bp" onclick="saveEditPlayer()">Save</button></div>
   </div>
 </div>
 
