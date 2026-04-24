@@ -34,7 +34,7 @@ async function apiDel(id){try{return await(await fetch(`/api?action=delete&id=${
 async function apiVerifyPin(pin){try{const r=await fetch('/api?action=verify-pin',{headers:{'X-Admin-Pin':pin}});return(await r.json()).valid}catch{return false}}
 
 function gL(){return ladders.find(l=>l.id===activeLadderId)||null}
-function gS(){const l=gL();return l?.seasons.find(s=>s.id===l.activeSeason)||null}
+function gS(){const l=gL();if(!l)return null;if(l.activeSeason){const s=l.seasons.find(x=>x.id===l.activeSeason);if(s)return s}return l.seasons.find(x=>!x.archived)||null}
 function gSS(){const s=gS();return s?.sessions.find(ss=>ss.id===activeSessionId)||null}
 async function save(l){const i=ladders.findIndex(x=>x.id===l.id);if(i>=0)ladders[i]=l;else ladders.push(l);const r=await apiSave(l);if(r)render();return r}
 
@@ -191,12 +191,17 @@ async function removePlayer(pid){const l=gL();if(!l||!confirm('Remove this playe
 async function startSessionAction(){const l=gL();const ss=gSS();if(!l||!ss||l.players.length<4)return alert('Need at least 4 players.');ss.rounds=[genR1(l.players,ss.config.courts)];ss.currentRound=0;ss.started=true;resetTimer(ss);tab='play';mapOpen=true;await save(l)}
 async function submitScore(ci,f,v){const l=gL();const ss=gSS();if(!l||!ss)return;const ct=ss.rounds[ss.currentRound].courts[ci];const sc=ct.score||{t1:0,t2:0,winner:'T'};sc[f]=parseInt(v)||0;sc.winner=sc.t1>sc.t2?'A':sc.t2>sc.t1?'B':'T';ct.score=sc;await save(l)}
 async function setWL(ci,w){const l=gL();const ss=gSS();if(!l||!ss)return;ss.rounds[ss.currentRound].courts[ci].score={t1:w==='A'?1:0,t2:w==='B'?1:0,winner:w};await save(l)}
+async function submitScoreRound(ri,ci,f,v){const l=gL();const ss=gSS();if(!l||!ss||!ss.rounds[ri])return;const ct=ss.rounds[ri].courts[ci];const sc=ct.score||{t1:0,t2:0,winner:'T'};sc[f]=parseInt(v)||0;sc.winner=sc.t1>sc.t2?'A':sc.t2>sc.t1?'B':'T';ct.score=sc;await save(l)}
+async function setWLRound(ri,ci,w){const l=gL();const ss=gSS();if(!l||!ss||!ss.rounds[ri])return;ss.rounds[ri].courts[ci].score={t1:w==='A'?1:0,t2:w==='B'?1:0,winner:w};await save(l)}
 async function nextRound(){const l=gL();const ss=gSS();if(!l||!ss)return;const un=ss.rounds[ss.currentRound].courts.filter(c=>!c.score);if(un.length&&!confirm(`${un.length} court(s) unscored. Continue?`))return;if(ss.currentRound>=ss.config.rounds-1){ss.finished=true;tab='stats';await save(l);return}ss.rounds.push(genNR(ss.rounds[ss.currentRound],ss.config.courts));ss.currentRound++;resetTimer(ss);await save(l)}
 async function reshuffleRound(){const l=gL();const ss=gSS();if(!l||!ss||!confirm('Reshuffle? Scores cleared.'))return;const all=[];ss.rounds[ss.currentRound].courts.forEach(c=>[...c.team1,...c.team2].filter(Boolean).forEach(p=>all.push(p)));ss.rounds[ss.currentRound]=genR1(all,ss.config.courts);await save(l)}
 
 // Rename / edit names
 async function renameLadder(){const l=gL();if(!l)return;const n=prompt('Ladder name:',l.name);if(n&&n.trim()){l.name=n.trim();await save(l)}}
 async function renameSeason(){const l=gL();const s=gS();if(!l||!s)return;const n=prompt('Season name:',s.name);if(n&&n.trim()){s.name=n.trim();await save(l)}}
+async function archiveSeason(sid){const l=gL();if(!l)return;const s=l.seasons.find(x=>x.id===sid);if(!s)return;if(!confirm(`Archive "${s.name}"? It will be hidden from the main view.`))return;s.archived=true;if(l.activeSeason===sid){const active=l.seasons.find(x=>!x.archived);l.activeSeason=active?.id||null}await save(l)}
+async function unarchiveSeason(sid){const l=gL();if(!l)return;const s=l.seasons.find(x=>x.id===sid);if(!s)return;s.archived=false;l.activeSeason=sid;await save(l)}
+async function deleteSeason(sid){const l=gL();if(!l)return;const s=l.seasons.find(x=>x.id===sid);if(!s||!confirm(`Permanently delete "${s.name}" and all its ladders? This cannot be undone.`))return;l.seasons=l.seasons.filter(x=>x.id!==sid);if(l.activeSeason===sid){l.activeSeason=l.seasons[0]?.id||null}await save(l)}
 async function editSessionDate(){const l=gL();const ss=gSS();if(!l||!ss)return;const d=prompt('Date (YYYY-MM-DD):',ss.date);if(d&&d.trim()){ss.date=d.trim();await save(l)}}
 async function editSessionTime(){const l=gL();const ss=gSS();if(!l||!ss)return;const t=prompt('Start time (HH:MM, 24hr):',ss.config.startTime||'');if(t!==null){ss.config.startTime=t.trim();await save(l)}}
 async function editSessionPlace(){const l=gL();const ss=gSS();if(!l||!ss)return;const p=prompt('Location:',ss.config.place||'');if(p!==null){ss.config.place=p.trim();await save(l)}}
@@ -215,11 +220,21 @@ function render(){
   const sStats=ss?calcStats([ss],l?.players||[]):[];
   let h='';
 
-  // Header
-  h+=`<header class="hdr"><div class="hdr-row"><div class="hdr-left"><div class="hdr-logo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="2" y1="12" x2="22" y2="12"/></svg></div><div><h1 class="hdr-title">Pickle Friends</h1>${s?`<div class="hdr-sub">${s.name}</div>`:''}</div></div><div class="hdr-right">${ladders.length>1?`<select class="hdr-sel" onchange="selectLadder(this.value)">${ladders.map(x=>`<option value="${x.id}"${x.id===activeLadderId?' selected':''}>${x.name}</option>`).join('')}</select>`:''}</div></div>
+  // Header — clean, no dropdown
+  h+=`<header class="hdr"><div class="hdr-row"><div class="hdr-left"><div class="hdr-logo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="2" y1="12" x2="22" y2="12"/></svg></div><div><h1 class="hdr-title">${l?.name||'Pickle Friends'}</h1>${s?`<div class="hdr-sub">${s.name}</div>`:''}</div></div></div>
   ${view==='session'?`<div class="tabs">${['Play','Roster','Stats','Rules'].map(t=>`<button class="tab${tab===t.toLowerCase()?' active':''}" onclick="tab='${t.toLowerCase()}';render()">${t}</button>`).join('')}<button class="tab" style="margin-left:auto;font-size:.68rem" onclick="go('dashboard','overview')">← Back</button></div>`:''}
   ${view==='dashboard'&&s?`<div class="tabs">${['Overview','Stats','Players'].map(t=>`<button class="tab${tab===t.toLowerCase()?' active':''}" onclick="tab='${t.toLowerCase()}';render()">${t}</button>`).join('')}</div>`:''}
   </header><div class="content">`;
+
+  // League selector — shown on dashboard when multiple leagues exist
+  if(view==='dashboard'&&ladders.length>1){
+    h+=`<div style="display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;padding-bottom:2px">`;
+    ladders.forEach(x=>{
+      const isActive=x.id===activeLadderId;
+      h+=`<button onclick="selectLadder('${x.id}')" style="padding:8px 16px;border-radius:var(--rx);border:1.5px solid ${isActive?'var(--green)':'var(--border-s)'};background:${isActive?'var(--green-pale)':'var(--bg-card)'};color:${isActive?'var(--green)':'var(--muted)'};font-family:'Sora',sans-serif;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;box-shadow:${isActive?'none':'var(--shadow-sm)'}">${x.name}</button>`;
+    });
+    h+=`</div>`;
+  }
 
   // Forms
   if(view==='newLadder')h+=`<div class="card fu"><h2 class="card-t">Create League</h2><input id="fLN" class="inp" placeholder="League name" autofocus><div class="btn-row"><button class="bg-btn" onclick="go('dashboard','overview')">Cancel</button><button class="bp" onclick="createLadder()">Create</button></div></div>`;
@@ -266,7 +281,35 @@ function render(){
   h+=`<div class="admin-footer">`;
   if(isAdmin){
     h+=`<div class="admin-bar-bottom">ADMIN MODE</div><div style="display:flex;flex-direction:column;gap:8px">`;
-    if(view==='dashboard'&&s){h+=`<button class="bp full" onclick="go('newSession')">New Ladder</button><button class="bg-btn full" onclick="go('newSeason')">New Season</button><button class="bp full" onclick="go('newLadder')">New League</button><button class="bg-btn full" onclick="renameLadder()">Rename League</button>`;if(l.seasons.length>1)h+=`<div style="margin-top:4px"><label class="lbl">Switch Season</label><select class="inp" onchange="gL().activeSeason=this.value;save(gL())">${l.seasons.map(x=>`<option value="${x.id}"${x.id===l.activeSeason?' selected':''}>${x.name}</option>`).join('')}</select></div>`;h+=`<button class="bd full" style="margin-top:8px" onclick="deleteLadderAction()">Delete League</button>`}
+    if(view==='dashboard'&&s){
+      h+=`<button class="bp full" onclick="go('newSession')">New Ladder</button>`;
+      h+=`<button class="bg-btn full" onclick="go('newSeason')">New Season</button>`;
+
+      // Season management
+      const activeSeasons=l.seasons.filter(x=>!x.archived);
+      const archivedSeasons=l.seasons.filter(x=>x.archived);
+      if(activeSeasons.length>1){
+        h+=`<div style="margin-top:4px"><label class="lbl">Switch Season</label><select class="inp" onchange="gL().activeSeason=this.value;save(gL())">${activeSeasons.map(x=>`<option value="${x.id}"${x.id===l.activeSeason?' selected':''}>${x.name}</option>`).join('')}</select></div>`;
+      }
+      h+=`<button class="bg-btn full" style="margin-top:4px" onclick="archiveSeason('${s.id}')">Archive "${s.name}"</button>`;
+      if(archivedSeasons.length){
+        h+=`<div style="margin-top:8px"><label class="lbl">Archived Seasons</label>`;
+        archivedSeasons.forEach(as=>{
+          h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;padding:8px 10px;background:var(--bg-subtle);border-radius:var(--rx)">
+            <span style="flex:1;font-size:.82rem;font-weight:600;color:var(--muted)">${as.name}</span>
+            <button class="edit-btn" onclick="unarchiveSeason('${as.id}')" style="font-size:.68rem">Restore</button>
+            <button class="edit-btn" onclick="deleteSeason('${as.id}')" style="font-size:.68rem;color:var(--danger)">Delete</button>
+          </div>`;
+        });
+        h+=`</div>`;
+      }
+
+      h+=`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">`;
+      h+=`<button class="bp full" onclick="go('newLadder')">New League</button>`;
+      h+=`<button class="bg-btn full" style="margin-top:6px" onclick="renameLadder()">Rename League</button>`;
+      h+=`<button class="bd full" style="margin-top:6px" onclick="deleteLadderAction()">Delete League</button>`;
+      h+=`</div>`;
+    }
     else if(!l||!s)h+=`<button class="bp full" onclick="go('newLadder')">New League</button>`;
     h+=`</div><button class="admin-lock-btn unlocked" onclick="lockAdmin()" style="margin-top:12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Lock Admin</button>`;
   } else {
@@ -369,10 +412,10 @@ function rPlay(l,ss){
     h+=`<div class="cc${hs?' scored':''} fu"><div class="cc-hdr"><div class="cc-ltr">${nm}</div><div><span class="cc-label">Court ${nm}</span></div>${hs?`<div class="cc-score">${ct.score.t1} – ${ct.score.t2}</div>`:''}</div>
     <div class="tg"><div class="tb${w==='A'?' wg':''}">${ct.team1.filter(Boolean).map(p=>`<div class="tn"><span class="num">${pTag(p,l)}</span>${p.name}<span class="gtag">${p.gender}</span></div>`).join('')}${w==='A'?'<div class="wl g">WINNER</div>':''}</div><div class="vs">VS</div><div class="tb${w==='B'?' wb':''}">${ct.team2.filter(Boolean).map(p=>`<div class="tn"><span class="num">${pTag(p,l)}</span>${p.name}<span class="gtag">${p.gender}</span></div>`).join('')}${w==='B'?'<div class="wl b">WINNER</div>':''}</div></div>`;
 
-    // Score entry only on current round + admin
-    if(isAdmin&&isCurrent){
-      if(ss.config.scoreMode==='points')h+=`<div class="sr"><div class="scol"><input type="number" class="si${w==='A'?' wa':''}" min="0" max="99" placeholder="0" value="${ct.score?.t1??''}" onchange="submitScore(${ci},'t1',this.value)"><div class="sl">TEAM A</div></div><div class="sd">—</div><div class="scol"><input type="number" class="si${w==='B'?' swb':''}" min="0" max="99" placeholder="0" value="${ct.score?.t2??''}" onchange="submitScore(${ci},'t2',this.value)"><div class="sl">TEAM B</div></div></div>`;
-      else h+=`<div style="display:flex;gap:8px;margin-top:14px"><button class="wlb${w==='A'?' aa':''}" onclick="setWL(${ci},'A')">${w==='A'?'Winner — ':''}Team A</button><button class="wlb${w==='B'?' ab':''}" onclick="setWL(${ci},'B')">${w==='B'?'Winner — ':''}Team B</button></div>`;
+    // Score entry — admin can edit any round
+    if(isAdmin){
+      if(ss.config.scoreMode==='points')h+=`<div class="sr"><div class="scol"><input type="number" class="si${w==='A'?' wa':''}" min="0" max="99" placeholder="0" value="${ct.score?.t1??''}" onchange="submitScoreRound(${vr},${ci},'t1',this.value)"><div class="sl">TEAM A</div></div><div class="sd">—</div><div class="scol"><input type="number" class="si${w==='B'?' swb':''}" min="0" max="99" placeholder="0" value="${ct.score?.t2??''}" onchange="submitScoreRound(${vr},${ci},'t2',this.value)"><div class="sl">TEAM B</div></div></div>`;
+      else h+=`<div style="display:flex;gap:8px;margin-top:14px"><button class="wlb${w==='A'?' aa':''}" onclick="setWLRound(${vr},${ci},'A')">${w==='A'?'Winner — ':''}Team A</button><button class="wlb${w==='B'?' ab':''}" onclick="setWLRound(${vr},${ci},'B')">${w==='B'?'Winner — ':''}Team B</button></div>`;
     }
 
     if(hs&&w!=='T')h+=`<div class="mh">Winners → Ct ${upNm} · Losers → Ct ${dnNm}</div>`;
