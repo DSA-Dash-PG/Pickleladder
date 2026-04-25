@@ -55,7 +55,7 @@ function calcStats(sessions,players){
     sess.rounds.forEach((round,ri)=>{round.courts.forEach(c=>{if(!c.score||c.score.t1===null||c.score.t1===undefined||c.score.t2===null||c.score.t2===undefined||!c.score.winner)return;const{t1,t2,winner}=c.score;
       [[c.team1,t1,t2,winner==='A'],[c.team2,t2,t1,winner==='B']].forEach(([team,sc,al,won])=>{team.filter(Boolean).forEach(p=>{if(!s[p.id])return;played.add(p.id);s[p.id].pf+=sc;s[p.id].pa+=al;
         if(won){s[p.id].w++;s[p.id].streak=s[p.id].streak>0?s[p.id].streak+1:1;s[p.id].maxStreak=Math.max(s[p.id].maxStreak,s[p.id].streak)}else{s[p.id].l++;s[p.id].streak=s[p.id].streak<0?s[p.id].streak-1:-1}
-        s[p.id].best=Math.max(s[p.id].best,c.court);s[p.id].courtHist.push({round:ri+1,court:c.court});s[p.id].roundRes.push({round:ri+1,court:c.court,won,tied,pf:sc,pa:al,diff:sc-al});s[p.id].roundPts.push(sc)})})})});
+        s[p.id].best=Math.max(s[p.id].best,c.court);s[p.id].courtHist.push({round:ri+1,court:c.court});s[p.id].roundRes.push({round:ri+1,court:c.court,won,pf:sc,pa:al,diff:sc-al});s[p.id].roundPts.push(sc)})})})});
     played.forEach(id=>{if(s[id])s[id].attended++})});
   return Object.values(s).sort((a,b)=>b.pf!==a.pf?b.pf-a.pf:(b.pf-b.pa)-(a.pf-a.pa))}
 
