@@ -50,10 +50,13 @@ function calcStats(sessions,players){
 
 // Round MVPs — best diff by gender
 function getRoundMVPs(round,ladder){
-  if(!round)return{m:null,f:null};
+  if(!round||!ladder)return{m:null,f:null};
   const perfs=[];
-  round.courts.forEach(c=>{if(!c.score||c.score.t1===null||c.score.t1===undefined||c.score.t2===null||c.score.t2===undefined)return;const{t1,t2,winner}=c.score;
-    [[c.team1,t1-t2],[c.team2,t2-t1]].forEach(([team,diff])=>{team.filter(Boolean).forEach(p=>{perfs.push({p,diff,pts:diff>0?Math.max(t1,t2):Math.min(t1,t2),court:c.court})})})});
+  round.courts.forEach(c=>{if(!c.score||c.score.t1===null||c.score.t1===undefined||c.score.t2===null||c.score.t2===undefined)return;const{t1,t2}=c.score;
+    [[c.team1,t1-t2],[c.team2,t2-t1]].forEach(([team,diff])=>{team.filter(Boolean).forEach(p=>{
+      const rosterP=ladder.players.find(x=>x.id===p.id);
+      const gender=rosterP?.gender||p.gender||'M';
+      perfs.push({p:{...p,gender},diff,court:c.court})})})});
   const males=perfs.filter(x=>x.p.gender==='M').sort((a,b)=>b.diff-a.diff);
   const females=perfs.filter(x=>x.p.gender==='F').sort((a,b)=>b.diff-a.diff);
   return{m:males[0]||null,f:females[0]||null};
@@ -120,6 +123,9 @@ async function editSessionPlace(){const l=gL();const ss=gSS();if(!l||!ss)return;
 async function archiveSeason(sid){const l=gL();if(!l)return;const s=l.seasons.find(x=>x.id===sid);if(!s||!confirm(`Archive "${s.name}"?`))return;s.archived=true;if(l.activeSeason===sid){const a=l.seasons.find(x=>!x.archived);l.activeSeason=a?.id||null}await save(l)}
 async function unarchiveSeason(sid){const l=gL();if(!l)return;const s=l.seasons.find(x=>x.id===sid);if(!s)return;s.archived=false;l.activeSeason=sid;await save(l)}
 async function deleteSeason(sid){const l=gL();if(!l)return;const s=l.seasons.find(x=>x.id===sid);if(!s||!confirm(`Delete "${s.name}" permanently?`))return;l.seasons=l.seasons.filter(x=>x.id!==sid);if(l.activeSeason===sid)l.activeSeason=l.seasons[0]?.id||null;await save(l)}
+async function archiveSession(ssid){const l=gL();const s=gS();if(!l||!s)return;const ss=s.sessions.find(x=>x.id===ssid);if(!ss||!confirm(`Archive "${ss.name||fmtDate(ss.date)}"?`))return;ss.archived=true;if(activeSessionId===ssid)activeSessionId=null;await save(l)}
+async function unarchiveSession(ssid){const l=gL();const s=gS();if(!l||!s)return;const ss=s.sessions.find(x=>x.id===ssid);if(!ss)return;ss.archived=false;await save(l)}
+async function deleteSession(ssid){const l=gL();const s=gS();if(!l||!s)return;const ss=s.sessions.find(x=>x.id===ssid);if(!ss||!confirm(`Delete "${ss.name||fmtDate(ss.date)}" permanently?`))return;s.sessions=s.sessions.filter(x=>x.id!==ssid);if(activeSessionId===ssid)activeSessionId=null;await save(l)}
 
 function go(v,t){view=v;if(t)tab=t;viewingRound=-1;if(v==='newSession')formCourtCount=4;render();if(v==='newSession')setTimeout(updateCourtInputs,10)}
 function selectLadder(id){activeLadderId=id;activeSessionId=null;view='dashboard';tab='overview';viewingRound=-1;render()}
@@ -227,12 +233,14 @@ function render(){
 
 // ── OVERVIEW ──
 function rOverview(l,s,stats){
-  let h=`<div class="card fu"><div class="overline">Current season</div><h2 class="heading" style="font-size:1.2rem;color:var(--green)">${s.name}</h2><div class="subtext" style="margin-top:4px">${s.sessions.length} ladder${s.sessions.length!==1?'s':''} · ${l.players.length} players</div></div>`;
-  if(stats.some(x=>x.w+x.l+x.t>0))h+=`<div class="chip-grid fu">${[{l:'Ladders',v:s.sessions.filter(x=>x.started).length},{l:'Games',v:Math.floor(stats.reduce((a,x)=>a+x.w+x.l+x.t,0)/2)},{l:'Players',v:l.players.length},{l:'High Pts',v:stats.reduce((m,x)=>Math.max(m,x.pf),0)}].map(c=>`<div class="chip"><div class="chip-n">${c.v}</div><div class="chip-l">${c.l}</div></div>`).join('')}</div>`;
+  const activeSessions=s.sessions.filter(x=>!x.archived);
+  const totalActive=activeSessions.length;
+  let h=`<div class="card fu"><div class="overline">Current season</div><h2 class="heading" style="font-size:1.2rem;color:var(--green)">${s.name}</h2><div class="subtext" style="margin-top:4px">${totalActive} ladder${totalActive!==1?'s':''} · ${l.players.length} players</div></div>`;
+  if(stats.some(x=>x.w+x.l+x.t>0))h+=`<div class="chip-grid fu">${[{l:'Ladders',v:activeSessions.filter(x=>x.started).length},{l:'Games',v:Math.floor(stats.reduce((a,x)=>a+x.w+x.l+x.t,0)/2)},{l:'Players',v:l.players.length},{l:'High Pts',v:stats.reduce((m,x)=>Math.max(m,x.pf),0)}].map(c=>`<div class="chip"><div class="chip-n">${c.v}</div><div class="chip-l">${c.l}</div></div>`).join('')}</div>`;
   if(isAdmin)h+=`<button class="bp full" onclick="go('newSession')" style="margin-bottom:14px">New ladder</button>`;
   h+=`<div class="card fu"><h3 class="card-t">Ladders</h3>`;
-  if(!s.sessions.length)h+='<p class="subtext" style="text-align:center;padding:20px">No ladders scheduled yet.</p>';
-  else h+=[...s.sessions].reverse().map(x=>{const st=x.finished?'<span class="pill ok">Complete</span>':x.started?`<span class="pill live"><span class="dot"></span>Rd ${x.currentRound+1}</span>`:'<span class="pill draft">Upcoming</span>';const dn=x.name||fmtDate(x.date);return`<button class="sc" onclick="openSession('${x.id}')"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:700;font-size:.9rem">${dn}</div><div class="subtext" style="font-size:.72rem;margin-top:2px">${fmtDate(x.date)}${x.config.startTime?' · '+fmt12(x.config.startTime):''} · ${x.config.courts} courts${x.config.place?' · '+x.config.place:''}</div></div>${st}</div></button>`}).join('');
+  if(!activeSessions.length)h+='<p class="subtext" style="text-align:center;padding:20px">No ladders scheduled yet.</p>';
+  else h+=[...activeSessions].reverse().map(x=>{const st=x.finished?'<span class="pill ok">Complete</span>':x.started?`<span class="pill live"><span class="dot"></span>Rd ${x.currentRound+1}</span>`:'<span class="pill draft">Upcoming</span>';const dn=x.name||fmtDate(x.date);return`<button class="sc" onclick="openSession('${x.id}')"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:700;font-size:.9rem">${dn}</div><div class="subtext" style="font-size:.72rem;margin-top:2px">${fmtDate(x.date)}${x.config.startTime?' · '+fmt12(x.config.startTime):''} · ${x.config.courts} courts${x.config.place?' · '+x.config.place:''}</div></div>${st}</div></button>`}).join('');
   h+='</div>';return h;
 }
 
@@ -263,8 +271,14 @@ function rAdmin(l,s){
     <div style="display:flex;gap:6px;margin-top:8px"><button class="bp" style="flex:1" onclick="go('newSeason')">New season</button><button class="bg-btn" style="flex:1" onclick="archiveSeason('${s.id}')">Archive</button></div>
     ${archived.length?`<div style="margin-top:10px"><label class="lbl">Archived</label>${archived.map(a=>`<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;padding:8px 10px;background:var(--bg-card);border-radius:var(--rx);border:1px solid var(--border)"><span style="flex:1;font-size:.82rem;font-weight:600;color:var(--muted)">${a.name}</span><button class="edit-btn" onclick="unarchiveSeason('${a.id}')">Restore</button><button class="edit-btn" style="color:var(--danger)" onclick="deleteSeason('${a.id}')">Delete</button></div>`).join('')}</div>`:''}
   </div>`;
-  // Ladder
-  h+=`<div class="admin-section"><div class="admin-section-t">Ladders</div><button class="bp full" onclick="go('newSession')">New ladder</button></div>`;
+  // Ladders
+  const activeLadders=s.sessions.filter(x=>!x.archived);
+  const archivedLadders=s.sessions.filter(x=>x.archived);
+  h+=`<div class="admin-section"><div class="admin-section-t">Ladders</div>
+    <button class="bp full" onclick="go('newSession')" style="margin-bottom:10px">New ladder</button>
+    ${activeLadders.length?activeLadders.map(x=>{const dn=x.name||fmtDate(x.date);return`<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;padding:8px 10px;background:var(--bg-card);border-radius:var(--rx);border:1px solid var(--border)"><span style="flex:1;font-size:.82rem;font-weight:600">${dn}</span><button class="edit-btn" onclick="archiveSession('${x.id}')">Archive</button></div>`}).join(''):'<p class="subtext" style="font-size:.78rem">No active ladders.</p>'}
+    ${archivedLadders.length?`<div style="margin-top:10px"><label class="lbl">Archived ladders</label>${archivedLadders.map(x=>{const dn=x.name||fmtDate(x.date);return`<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;padding:8px 10px;background:var(--bg-card);border-radius:var(--rx);border:1px solid var(--border)"><span style="flex:1;font-size:.82rem;font-weight:600;color:var(--muted)">${dn}</span><button class="edit-btn" onclick="unarchiveSession('${x.id}')">Restore</button><button class="edit-btn" style="color:var(--danger)" onclick="deleteSession('${x.id}')">Delete</button></div>`}).join('')}</div>`:''}
+  </div>`;
   return h;
 }
 
@@ -279,6 +293,9 @@ function rSessionAdmin(l,ss){
     <div style="display:grid;grid-template-columns:1fr 76px;gap:10px;margin-bottom:10px"><input id="fPN" class="inp" placeholder="Player name" onkeydown="if(event.key==='Enter')addPlayer()"><select id="fPG" class="inp"><option value="M">M</option><option value="F">F</option></select></div>
     <button class="bp full" onclick="addPlayer()" style="margin-bottom:10px">Add player</button>
     ${l.players.map((p,i)=>`<div class="pr"><div class="pn">${i+1}</div><span style="flex:1;font-weight:600;font-size:.84rem">${p.name}</span><span class="gt ${p.gender==='F'?'f':'m'}">${p.gender}</span><button class="edit-btn" onclick="openEditPlayer('${p.id}')">Edit</button>${!ss.started?`<button class="rm" onclick="removePlayer('${p.id}')">×</button>`:''}</div>`).join('')}
+  </div>`;
+  h+=`<div class="admin-section"><div class="admin-section-t">Danger zone</div>
+    <div style="display:flex;gap:6px"><button class="bg-btn" style="flex:1" onclick="archiveSession('${ss.id}');go('dashboard','overview')">Archive ladder</button><button class="bd" style="flex:1" onclick="deleteSession('${ss.id}');go('dashboard','overview')">Delete ladder</button></div>
   </div>`;
   return h;
 }
@@ -299,9 +316,9 @@ function rPlay(l,ss){
   }else{h+=`<div class="card fu" style="text-align:center;padding:14px"><div class="subtext" style="font-size:.72rem">Viewing</div><h3 class="heading" style="font-size:1rem;color:var(--green);margin:4px 0">Round ${vr+1}</h3></div>`}
 
   // Round tabs
-  h+=`<div style="display:flex;gap:4px;margin-bottom:10px;overflow-x:auto;padding-bottom:2px">`;
-  for(let ri=0;ri<=ss.currentRound;ri++){const isV=(isCurrent&&ri===ss.currentRound)||(!isCurrent&&ri===vr);const done=ss.rounds[ri]?.courts.every(c=>!!c.score);
-    h+=`<button onclick="viewRound(${ri===ss.currentRound?-1:ri})" style="padding:6px 12px;border-radius:var(--rx);border:1.5px solid ${isV?'var(--green)':'var(--border-s)'};background:${isV?'var(--green-pale)':'var(--bg-card)'};color:${isV?'var(--green)':'var(--muted)'};font-family:'Sora',sans-serif;font-size:.72rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">Rd ${ri+1}${ri===ss.currentRound?' •':done?' ✓':''}</button>`}
+  h+=`<div style="display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap">`;
+  for(let ri=0;ri<=ss.currentRound;ri++){const isV=(isCurrent&&ri===ss.currentRound)||(!isCurrent&&ri===vr);const done=ss.rounds[ri]?.courts.every(c=>c.score&&c.score.t1!==null&&c.score.t2!==null);
+    h+=`<button onclick="viewRound(${ri===ss.currentRound?-1:ri})" style="padding:6px 12px;border-radius:var(--rx);border:1.5px solid ${isV?'var(--green)':'var(--border-s)'};background:${isV?'var(--green-pale)':'var(--bg-card)'};color:${isV?'var(--green)':'var(--muted)'};font-family:'Sora',sans-serif;font-size:.72rem;font-weight:700;cursor:pointer">Rd ${ri+1}${ri===ss.currentRound?' •':done?' ✓':''}</button>`}
   h+=`</div>`;
 
   // Round MVPs
