@@ -27,7 +27,10 @@ async function apiVerifyPin(pin){try{const r=await fetch('/api?action=verify-pin
 function gL(){return ladders.find(l=>l.id===activeLadderId)||null}
 function gS(){const l=gL();if(!l)return null;if(l.activeSeason){const s=l.seasons.find(x=>x.id===l.activeSeason);if(s)return s}return l.seasons.find(x=>!x.archived)||null}
 function gSS(){const s=gS();return s?.sessions.find(ss=>ss.id===activeSessionId)||null}
-async function save(l){const i=ladders.findIndex(x=>x.id===l.id);if(i>=0)ladders[i]=l;else ladders.push(l);const r=await apiSave(l);if(r)render();return r}
+async function save(l,skipRender){const i=ladders.findIndex(x=>x.id===l.id);if(i>=0)ladders[i]=l;else ladders.push(l);const r=await apiSave(l);if(r&&!skipRender)render();return r}
+// Debounced score save — updates local state instantly, delays API call, never re-renders
+let scoreTimer=null;
+function saveScoreDebounced(l){clearTimeout(scoreTimer);scoreTimer=setTimeout(()=>{apiSave(l)},800)}
 
 // Coed lineup
 function makeCoed(group,pp){const males=group.filter(p=>p?.gender==='M'),females=group.filter(p=>p?.gender==='F');let t1,t2;if(males.length>=2&&females.length>=2){t1=[males[0],females[0]];t2=[males[1],females[1]];if(pp&&(pp[t1[0]?.id]===t1[1]?.id||pp[t2[0]?.id]===t2[1]?.id)){t1=[males[0],females[1]];t2=[males[1],females[0]]}}else if(males.length>=1&&females.length>=1){const others=group.filter(p=>p!==males[0]&&p!==females[0]);t1=[males[0],females[0]];t2=[others[0]||null,others[1]||null]}else{t1=[group[0]||null,group[1]||null];t2=[group[2]||null,group[3]||null];if(pp&&(pp[t1[0]?.id]===t1[1]?.id||pp[t2[0]?.id]===t2[1]?.id)){t1=[group[0]||null,group[2]||null];t2=[group[1]||null,group[3]||null]}}return{t1,t2}}
@@ -38,7 +41,7 @@ function genNR(prev,nC){const mvs=[];prev.courts.forEach(c=>{const all=[...(c.te
 function calcStats(sessions,players){
   const s={};players.forEach(p=>{s[p.id]={id:p.id,name:p.name,gender:p.gender,w:0,l:0,t:0,pf:0,pa:0,best:0,attended:0,courtHist:[],roundRes:[],streak:0,maxStreak:0,roundPts:[]}});
   sessions.forEach(sess=>{const played=new Set();
-    sess.rounds.forEach((round,ri)=>{round.courts.forEach(c=>{if(!c.score)return;const{t1,t2,winner}=c.score;const tied=winner==='T';
+    sess.rounds.forEach((round,ri)=>{round.courts.forEach(c=>{if(!c.score||c.score.t1===null||c.score.t1===undefined||c.score.t2===null||c.score.t2===undefined)return;const{t1,t2,winner}=c.score;const tied=winner==='T';
       [[c.team1,t1,t2,winner==='A'],[c.team2,t2,t1,winner==='B']].forEach(([team,sc,al,won])=>{team.filter(Boolean).forEach(p=>{if(!s[p.id])return;played.add(p.id);s[p.id].pf+=sc;s[p.id].pa+=al;
         if(tied){s[p.id].t++;s[p.id].streak=0}else if(won){s[p.id].w++;s[p.id].streak=s[p.id].streak>0?s[p.id].streak+1:1;s[p.id].maxStreak=Math.max(s[p.id].maxStreak,s[p.id].streak)}else{s[p.id].l++;s[p.id].streak=s[p.id].streak<0?s[p.id].streak-1:-1}
         s[p.id].best=Math.max(s[p.id].best,c.court);s[p.id].courtHist.push({round:ri+1,court:c.court});s[p.id].roundRes.push({round:ri+1,court:c.court,won,tied,pf:sc,pa:al,diff:sc-al});s[p.id].roundPts.push(sc)})})})});
@@ -49,7 +52,7 @@ function calcStats(sessions,players){
 function getRoundMVPs(round,ladder){
   if(!round)return{m:null,f:null};
   const perfs=[];
-  round.courts.forEach(c=>{if(!c.score)return;const{t1,t2,winner}=c.score;
+  round.courts.forEach(c=>{if(!c.score||c.score.t1===null||c.score.t1===undefined||c.score.t2===null||c.score.t2===undefined)return;const{t1,t2,winner}=c.score;
     [[c.team1,t1-t2],[c.team2,t2-t1]].forEach(([team,diff])=>{team.filter(Boolean).forEach(p=>{perfs.push({p,diff,pts:diff>0?Math.max(t1,t2):Math.min(t1,t2),court:c.court})})})});
   const males=perfs.filter(x=>x.p.gender==='M').sort((a,b)=>b.diff-a.diff);
   const females=perfs.filter(x=>x.p.gender==='F').sort((a,b)=>b.diff-a.diff);
@@ -59,7 +62,7 @@ function getRoundMVPs(round,ladder){
 // Partnership tracking
 function calcPartners(sessions,players){
   const pairs={};
-  sessions.forEach(sess=>{sess.rounds.forEach(round=>{round.courts.forEach(c=>{if(!c.score)return;const won=c.score.winner;
+  sessions.forEach(sess=>{sess.rounds.forEach(round=>{round.courts.forEach(c=>{if(!c.score||c.score.t1===null||c.score.t2===null)return;const won=c.score.winner;
     [c.team1,c.team2].forEach((team,ti)=>{if(team[0]&&team[1]){const key=[team[0].id,team[1].id].sort().join('-');if(!pairs[key])pairs[key]={p1:team[0],p2:team[1],w:0,l:0};
       const teamWon=(ti===0&&won==='A')||(ti===1&&won==='B');if(teamWon)pairs[key].w++;else if(won!=='T')pairs[key].l++}})})})});
   return Object.values(pairs).sort((a,b)=>(b.w/(b.w+b.l||1))-(a.w/(a.w+a.l||1)));
@@ -101,8 +104,9 @@ async function createSessionAction(){const l=gL();const s=gS();if(!l||!s)return;
 async function addPlayer(){const l=gL();if(!l)return;const n=document.getElementById('fPN')?.value?.trim();const g=document.getElementById('fPG')?.value||'M';if(!n)return;l.players.push({id:uid(),name:n,gender:g});document.getElementById('fPN').value='';await save(l)}
 async function removePlayer(pid){const l=gL();if(!l||!confirm('Remove this player?'))return;l.players=l.players.filter(p=>p.id!==pid);await save(l)}
 async function startSessionAction(){const l=gL();const ss=gSS();if(!l||!ss||l.players.length<4)return alert('Need at least 4 players.');ss.rounds=[genR1(l.players,ss.config.courts)];ss.currentRound=0;ss.started=true;resetTimer(ss);tab='play';mapOpen=true;await save(l)}
-async function submitScoreRound(ri,ci,f,v){const l=gL();const ss=gSS();if(!l||!ss||!ss.rounds[ri])return;const ct=ss.rounds[ri].courts[ci];const sc=ct.score||{t1:0,t2:0,winner:'T'};sc[f]=parseInt(v)||0;sc.winner=sc.t1>sc.t2?'A':sc.t2>sc.t1?'B':'T';ct.score=sc;await save(l)}
+async function submitScoreRound(ri,ci,f,v){const l=gL();const ss=gSS();if(!l||!ss||!ss.rounds[ri])return;const ct=ss.rounds[ri].courts[ci];const sc=ct.score||{t1:null,t2:null,winner:'T'};const num=v===''?null:parseInt(v)||0;sc[f]=num;if(sc.t1!==null&&sc.t2!==null){sc.winner=sc.t1>sc.t2?'A':sc.t2>sc.t1?'B':'T'}else{sc.winner='T'}ct.score=sc;const idx=ladders.findIndex(x=>x.id===l.id);if(idx>=0)ladders[idx]=l;saveScoreDebounced(l)}
 async function setWLRound(ri,ci,w){const l=gL();const ss=gSS();if(!l||!ss||!ss.rounds[ri])return;ss.rounds[ri].courts[ci].score={t1:w==='A'?1:0,t2:w==='B'?1:0,winner:w};await save(l)}
+async function finishLadderEarly(){const l=gL();const ss=gSS();if(!l||!ss)return;if(!confirm('End this ladder now? Unplayed rounds will not be scored.'))return;ss.finished=true;tab='stats';await save(l)}
 async function nextRound(){const l=gL();const ss=gSS();if(!l||!ss)return;const un=ss.rounds[ss.currentRound].courts.filter(c=>!c.score);if(un.length&&!confirm(`${un.length} court(s) unscored. Continue?`))return;if(ss.currentRound>=ss.config.rounds-1){ss.finished=true;tab='stats';await save(l);return}ss.rounds.push(genNR(ss.rounds[ss.currentRound],ss.config.courts));ss.currentRound++;resetTimer(ss);await save(l)}
 async function reshuffleRound(){const l=gL();const ss=gSS();if(!l||!ss||!confirm('Reshuffle? Scores cleared.'))return;const all=[];ss.rounds[ss.currentRound].courts.forEach(c=>[...c.team1,...c.team2].filter(Boolean).forEach(p=>all.push(p)));ss.rounds[ss.currentRound]=genR1(all,ss.config.courts);await save(l)}
 
@@ -316,19 +320,22 @@ function rPlay(l,ss){
   // Court map
   const isOpen=mapOpen||shouldMapOpen(ss);
   h+=`<div class="map-toggle${isOpen?' open':''}" onclick="toggleMap()"><span class="label">Court map — Rd ${vr+1}</span><span class="arrow">▼</span></div><div class="court-map${isOpen?' open':''}">`;
-  [...round.courts].sort((a,b)=>b.court-a.court).forEach(ct=>{const nm=cName(ct.court,ss);const hs=!!ct.score;h+=`<div class="cmc${hs?' scored':''}"><div class="cmc-ltr">Ct ${nm}</div><div class="cmc-match">${ct.team1.filter(Boolean).map(p=>pTag(p,l)).join(' & ')}<span class="vs-s">vs</span>${ct.team2.filter(Boolean).map(p=>pTag(p,l)).join(' & ')}</div>${hs?`<div class="cmc-score">${ct.score.t1} – ${ct.score.t2}</div>`:''}</div>`});
+  [...round.courts].sort((a,b)=>b.court-a.court).forEach(ct=>{const nm=cName(ct.court,ss);const sc=ct.score;const hasBoth=sc&&sc.t1!==null&&sc.t1!==undefined&&sc.t2!==null&&sc.t2!==undefined;h+=`<div class="cmc${hasBoth?' scored':''}"><div class="cmc-ltr">Ct ${nm}</div><div class="cmc-match">${ct.team1.filter(Boolean).map(p=>pTag(p,l)).join(' & ')}<span class="vs-s">vs</span>${ct.team2.filter(Boolean).map(p=>pTag(p,l)).join(' & ')}</div>${hasBoth?`<div class="cmc-score">${sc.t1} – ${sc.t2}</div>`:''}</div>`});
   h+='</div>';
 
   // Court cards
+  let tabIdx=1;
   round.courts.slice().sort((a,b)=>b.court-a.court).forEach(ct=>{
-    const ci=round.courts.indexOf(ct);const hs=!!ct.score;const w=ct.score?.winner;const nm=cName(ct.court,ss);
-    h+=`<div class="cc${hs?' scored':''} fu"><div class="cc-hdr"><div class="cc-ltr">${nm}</div><span class="cc-label">Court ${nm}</span>${hs?`<div class="cc-score">${ct.score.t1} – ${ct.score.t2}</div>`:''}</div>
+    const ci=round.courts.indexOf(ct);const sc=ct.score;const hasT1=sc&&sc.t1!==null&&sc.t1!==undefined;const hasT2=sc&&sc.t2!==null&&sc.t2!==undefined;const hasBoth=hasT1&&hasT2;const w=hasBoth?sc.winner:null;const nm=cName(ct.court,ss);
+    const dispScore=hasBoth?`${sc.t1} – ${sc.t2}`:(hasT1?`${sc.t1} – --`:(hasT2?`-- – ${sc.t2}`:''));
+    h+=`<div class="cc${hasBoth?' scored':''} fu"><div class="cc-hdr"><div class="cc-ltr">${nm}</div><span class="cc-label">Court ${nm}</span>${dispScore?`<div class="cc-score">${dispScore}</div>`:''}</div>
     <div class="tg"><div class="tb${w==='A'?' wg':''}">${ct.team1.filter(Boolean).map(p=>`<div class="tn"><span class="num">${pTag(p,l)}</span>${p.name}<span class="gtag">${p.gender}</span></div>`).join('')}${w==='A'?'<div class="wl g">WINNER</div>':''}</div><div class="vs">VS</div><div class="tb${w==='B'?' wb':''}">${ct.team2.filter(Boolean).map(p=>`<div class="tn"><span class="num">${pTag(p,l)}</span>${p.name}<span class="gtag">${p.gender}</span></div>`).join('')}${w==='B'?'<div class="wl b">WINNER</div>':''}</div></div>`;
-    if(isAdmin){if(ss.config.scoreMode==='points')h+=`<div class="sr"><div class="scol"><input type="number" class="si${w==='A'?' wa':''}" min="0" max="99" placeholder="0" value="${ct.score?.t1??''}" onchange="submitScoreRound(${vr},${ci},'t1',this.value)"><div class="sl">TEAM A</div></div><div class="sd">—</div><div class="scol"><input type="number" class="si${w==='B'?' swb':''}" min="0" max="99" placeholder="0" value="${ct.score?.t2??''}" onchange="submitScoreRound(${vr},${ci},'t2',this.value)"><div class="sl">TEAM B</div></div></div>`;else h+=`<div style="display:flex;gap:8px;margin-top:14px"><button class="wlb${w==='A'?' aa':''}" onclick="setWLRound(${vr},${ci},'A')">${w==='A'?'Winner — ':''}Team A</button><button class="wlb${w==='B'?' ab':''}" onclick="setWLRound(${vr},${ci},'B')">${w==='B'?'Winner — ':''}Team B</button></div>`}
-    if(hs&&w!=='T')h+=`<div class="mh">Winners → Ct ${cName(Math.min(nC,ct.court+1),ss)} · Losers → Ct ${cName(Math.max(1,ct.court-1),ss)}</div>`;
-    if(w==='T'&&hs)h+='<div class="th">Tie — all stay</div>';h+='</div>'});
+    if(isAdmin){if(ss.config.scoreMode==='points'){const v1=hasT1?sc.t1:'';const v2=hasT2?sc.t2:'';h+=`<div class="sr"><div class="scol"><input type="number" class="si${w==='A'?' wa':''}" min="0" max="99" placeholder="--" value="${v1}" tabindex="${tabIdx++}" oninput="submitScoreRound(${vr},${ci},'t1',this.value)"><div class="sl">TEAM A</div></div><div class="sd">—</div><div class="scol"><input type="number" class="si${w==='B'?' swb':''}" min="0" max="99" placeholder="--" value="${v2}" tabindex="${tabIdx++}" oninput="submitScoreRound(${vr},${ci},'t2',this.value)"><div class="sl">TEAM B</div></div></div>`}else h+=`<div style="display:flex;gap:8px;margin-top:14px"><button class="wlb${w==='A'?' aa':''}" onclick="setWLRound(${vr},${ci},'A')">${w==='A'?'Winner — ':''}Team A</button><button class="wlb${w==='B'?' ab':''}" onclick="setWLRound(${vr},${ci},'B')">${w==='B'?'Winner — ':''}Team B</button></div>`}
+    if(hasBoth&&w!=='T')h+=`<div class="mh">Winners → Ct ${cName(Math.min(nC,ct.court+1),ss)} · Losers → Ct ${cName(Math.max(1,ct.court-1),ss)}</div>`;
+    if(w==='T'&&hasBoth)h+='<div class="th">Tie — all stay</div>';h+='</div>'});
 
   if(isAdmin&&isCurrent)h+=`<div style="display:flex;gap:8px;margin-top:4px"><button class="bg-btn" style="flex:1" onclick="reshuffleRound()">Reshuffle</button><button class="bp" style="flex:2" onclick="nextRound()">${ss.currentRound>=ss.config.rounds-1?'Finish ladder':'Next round'}</button></div>`;
+  if(isAdmin&&isCurrent&&ss.currentRound<ss.config.rounds-1)h+=`<div style="margin-top:8px"><button class="bds full" onclick="finishLadderEarly()">End ladder early</button></div>`;
   if(!isCurrent)h+=`<div style="margin-top:10px"><button class="bp full" onclick="viewRound(-1)">Back to current round</button></div>`;
   if(ss.finished)h+=`<div class="card fu" style="margin-top:14px;text-align:center;padding:22px"><h3 class="heading" style="font-size:1rem;color:var(--green);margin-bottom:4px">Ladder complete</h3><p class="subtext">Check the Stats tab for final results.</p></div>`;
   return h;
