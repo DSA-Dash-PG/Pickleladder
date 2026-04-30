@@ -500,3 +500,14 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
   .mvp-grid{grid-template-columns:1fr}
   .hot-grid{grid-template-columns:1fr}
 }
+
+/* ── Court grid — 2 columns on iPad+ ── */
+.court-grid{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:768px){
+  .content{max-width:1080px;padding:14px 20px 80px}
+  .court-grid{grid-template-columns:1fr 1fr}
+  .cc{margin-bottom:0}
+  .pv-panel.active{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
+  .pv-sec-label{grid-column:1/-1}
+  .round-progress{grid-column:1/-1}
+}

@@ -483,7 +483,13 @@ function rPlay(l,ss){
       h+='<div style="display:flex;gap:8px;margin-bottom:12px">';
       h+=timerOn?'<button class="bw" style="flex:1;padding:11px" onclick="pauseTimer()">⏸ Pause</button>':'<button class="bp" style="flex:2;padding:11px" onclick="startTimer()">'+(timer===0?'Start timer':'Resume')+'</button>';
       h+='<button class="bg-btn" style="flex:1;padding:11px" onclick="editTimer()">Edit</button>';
-      h+='<button class="bds" style="flex:1;padding:11px" onclick="endTimer()">End</button></div>'}}
+      h+='<button class="bds" style="flex:1;padding:11px" onclick="endTimer()">End</button></div>';
+      h+='<div style="display:flex;gap:8px;margin-bottom:12px">';
+      h+='<button class="bg-btn" style="flex:1" onclick="reshuffleRound()">Reshuffle</button>';
+      h+='<button class="bp" style="flex:2" onclick="nextRound()">'+(ss.currentRound>=ss.config.rounds-1?'Finish ladder':'Next round')+'</button>';
+      h+='</div>';
+      if(ss.currentRound<ss.config.rounds-1)h+='<div style="margin-bottom:12px"><button class="bds full" onclick="finishLadderEarly()">End ladder early</button></div>';
+    }}
   else{
     h+='<div class="viewing-banner fu"><div class="subtext" style="font-size:.7rem">Viewing</div>';
     h+='<h3 class="heading" style="font-size:.98rem;color:var(--lime);margin:3px 0">Round '+(vr+1)+'</h3>';
@@ -528,11 +534,10 @@ function rPlay(l,ss){
     h+=rCourtCard(ct,ci,vr,ss,l,true)});
   h+='</div>';
 
-  // Next round / finish buttons
+  // Next round / finish buttons also at bottom for convenience
   if(isAdmin&&isCurrent){
     h+='<div style="display:flex;gap:8px;margin-top:4px">';
-    h+='<button class="bg-btn" style="flex:1" onclick="reshuffleRound()">Reshuffle</button>';
-    h+='<button class="bp" style="flex:2" onclick="nextRound()">'+(ss.currentRound>=ss.config.rounds-1?'Finish ladder':'Next round')+'</button>';
+    h+='<button class="bp full" onclick="nextRound()">'+(ss.currentRound>=ss.config.rounds-1?'Finish ladder':'Next round')+'</button>';
     h+='</div>';
     if(ss.currentRound<ss.config.rounds-1)h+='<div style="margin-top:8px"><button class="bds full" onclick="finishLadderEarly()">End ladder early</button></div>'}
   if(!isCurrent)h+='<div style="margin-top:10px"><button class="bp full" onclick="viewRound(-1)">Back to current round</button></div>';
