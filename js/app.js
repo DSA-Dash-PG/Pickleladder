@@ -236,28 +236,44 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
   const isTop=ct.court===nC;
   const isBot=ct.court===1;
   const isKitchen=isTop;
-  const accents={[nC]:{col:'#ffcc00',dim:'rgba(255,204,0,0.18)',bd:'rgba(255,204,0,0.35)',stripe:'#1c1400,#1c1400 5px,#140f00 5px,#140f00 10px',bg:'#0a0800',courtBg:'#0d1800'},
-                 [nC-1]:{col:'#00e5ff',dim:'rgba(0,229,255,0.15)',bd:'rgba(0,229,255,0.3)',stripe:'#001618,#001618 5px,#000e10 5px,#000e10 10px',bg:'#000c10',courtBg:'#091812'},
-                 [nC-2]:{col:'#3b82f6',dim:'rgba(59,130,246,0.12)',bd:'rgba(59,130,246,0.25)',stripe:'#000a20,#000a20 5px,#000718 5px,#000718 10px',bg:'#00081a',courtBg:'#080c18'}};
-  const acc=accents[ct.court]||{col:'#3a3a55',dim:'rgba(255,255,255,0.06)',bd:'rgba(255,255,255,0.1)',stripe:'#0e0e18,#0e0e18 5px,#080810 5px,#080810 10px',bg:'#08080f',courtBg:'#0a0a14'};
+
+  const accents={[nC]:{col:'#ffcc00',dim:'rgba(255,204,0,0.18)',bd:'rgba(255,204,0,0.35)',stripe:'#1c1400,#1c1400 5px,#140f00 5px,#140f00 10px',bg:'#0a0800'},
+                 [nC-1]:{col:'#00e5ff',dim:'rgba(0,229,255,0.15)',bd:'rgba(0,229,255,0.3)',stripe:'#001618,#001618 5px,#000e10 5px,#000e10 10px',bg:'#000c10'},
+                 [nC-2]:{col:'#3b82f6',dim:'rgba(59,130,246,0.12)',bd:'rgba(59,130,246,0.25)',stripe:'#000a20,#000a20 5px,#000718 5px,#000718 10px',bg:'#00081a'}};
+  const acc=accents[ct.court]||{col:'#3a3a55',dim:'rgba(255,255,255,0.06)',bd:'rgba(255,255,255,0.1)',stripe:'#0e0e18,#0e0e18 5px,#080810 5px,#080810 10px',bg:'#08080f'};
+
   const wTeam=w==='A'?ct.team1:ct.team2;
   const lTeam=w==='A'?ct.team2:ct.team1;
   const wScore=w==='A'?sc?.t1:sc?.t2;
   const lScore=w==='A'?sc?.t2:sc?.t1;
+  const wNames=hb&&w?wTeam.filter(Boolean).map(p=>p.name).join(' + '):'';
+  const lNames=hb&&w?lTeam.filter(Boolean).map(p=>p.name).join(' + '):'';
   const wNamesShort=hb&&w?wTeam.filter(Boolean).map(p=>p.name.split(' ')[0]).join(' + '):'';
   const lNamesShort=hb&&w?lTeam.filter(Boolean).map(p=>p.name.split(' ')[0]).join(' + '):'';
-  let wMove='',lMove='';
-  if(hb&&w){if(isTop){wMove='Stay &amp; split';lMove='&#8594; '+cName(Math.max(1,ct.court-1),ss)}else if(isBot){wMove='&#8594; '+cName(Math.min(nC,ct.court+1),ss);lMove='Stay &amp; split'}else{wMove='&#8594; '+cName(Math.min(nC,ct.court+1),ss);lMove='&#8594; '+cName(Math.max(1,ct.court-1),ss)}}
-  const winGlow=isKitchen?'rgba(255,204,0,0.75)':'rgba(200,255,0,0.7)';
-  const winGlowSoft=isKitchen?'rgba(255,204,0,0.28)':'rgba(200,255,0,0.25)';
+
+  // movement badges with arrows
+  let wMove='',lMove='',wArrow='',lArrow='';
+  if(hb&&w){
+    if(isTop){wMove='Stay &amp; split';wArrow='&#x21D5;';lMove='&#8595; '+cName(Math.max(1,ct.court-1),ss);lArrow='&#8595;'}
+    else if(isBot){wMove='&#8593; '+cName(Math.min(nC,ct.court+1),ss);wArrow='&#8593;';lMove='Stay &amp; split';lArrow='&#x21D5;'}
+    else{wMove='&#8593; '+cName(Math.min(nC,ct.court+1),ss);wArrow='&#8593;';lMove='&#8595; '+cName(Math.max(1,ct.court-1),ss);lArrow='&#8595;'}}
+  let footWin='',footLose='';
+  if(!hb||!w){
+    if(isTop){footWin='Winners &#x21D5; stay &amp; split';footLose='Losers &#8595; '+cName(Math.max(1,ct.court-1),ss)}
+    else if(isBot){footWin='Winners &#8593; '+cName(Math.min(nC,ct.court+1),ss);footLose='Losers &#x21D5; stay &amp; split'}
+    else{footWin='Winners &#8593; '+cName(Math.min(nC,ct.court+1),ss);footLose='Losers &#8595; '+cName(Math.max(1,ct.court-1),ss)}}
+
+  const winGlow=isKitchen?'rgba(255,204,0,0.75)':'rgba(200,255,0,0.65)';
+  const winGlowSoft=isKitchen?'rgba(255,204,0,0.28)':'rgba(200,255,0,0.22)';
   const winScoreCol=isKitchen?'#ffcc00':'#c8ff00';
 
   let h='<div class="fu" style="border:1px solid '+acc.bd+';border-radius:14px;overflow:hidden;margin-bottom:10px">';
-  // Jersey header
+
+  // ── Jersey header ──
   h+='<div style="background:repeating-linear-gradient(45deg,'+acc.stripe+');border-bottom:2px solid '+acc.col+';padding:7px 12px;display:flex;align-items:center;justify-content:space-between">';
   h+='<div style="display:flex;align-items:center;gap:8px">';
-  if(isKitchen){h+='<div style="width:30px;height:30px;border-radius:50%;background:'+acc.col+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#000;flex-shrink:0">'+nm+'</div>';}
-  else{h+='<div style="width:30px;height:30px;border-radius:50%;background:'+acc.dim+';border:2px solid '+acc.col+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:'+acc.col+';flex-shrink:0">'+nm+'</div>';}
+  if(isKitchen){h+='<div style="width:28px;height:28px;border-radius:50%;background:'+acc.col+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#000;flex-shrink:0">'+nm+'</div>';}
+  else{h+='<div style="width:28px;height:28px;border-radius:50%;background:'+acc.dim+';border:2px solid '+acc.col+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:'+acc.col+';flex-shrink:0">'+nm+'</div>';}
   h+='<div>';
   if(isKitchen){h+='<div style="font-size:10px;font-weight:900;color:'+acc.col+';letter-spacing:.07em;text-transform:uppercase">&#128081; Owns the Kitchen</div><div style="font-size:7px;color:rgba(255,204,0,0.45);margin-top:1px">Top court &#183; Winners stay &amp; split</div>';}
   else{h+='<div style="font-size:10px;font-weight:900;color:'+acc.col+';letter-spacing:.07em;text-transform:uppercase">Court '+nm+'</div>';}
@@ -266,48 +282,54 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
   else{h+='<span style="font-size:7px;font-weight:800;color:#444;text-transform:uppercase;letter-spacing:.08em">'+(adminMode?'Tap to score':'Not scored')+'</span>';}
   h+='</div>';
 
-  // Panels
+  // ── Split panels ──
   if(hb&&w){
     h+='<div style="display:grid;grid-template-columns:1fr 1fr">';
-    h+='<div style="background:'+(isKitchen?'#1a1000':'#0d1f00')+';padding:10px 12px">';
+    // Winner panel
+    h+='<div style="background:'+(isKitchen?'#1a1000':'#0d1f00')+';padding:10px 12px;text-align:center">';
     h+='<div style="font-size:7px;font-weight:900;color:'+winScoreCol+';text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">Winner</div>';
-    wTeam.filter(Boolean).forEach(p=>{h+='<div style="font-size:13px;font-weight:700;color:#f4f4f0;line-height:1.45"'+(adminMode?' onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+(w==='A'?0:1)+','+wTeam.filter(Boolean).indexOf(p)+')" style="cursor:pointer;font-size:10px;font-weight:700;color:#f4f4f0;line-height:1.45"':'')+'>'+p.name+'</div>';});
+    // Names as "P1 + P2" on one line, clickable for swap in admin
+    const wNameStr=wTeam.filter(Boolean).map(p=>p.name).join(' + ');
+    const lNameStr=lTeam.filter(Boolean).map(p=>p.name).join(' + ');
+    if(adminMode){
+      h+='<div style="font-size:12px;font-weight:700;color:#f4f4f0;margin-bottom:6px;line-height:1.35;cursor:pointer" onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+(w==='A'?0:1)+',0)">'+wNameStr+'</div>';}
+    else{h+='<div style="font-size:12px;font-weight:700;color:#f4f4f0;margin-bottom:6px;line-height:1.35">'+wNameStr+'</div>';}
     h+='<div style="font-size:44px;font-weight:900;color:'+winScoreCol+';line-height:1;letter-spacing:-.03em;text-shadow:0 0 18px '+winGlow+',0 0 36px '+winGlowSoft+'">'+wScore+'</div>';
-    h+='<div style="display:inline-block;margin-top:5px;font-size:7px;font-weight:900;background:'+winScoreCol+';color:#000;padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.08em">'+(isKitchen?'&#128081; ':'')+wMove+'</div>';
+    h+='<div style="display:inline-flex;align-items:center;gap:3px;margin-top:6px;font-size:8px;font-weight:900;background:'+winScoreCol+';color:#000;padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.06em">'+wMove+'</div>';
     h+='</div>';
-    h+='<div style="background:#1a0000;padding:10px 12px;border-left:1px solid rgba(255,92,71,0.08)">';
+    // Loser panel
+    h+='<div style="background:#1a0000;padding:10px 12px;text-align:center;border-left:1px solid rgba(255,92,71,0.08)">';
     h+='<div style="font-size:7px;font-weight:900;color:rgba(255,92,71,0.7);text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">Loser</div>';
-    lTeam.filter(Boolean).forEach(p=>{h+='<div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.35);line-height:1.45"'+(adminMode?' onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+(w==='A'?1:0)+','+lTeam.filter(Boolean).indexOf(p)+')" style="cursor:pointer;font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);line-height:1.45"':'')+'>'+p.name+'</div>';});
+    if(adminMode){
+      h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:6px;line-height:1.35;cursor:pointer" onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+(w==='A'?1:0)+',0)">'+lNameStr+'</div>';}
+    else{h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:6px;line-height:1.35">'+lNameStr+'</div>';}
     h+='<div style="font-size:44px;font-weight:900;color:rgba(255,92,71,0.3);line-height:1;letter-spacing:-.03em">'+lScore+'</div>';
-    h+='<div style="display:inline-block;margin-top:5px;font-size:7px;font-weight:900;background:rgba(255,92,71,0.15);color:rgba(255,92,71,0.7);border:1px solid rgba(255,92,71,0.25);padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.08em">'+lMove+'</div>';
+    h+='<div style="display:inline-flex;align-items:center;gap:3px;margin-top:6px;font-size:8px;font-weight:900;background:rgba(255,92,71,0.15);color:rgba(255,92,71,0.7);border:1px solid rgba(255,92,71,0.25);padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.06em">'+lMove+'</div>';
     h+='</div></div>';
-  }else{
+    // Footer
+    h+='<div style="padding:5px 12px;font-size:7px;font-weight:700;color:rgba(255,255,255,0.28);background:'+acc.bg+';border-top:1px solid rgba(255,255,255,0.04);letter-spacing:.03em">';
+    h+=wNamesShort+' '+wMove.replace(/&#8593;/g,'↑').replace(/&#8595;/g,'↓').replace(/&#x21D5;/g,'↕').replace(/&amp;/g,'&').toLowerCase()+' &#183; '+lNamesShort+' '+lMove.replace(/&#8593;/g,'↑').replace(/&#8595;/g,'↓').replace(/&#x21D5;/g,'↕').replace(/&amp;/g,'&').toLowerCase();
+    h+='</div>';
+  } else {
+    // Unscored panels
     const mkPanel=(team,side,isRight)=>{
       const fld=side==='A'?'t1':'t2';const ti=side==='A'?0:1;
-      const onclk=adminMode?` onclick="openNumpad(${vr},${ci},'${fld}')" style="cursor:pointer"`:'';
-      let p='<div style="background:'+acc.bg+';padding:10px 12px;'+(isRight?'border-left:1px solid rgba(255,255,255,0.04)':'')+'"'+onclk+'>';
+      const onclk=adminMode?` onclick="openNumpad(${vr},${ci},'${fld}')" style="cursor:pointer;text-align:center;background:${acc.bg};padding:10px 12px${isRight?';border-left:1px solid rgba(255,255,255,0.04)':''}"`:`style="text-align:center;background:${acc.bg};padding:10px 12px${isRight?';border-left:1px solid rgba(255,255,255,0.04)':''}"`;
+      const nameStr=team.filter(Boolean).map(p=>p.name).join(' + ')||'TBD';
+      let p='<div '+onclk+'>';
       p+='<div style="font-size:7px;font-weight:900;color:'+acc.col+';opacity:.65;text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">Team '+side+'</div>';
-      team.filter(Boolean).forEach(pl=>{
-        const isSrc=swapMode&&swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===ti;
-        p+='<div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.6);line-height:1.45'+(isSrc?';opacity:.35':'')+'"'+(adminMode&&!onclk?' onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+ti+','+team.filter(Boolean).indexOf(pl)+')" style="cursor:pointer"':'')+'>'+pl.name+'</div>';});
-      p+='<div style="font-size:40px;font-weight:900;line-height:1;color:'+acc.col+';opacity:.1;letter-spacing:-.03em;margin-top:4px">--</div>';
-      if(adminMode)p+='<div style="font-size:7px;color:rgba(255,255,255,0.18);margin-top:4px">Tap to score</div>';
+      p+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.6);margin-bottom:6px;line-height:1.35">'+nameStr+'</div>';
+      p+='<div style="font-size:40px;font-weight:900;line-height:1;color:'+acc.col+';opacity:.1;letter-spacing:-.03em">--</div>';
+      if(adminMode)p+='<div style="font-size:7px;color:rgba(255,255,255,0.18);margin-top:6px">Tap to score</div>';
       p+='</div>';return p};
     h+='<div style="display:grid;grid-template-columns:1fr 1fr">';
-    h+=mkPanel(ct.team1,'A',false);h+=mkPanel(ct.team2,'B',true);
-    h+='</div>';}
-  // Movement footer
-  if(hb&&w){
-    h+='<div style="padding:5px 12px;font-size:7px;font-weight:700;color:rgba(255,255,255,0.28);background:'+acc.bg+';border-top:1px solid rgba(255,255,255,0.04);letter-spacing:.03em">';
-    h+=wNamesShort+' '+wMove.replace(/&#8594;/g,'→').replace(/&amp;/g,'&').toLowerCase()+' &#183; '+lNamesShort+' '+lMove.replace(/&#8594;/g,'→').replace(/&amp;/g,'&').toLowerCase();
+    h+=mkPanel(ct.team1,'A',false);
+    h+=mkPanel(ct.team2,'B',true);
     h+='</div>';
-  }else{
-    let ft='';
-    if(isTop)ft='Winners stay &amp; split &#183; Losers &#8594; '+cName(Math.max(1,ct.court-1),ss);
-    else if(isBot)ft='Winners &#8594; '+cName(Math.min(nC,ct.court+1),ss)+' &#183; Losers stay &amp; split';
-    else ft='Winners &#8594; '+cName(Math.min(nC,ct.court+1),ss)+' &#183; Losers &#8594; '+cName(Math.max(1,ct.court-1),ss);
-    h+='<div style="padding:5px 12px;font-size:7px;font-weight:700;color:#333;background:'+acc.bg+';border-top:1px solid rgba(255,255,255,0.04)">'+ft+'</div>';}
-  // Admin numpad
+    h+='<div style="padding:5px 12px;font-size:7px;font-weight:700;color:#333;background:'+acc.bg+';border-top:1px solid rgba(255,255,255,0.04)">'+footWin+' &#183; '+footLose+'</div>';
+  }
+
+  // ── Admin numpad ──
   if(adminMode&&npState&&npState.ri===vr&&npState.ci===ci){
     const ct2=ss.rounds[vr].courts[ci];
     const teamLabel=npState.field==='t1'?'Team A':'Team B';
@@ -325,14 +347,17 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
     h+='<button class="np-key" onclick="npPress(\'0\')">0</button>';
     h+='<button class="np-key confirm" onclick="npConfirm()">Set \u2192</button>';
     h+='</div></div>'}
-  // Win/Loss mode
+
+  // ── Win/Loss mode ──
   if(adminMode&&ss.config.scoreMode==='winloss'){
     h+='<div style="display:flex;gap:8px;padding:8px 12px 10px">';
     h+='<button class="wlb'+(w==='A'?' aa':'')+'" onclick="setWLRound('+vr+','+ci+',\'A\')">'+(w==='A'?'\u2713 Winner \u2014 ':'')+'Team A</button>';
     h+='<button class="wlb'+(w==='B'?' ab':'')+'" onclick="setWLRound('+vr+','+ci+',\'B\')">'+(w==='B'?'\u2713 Winner \u2014 ':'')+'Team B</button>';
     h+='</div>'}
-  // Tie warning
+
+  // ── Tie warning ──
   if(adminMode&&hb&&!w)h+='<div class="th" style="padding:6px 12px 8px">Scores tied \u2014 remove the last point to determine a winner</div>';
+
   h+='</div>';return h}
 
 // ═══════════════════════════════════════════════════
