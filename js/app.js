@@ -252,17 +252,9 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
     sv+='<line x1="12" y1="40" x2="216" y2="40" stroke="rgba(255,255,255,0.07)" stroke-width="5"/>';
     sv+='<line x1="12" y1="40" x2="216" y2="40" stroke="rgba(255,255,255,'+no+')" stroke-width="1.8"/>';
     if(hb&&w){
-      sv+='<rect x="12" y="8" width="102" height="32" fill="rgba(200,255,0,0.05)"/>';
-      sv+='<rect x="114" y="40" width="102" height="32" fill="rgba(255,92,71,0.04)"/>';
-      sv+='<text x="63" y="30" text-anchor="middle" font-family="Inter,sans-serif" font-size="20" font-weight="900" fill="'+winScoreCol+'" filter="url(#gf'+ci+')">'+wScore+'</text>';
-      sv+='<text x="63" y="46" text-anchor="middle" font-family="Inter,sans-serif" font-size="7" font-weight="700" fill="rgba(255,255,255,0.45)">'+wTeam.filter(Boolean).map(p=>p.name.split(' ')[0]).join(' + ')+'</text>';
-      sv+='<text x="165" y="62" text-anchor="middle" font-family="Inter,sans-serif" font-size="20" font-weight="900" fill="rgba(255,92,71,0.32)">'+lScore+'</text>';
-      sv+='<text x="165" y="50" text-anchor="middle" font-family="Inter,sans-serif" font-size="7" font-weight="700" fill="rgba(255,255,255,0.26)">'+lTeam.filter(Boolean).map(p=>p.name.split(' ')[0]).join(' + ')+'</text>';
-    }else{
-      const t1n=ct.team1.filter(Boolean).map(p=>p.name.split(' ')[0]).join(' + ');
-      const t2n=ct.team2.filter(Boolean).map(p=>p.name.split(' ')[0]).join(' + ');
-      sv+='<text x="63" y="38" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" font-weight="700" fill="rgba(255,255,255,0.38)">'+t1n+'</text>';
-      sv+='<text x="165" y="52" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" font-weight="700" fill="rgba(255,255,255,0.38)">'+t2n+'</text>';}
+      sv+='<rect x="12" y="8" width="102" height="32" fill="rgba(200,255,0,0.04)"/>';
+      sv+='<rect x="114" y="40" width="102" height="32" fill="rgba(255,92,71,0.03)"/>';
+    }
     sv+='</svg>';return sv})();
   let h='<div class="fu" style="border:1px solid '+acc.bd+';border-radius:14px;overflow:hidden;margin-bottom:10px">';
   // Jersey header
@@ -284,13 +276,13 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
     h+='<div style="display:grid;grid-template-columns:1fr 1fr">';
     h+='<div style="background:'+(isKitchen?'#1a1000':'#0d1f00')+';padding:10px 12px">';
     h+='<div style="font-size:7px;font-weight:900;color:'+winScoreCol+';text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">Winner</div>';
-    wTeam.filter(Boolean).forEach(p=>{h+='<div style="font-size:10px;font-weight:700;color:#f4f4f0;line-height:1.45"'+(adminMode?' onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+(w==='A'?0:1)+','+wTeam.filter(Boolean).indexOf(p)+')" style="cursor:pointer;font-size:10px;font-weight:700;color:#f4f4f0;line-height:1.45"':'')+'>'+p.name+'</div>';});
+    wTeam.filter(Boolean).forEach(p=>{h+='<div style="font-size:13px;font-weight:700;color:#f4f4f0;line-height:1.45"'+(adminMode?' onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+(w==='A'?0:1)+','+wTeam.filter(Boolean).indexOf(p)+')" style="cursor:pointer;font-size:10px;font-weight:700;color:#f4f4f0;line-height:1.45"':'')+'>'+p.name+'</div>';});
     h+='<div style="font-size:44px;font-weight:900;color:'+winScoreCol+';line-height:1;letter-spacing:-.03em;text-shadow:0 0 18px '+winGlow+',0 0 36px '+winGlowSoft+'">'+wScore+'</div>';
     h+='<div style="display:inline-block;margin-top:5px;font-size:7px;font-weight:900;background:'+winScoreCol+';color:#000;padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.08em">'+(isKitchen?'&#128081; ':'')+wMove+'</div>';
     h+='</div>';
     h+='<div style="background:#1a0000;padding:10px 12px;border-left:1px solid rgba(255,92,71,0.08)">';
     h+='<div style="font-size:7px;font-weight:900;color:rgba(255,92,71,0.7);text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">Loser</div>';
-    lTeam.filter(Boolean).forEach(p=>{h+='<div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);line-height:1.45"'+(adminMode?' onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+(w==='A'?1:0)+','+lTeam.filter(Boolean).indexOf(p)+')" style="cursor:pointer;font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);line-height:1.45"':'')+'>'+p.name+'</div>';});
+    lTeam.filter(Boolean).forEach(p=>{h+='<div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.35);line-height:1.45"'+(adminMode?' onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+(w==='A'?1:0)+','+lTeam.filter(Boolean).indexOf(p)+')" style="cursor:pointer;font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);line-height:1.45"':'')+'>'+p.name+'</div>';});
     h+='<div style="font-size:44px;font-weight:900;color:rgba(255,92,71,0.3);line-height:1;letter-spacing:-.03em">'+lScore+'</div>';
     h+='<div style="display:inline-block;margin-top:5px;font-size:7px;font-weight:900;background:rgba(255,92,71,0.15);color:rgba(255,92,71,0.7);border:1px solid rgba(255,92,71,0.25);padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.08em">'+lMove+'</div>';
     h+='</div></div>';
@@ -302,7 +294,7 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
       p+='<div style="font-size:7px;font-weight:900;color:'+acc.col+';opacity:.65;text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">Team '+side+'</div>';
       team.filter(Boolean).forEach(pl=>{
         const isSrc=swapMode&&swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===ti;
-        p+='<div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);line-height:1.45'+(isSrc?';opacity:.35':'')+'"'+(adminMode&&!onclk?' onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+ti+','+team.filter(Boolean).indexOf(pl)+')" style="cursor:pointer"':'')+'>'+pl.name+'</div>';});
+        p+='<div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.6);line-height:1.45'+(isSrc?';opacity:.35':'')+'"'+(adminMode&&!onclk?' onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+ti+','+team.filter(Boolean).indexOf(pl)+')" style="cursor:pointer"':'')+'>'+pl.name+'</div>';});
       p+='<div style="font-size:40px;font-weight:900;line-height:1;color:'+acc.col+';opacity:.1;letter-spacing:-.03em;margin-top:4px">--</div>';
       if(adminMode)p+='<div style="font-size:7px;color:rgba(255,255,255,0.18);margin-top:4px">Tap to score</div>';
       p+='</div>';return p};
@@ -410,21 +402,35 @@ function rPlayerView(l,ss){
   // UP NEXT
   h+='<div class="pv-panel'+(pvTab==='next'?' active':'')+'" id="pv-next">';
   const nextRd=vr+1;
-  h+='<div class="pv-sec-label">Round '+nextRd+' — projected assignments</div>';
-  const allScored=round.courts.every(c=>c.score&&c.score.winner);
-  if(!allScored){
-    h+='<div class="upnext-banner">';
-    h+='<div class="upnext-banner-icon">⏳</div>';
-    h+='<div><div class="upnext-banner-top">Waiting on scores</div>';
-    h+='<div class="upnext-banner-bot">Lineups lock in once all courts are scored</div></div></div>'}
-  if(ss.currentRound<ss.config.rounds-1){
-    // Show projected next round if all scored, else show movement rules per court
+  const isFinalRound=nextRd>=ss.config.rounds;
+  const nextRoundExists=ss.rounds[nextRd]!=null;
+  if(isFinalRound){
+    // Last round — see you next time
+    h+='<div class="card" style="text-align:center;padding:32px 24px">';
+    h+='<div style="font-size:2rem;margin-bottom:10px">🥒</div>';
+    h+='<div style="font-weight:900;font-size:1.1rem;color:var(--lime);margin-bottom:6px">See you at the next ladder!</div>';
+    h+='<div class="subtext">This is the final round. Check the Stats tab for final standings.</div>';
+    h+='</div>';
+  } else if(nextRoundExists){
+    // Round already played — show real lineups
+    h+='<div class="pv-sec-label">Round '+nextRd+' — actual lineups</div>';
+    const nextRound=ss.rounds[nextRd];
+    h+='<div class="court-grid">';
+    [...nextRound.courts].sort((a,b)=>b.court-a.court).forEach(ct=>{
+      h+=rCourtCard(ct,nextRound.courts.indexOf(ct),nextRd,ss,l,false)});
+    h+='</div>';
+  } else {
+    // Current round not yet complete — show projections
+    h+='<div class="pv-sec-label">Round '+nextRd+' — projected assignments</div>';
+    const allScored=round.courts.every(c=>c.score&&c.score.winner);
+    if(!allScored){
+      h+='<div class="upnext-banner">';
+      h+='<div class="upnext-banner-icon">⏳</div>';
+      h+='<div><div class="upnext-banner-top">Waiting on scores</div>';
+      h+='<div class="upnext-banner-bot">Lineups lock in once all courts are scored</div></div></div>'}
     [...round.courts].sort((a,b)=>b.court-a.court).forEach(ct=>{
-      const sc=ct.score;
-      const w=sc?.winner;
-      const nm=cName(ct.court,ss);
-      const isTop=ct.court===nC;
-      const isBot=ct.court===1;
+      const sc=ct.score;const w=sc?.winner;const nm=cName(ct.court,ss);
+      const isTop=ct.court===nC;const isBot=ct.court===1;
       const ltrCls=ct.court===nC?'cc-ltr-gold':ct.court===nC-1?'cc-ltr-cyan':ct.court===nC-2?'cc-ltr-blue':'cc-ltr-gray';
       const isKitchen=isTop;
       h+='<div class="next-cc">';
@@ -434,9 +440,7 @@ function rPlayerView(l,ss){
       if(isTop)h+='<span class="next-cc-cond next-cond-win">Winners stay</span>';
       else if(isBot)h+='<span class="next-cc-cond next-cond-lose">Losers stay</span>';
       else h+='<span class="next-cc-cond" style="color:var(--muted)">Mixed movement</span>';
-      h+='</div>';
-      h+='<div class="next-cc-body">';
-      // Team A side
+      h+='</div><div class="next-cc-body">';
       h+='<div class="next-team-col">';
       if(isTop){
         h+='<div class="next-from"><div class="cc-ltr '+ltrCls+'" style="width:20px;height:20px;border-radius:4px;font-size:10px">'+nm+'</div><span class="next-from-txt">Winners split</span></div>';
@@ -446,9 +450,7 @@ function rPlayerView(l,ss){
         const fromNm=cName(Math.min(nC,ct.court+1),ss);const fromCls=ct.court+1===nC?'cc-ltr-gold':ct.court+1===nC-1?'cc-ltr-cyan':'cc-ltr-blue';
         h+='<div class="next-from"><div class="cc-ltr '+fromCls+'" style="width:20px;height:20px;border-radius:4px;font-size:10px">'+fromNm+'</div><span class="next-from-txt">Winners of '+fromNm+'</span></div>';
         h+='<div class="next-name tbd">Pending...</div>'}
-      h+='</div>';
-      h+='<div class="next-vs">VS</div>';
-      // Team B side
+      h+='</div><div class="next-vs">VS</div>';
       h+='<div class="next-team-col">';
       if(isBot){
         h+='<div class="next-from"><div class="cc-ltr '+ltrCls+'" style="width:20px;height:20px;border-radius:4px;font-size:10px">'+nm+'</div><span class="next-from-txt">Losers split</span></div>';
@@ -458,8 +460,7 @@ function rPlayerView(l,ss){
         const fromNm2=cName(Math.max(1,ct.court-1),ss);const fromCls2=ct.court-1===0?'cc-ltr-gray':ct.court-1===nC-2?'cc-ltr-blue':'cc-ltr-cyan';
         h+='<div class="next-from"><div class="cc-ltr '+fromCls2+'" style="width:20px;height:20px;border-radius:4px;font-size:10px">'+fromNm2+'</div><span class="next-from-txt">Losers of '+fromNm2+'</span></div>';
         h+='<div class="next-name tbd">Pending...</div>'}
-      h+='</div></div></div>'})}
-  else{h+='<div class="card" style="text-align:center;padding:24px"><div style="font-size:1.4rem;margin-bottom:8px">🏆</div><div style="font-weight:800;font-size:1rem;color:var(--lime)">Final round!</div><div class="subtext" style="margin-top:4px">Check Stats after this round for final standings.</div></div>'}
+      h+='</div></div></div>'});}
   h+='</div>';
   return h}
 
