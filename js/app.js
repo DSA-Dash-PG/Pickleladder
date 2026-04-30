@@ -375,9 +375,11 @@ function rPlayerView(l,ss){
   // NOW PLAYING
   h+='<div class="pv-panel'+(pvTab==='now'?' active':'')+'" id="pv-now">';
   h+='<div class="pv-sec-label">Round '+(vr+1)+' — all courts</div>';
+  h+='<div class="court-grid">';
   [...round.courts].sort((a,b)=>b.court-a.court).forEach(ct=>{
     const ci=round.courts.indexOf(ct);
     h+=rCourtCard(ct,ci,vr,ss,l,false)});
+  h+='</div>';
   // Round progress
   const scored=round.courts.filter(c=>c.score&&c.score.winner).length;
   const total=round.courts.length;
@@ -519,10 +521,12 @@ function rPlay(l,ss){
     h+='<div class="cmc'+(hb?' scored':'')+'"><div class="cmc-ltr">Ct '+nm+'</div><div class="cmc-match">'+ct.team1.filter(Boolean).map(p=>pTag(p,l)).join(' &amp; ')+'<span class="vs-s">vs</span>'+ct.team2.filter(Boolean).map(p=>pTag(p,l)).join(' &amp; ')+'</div>'+(hb?'<div class="cmc-score">'+sc.t1+' – '+sc.t2+'</div>':'')+'</div>'});
   h+='</div>';
 
-  // Court cards — admin mode
+  // Court cards — admin mode (2-col grid on iPad)
+  h+='<div class="court-grid">';
   [...round.courts].sort((a,b)=>b.court-a.court).forEach(ct=>{
     const ci=round.courts.indexOf(ct);
     h+=rCourtCard(ct,ci,vr,ss,l,true)});
+  h+='</div>';
 
   // Next round / finish buttons
   if(isAdmin&&isCurrent){
