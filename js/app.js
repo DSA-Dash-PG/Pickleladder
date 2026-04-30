@@ -240,22 +240,7 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
   const winGlow=isKitchen?'rgba(255,204,0,0.75)':'rgba(200,255,0,0.7)';
   const winGlowSoft=isKitchen?'rgba(255,204,0,0.28)':'rgba(200,255,0,0.25)';
   const winScoreCol=isKitchen?'#ffcc00':'#c8ff00';
-  const courtSVG=(()=>{
-    const lo=hb?'0.16':'0.22';const no=hb?'0.38':'0.5';
-    let sv='<svg viewBox="0 0 228 80" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%">';
-    sv+='<defs><filter id="gf'+ci+'" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
-    sv+='<rect width="228" height="80" fill="'+acc.courtBg+'"/>';
-    sv+='<rect x="12" y="8" width="204" height="64" fill="none" stroke="rgba(255,255,255,'+lo+')" stroke-width="1.2"/>';
-    sv+='<rect x="12" y="8" width="51" height="64" fill="rgba(255,255,255,0.015)" stroke="rgba(255,255,255,'+(parseFloat(lo)*0.65)+')" stroke-width=".8"/>';
-    sv+='<rect x="165" y="8" width="51" height="64" fill="rgba(255,255,255,0.015)" stroke="rgba(255,255,255,'+(parseFloat(lo)*0.65)+')" stroke-width=".8"/>';
-    sv+='<line x1="114" y1="8" x2="114" y2="72" stroke="rgba(255,255,255,'+(parseFloat(lo)*0.75)+')" stroke-width=".8"/>';
-    sv+='<line x1="12" y1="40" x2="216" y2="40" stroke="rgba(255,255,255,0.07)" stroke-width="5"/>';
-    sv+='<line x1="12" y1="40" x2="216" y2="40" stroke="rgba(255,255,255,'+no+')" stroke-width="1.8"/>';
-    if(hb&&w){
-      sv+='<rect x="12" y="8" width="102" height="32" fill="rgba(200,255,0,0.04)"/>';
-      sv+='<rect x="114" y="40" width="102" height="32" fill="rgba(255,92,71,0.03)"/>';
-    }
-    sv+='</svg>';return sv})();
+
   let h='<div class="fu" style="border:1px solid '+acc.bd+';border-radius:14px;overflow:hidden;margin-bottom:10px">';
   // Jersey header
   h+='<div style="background:repeating-linear-gradient(45deg,'+acc.stripe+');border-bottom:2px solid '+acc.col+';padding:7px 12px;display:flex;align-items:center;justify-content:space-between">';
@@ -269,8 +254,7 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
   if(hb&&w){h+='<span style="font-size:12px;font-weight:900;color:#c8ff00;letter-spacing:.02em">'+sc.t1+' &#8211; '+sc.t2+'</span>';}
   else{h+='<span style="font-size:7px;font-weight:800;color:#444;text-transform:uppercase;letter-spacing:.08em">'+(adminMode?'Tap to score':'Not scored')+'</span>';}
   h+='</div>';
-  // SVG court
-  h+=courtSVG;
+
   // Panels
   if(hb&&w){
     h+='<div style="display:grid;grid-template-columns:1fr 1fr">';
