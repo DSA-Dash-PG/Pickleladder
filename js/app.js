@@ -674,7 +674,16 @@ function render(){
 
 async function init(){
   applyTextSize();
-  ladders=await apiList();
-  if(ladders.length){activeLadderId=ladders[0].id;const l=gL();if(l?.activeSeason)tab='overview'}
+  render(); // show UI immediately so screen is never blank
+  try{
+    ladders=await Promise.race([
+      apiList(),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))
+    ]);
+    if(ladders.length){activeLadderId=ladders[0].id;const l=gL();if(l?.activeSeason)tab='overview'}
+  }catch(e){
+    console.warn('API init failed:',e.message);
+    ladders=[];
+  }
   render()}
 document.addEventListener('DOMContentLoaded',init);
