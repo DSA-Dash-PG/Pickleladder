@@ -191,7 +191,7 @@ async function deleteSession(ssid){const l=gL();const s=gS();if(!l||!s)return;co
 
 function go(v,t){view=v;if(t)tab=t;viewingRound=-1;swapMode=null;npState=null;if(v==='newSession')formCourtCount=4;render();if(v==='newSession')setTimeout(updateCourtInputs,10)}
 function selectLadder(id){activeLadderId=id;activeSessionId=null;view='dashboard';tab='overview';viewingRound=-1;render()}
-function openSession(id){activeSessionId=id;view='session';tab='play';viewingRound=-1;swapMode=null;npState=null;const ss=gSS();mapOpen=ss?shouldMapOpen(ss)||ss.started:false;render()}
+function openSession(id){activeSessionId=id;view='session';viewingRound=-1;swapMode=null;npState=null;const ss=gSS();const finished=ss?.finished;tab=finished?(isAdmin?'play':'stats'):'play';mapOpen=ss?shouldMapOpen(ss)||ss.started:false;render()}
 function setPvTab(t){pvTab=t;render()}
 
 function tkSetMode(m){tkMode=m;tkPicked.clear();render();setTimeout(tkRenderChart,10)}
@@ -212,9 +212,7 @@ function tkRenderChart(){
   const chEl=document.getElementById('tkChips');if(chEl)chEl.innerHTML=ranked.map(p=>'<button class="tk-chip'+(tkPicked.has(p.id)?' on':'')+'" onclick="tkTogglePlayer(\''+p.id+'\')">#'+pNum(p,l)+' '+p.name+'</button>').join('')}
 
 // ═══════════════════════════════════════════════════
-// COURT CARD RENDERER — shared between admin & player views
-// isAdmin=true adds the numpad scoring UI
-// isTop = true for Court A (Owns the Kitchen)
+// COURT CARD RENDERER — Jersey + Split Panel + SVG court
 // ═══════════════════════════════════════════════════
 function rCourtCard(ct,ci,vr,ss,l,adminMode){
   const nC=ss.config.courts;
@@ -227,137 +225,152 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
   const isTop=ct.court===nC;
   const isBot=ct.court===1;
   const isKitchen=isTop;
-
-  // court letter color
-  const ltrs={[nC]:'cc-ltr-gold',[nC-1]:'cc-ltr-cyan',[nC-2]:'cc-ltr-blue'};
-  const ltrCls=ltrs[ct.court]||'cc-ltr-gray';
-
-  // status badge
-  let statusHtml='';
-  if(hb&&w){statusHtml='<span class="cc-status cc-status-scored">Scored ✓</span>'}
-  else if(h1||h2){statusHtml='<span class="cc-status cc-status-live">● In progress</span>'}
-  else{statusHtml='<span class="cc-status cc-status-wait">Not scored</span>'}
-
-  // score in header
-  const scoreHeader=hb?'<span class="cc-score">'+sc.t1+' – '+sc.t2+'</span>':'';
-
-  let h='<div class="cc'+(hb?' scored':'')+(isKitchen?' kitchen':'')+' fu">';
-  h+='<div class="cc-surface">';
-
-  // Kitchen crown banner
-  if(isKitchen){
-    h+='<div class="kitchen-banner">';
-    h+='<span class="kitchen-crown">👑</span>';
-    h+='<span class="kitchen-title">Owns the Kitchen</span>';
-    h+='<span class="kitchen-sub">Top court · Winners stay &amp; split</span>';
-    h+='</div>'}
-
-  // Top bar
-  h+='<div class="cc-hdr"><div class="cc-id">';
-  h+='<div class="cc-ltr '+ltrCls+'">'+nm+'</div>';
-  h+='<div><div class="cc-label">Court '+nm+'</div></div>';
+  const accents={[nC]:{col:'#ffcc00',dim:'rgba(255,204,0,0.18)',bd:'rgba(255,204,0,0.35)',stripe:'#1c1400,#1c1400 5px,#140f00 5px,#140f00 10px',bg:'#0a0800',courtBg:'#0d1800'},
+                 [nC-1]:{col:'#00e5ff',dim:'rgba(0,229,255,0.15)',bd:'rgba(0,229,255,0.3)',stripe:'#001618,#001618 5px,#000e10 5px,#000e10 10px',bg:'#000c10',courtBg:'#091812'},
+                 [nC-2]:{col:'#3b82f6',dim:'rgba(59,130,246,0.12)',bd:'rgba(59,130,246,0.25)',stripe:'#000a20,#000a20 5px,#000718 5px,#000718 10px',bg:'#00081a',courtBg:'#080c18'}};
+  const acc=accents[ct.court]||{col:'#3a3a55',dim:'rgba(255,255,255,0.06)',bd:'rgba(255,255,255,0.1)',stripe:'#0e0e18,#0e0e18 5px,#080810 5px,#080810 10px',bg:'#08080f',courtBg:'#0a0a14'};
+  const wTeam=w==='A'?ct.team1:ct.team2;
+  const lTeam=w==='A'?ct.team2:ct.team1;
+  const wScore=w==='A'?sc?.t1:sc?.t2;
+  const lScore=w==='A'?sc?.t2:sc?.t1;
+  const wNamesShort=hb&&w?wTeam.filter(Boolean).map(p=>p.name.split(' ')[0]).join(' + '):'';
+  const lNamesShort=hb&&w?lTeam.filter(Boolean).map(p=>p.name.split(' ')[0]).join(' + '):'';
+  let wMove='',lMove='';
+  if(hb&&w){if(isTop){wMove='Stay &amp; split';lMove='&#8594; '+cName(Math.max(1,ct.court-1),ss)}else if(isBot){wMove='&#8594; '+cName(Math.min(nC,ct.court+1),ss);lMove='Stay &amp; split'}else{wMove='&#8594; '+cName(Math.min(nC,ct.court+1),ss);lMove='&#8594; '+cName(Math.max(1,ct.court-1),ss)}}
+  const winGlow=isKitchen?'rgba(255,204,0,0.75)':'rgba(200,255,0,0.7)';
+  const winGlowSoft=isKitchen?'rgba(255,204,0,0.28)':'rgba(200,255,0,0.25)';
+  const winScoreCol=isKitchen?'#ffcc00':'#c8ff00';
+  const courtSVG=(()=>{
+    const lo=hb?'0.16':'0.22';const no=hb?'0.38':'0.5';
+    let sv='<svg viewBox="0 0 228 80" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%">';
+    sv+='<defs><filter id="gf'+ci+'" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
+    sv+='<rect width="228" height="80" fill="'+acc.courtBg+'"/>';
+    sv+='<rect x="12" y="8" width="204" height="64" fill="none" stroke="rgba(255,255,255,'+lo+')" stroke-width="1.2"/>';
+    sv+='<rect x="12" y="8" width="51" height="64" fill="rgba(255,255,255,0.015)" stroke="rgba(255,255,255,'+(parseFloat(lo)*0.65)+')" stroke-width=".8"/>';
+    sv+='<rect x="165" y="8" width="51" height="64" fill="rgba(255,255,255,0.015)" stroke="rgba(255,255,255,'+(parseFloat(lo)*0.65)+')" stroke-width=".8"/>';
+    sv+='<line x1="114" y1="8" x2="114" y2="72" stroke="rgba(255,255,255,'+(parseFloat(lo)*0.75)+')" stroke-width=".8"/>';
+    sv+='<line x1="12" y1="40" x2="216" y2="40" stroke="rgba(255,255,255,0.07)" stroke-width="5"/>';
+    sv+='<line x1="12" y1="40" x2="216" y2="40" stroke="rgba(255,255,255,'+no+')" stroke-width="1.8"/>';
+    if(hb&&w){
+      sv+='<rect x="12" y="8" width="102" height="32" fill="rgba(200,255,0,0.05)"/>';
+      sv+='<rect x="114" y="40" width="102" height="32" fill="rgba(255,92,71,0.04)"/>';
+      sv+='<text x="63" y="30" text-anchor="middle" font-family="Inter,sans-serif" font-size="20" font-weight="900" fill="'+winScoreCol+'" filter="url(#gf'+ci+')">'+wScore+'</text>';
+      sv+='<text x="63" y="46" text-anchor="middle" font-family="Inter,sans-serif" font-size="7" font-weight="700" fill="rgba(255,255,255,0.45)">'+wTeam.filter(Boolean).map(p=>p.name.split(' ')[0]).join(' + ')+'</text>';
+      sv+='<text x="165" y="62" text-anchor="middle" font-family="Inter,sans-serif" font-size="20" font-weight="900" fill="rgba(255,92,71,0.32)">'+lScore+'</text>';
+      sv+='<text x="165" y="50" text-anchor="middle" font-family="Inter,sans-serif" font-size="7" font-weight="700" fill="rgba(255,255,255,0.26)">'+lTeam.filter(Boolean).map(p=>p.name.split(' ')[0]).join(' + ')+'</text>';
+    }else{
+      const t1n=ct.team1.filter(Boolean).map(p=>p.name.split(' ')[0]).join(' + ');
+      const t2n=ct.team2.filter(Boolean).map(p=>p.name.split(' ')[0]).join(' + ');
+      sv+='<text x="63" y="38" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" font-weight="700" fill="rgba(255,255,255,0.38)">'+t1n+'</text>';
+      sv+='<text x="165" y="52" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" font-weight="700" fill="rgba(255,255,255,0.38)">'+t2n+'</text>';}
+    sv+='</svg>';return sv})();
+  let h='<div class="fu" style="border:1px solid '+acc.bd+';border-radius:14px;overflow:hidden;margin-bottom:10px">';
+  // Jersey header
+  h+='<div style="background:repeating-linear-gradient(45deg,'+acc.stripe+');border-bottom:2px solid '+acc.col+';padding:7px 12px;display:flex;align-items:center;justify-content:space-between">';
+  h+='<div style="display:flex;align-items:center;gap:8px">';
+  if(isKitchen){h+='<div style="width:30px;height:30px;border-radius:50%;background:'+acc.col+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#000;flex-shrink:0">'+nm+'</div>';}
+  else{h+='<div style="width:30px;height:30px;border-radius:50%;background:'+acc.dim+';border:2px solid '+acc.col+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:'+acc.col+';flex-shrink:0">'+nm+'</div>';}
+  h+='<div>';
+  if(isKitchen){h+='<div style="font-size:10px;font-weight:900;color:'+acc.col+';letter-spacing:.07em;text-transform:uppercase">&#128081; Owns the Kitchen</div><div style="font-size:7px;color:rgba(255,204,0,0.45);margin-top:1px">Top court &#183; Winners stay &amp; split</div>';}
+  else{h+='<div style="font-size:10px;font-weight:900;color:'+acc.col+';letter-spacing:.07em;text-transform:uppercase">Court '+nm+'</div>';}
+  h+='</div></div>';
+  if(hb&&w){h+='<span style="font-size:12px;font-weight:900;color:#c8ff00;letter-spacing:.02em">'+sc.t1+' &#8211; '+sc.t2+'</span>';}
+  else{h+='<span style="font-size:7px;font-weight:800;color:#444;text-transform:uppercase;letter-spacing:.08em">'+(adminMode?'Tap to score':'Not scored')+'</span>';}
   h+='</div>';
-  h+='<div style="display:flex;align-items:center;gap:8px">'+scoreHeader+statusHtml+'</div></div>';
-
-  // Team sides
-  const teamSide=(team,side,scoreVal,won,isWinner)=>{
-    const winSide=isKitchen?'won-kitchen':'won-side';
-    const pNameWon=isKitchen?'p-won-kitchen':'p-won';
-    const sNumWon=isKitchen?'s-won-kitchen':'s-won';
-    const wBadgeCls=isKitchen?'wbadge-gold':'wbadge-lime';
-    const wLabel=isKitchen?'👑 Winner':'Winner';
-    let cls='cc-team';
-    if(hb&&isWinner)cls+=' '+winSide;
-    if(hb&&!isWinner)cls+=' lost-side';
-    if(adminMode&&!hb)cls+=' admin-score';
-    const field=side==='A'?'t1':'t2';const onclk=(adminMode&&!hb)?` onclick="openNumpad(${vr},${ci},'${field}')" style="cursor:pointer"`:'';
-
-    let s='<div class="'+cls+'"'+onclk+'>';
-    s+='<div class="cc-team-tag">Team '+side+'</div>';
-    team.filter(Boolean).forEach(p=>{
-      const isSrc=swapMode&&swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===(side==='A'?0:1);
-      const playerCls='cc-player'+(hb&&isWinner?' '+pNameWon:'')+(hb&&!isWinner?' p-lost':'');
-      s+='<div class="'+playerCls+'"'+(adminMode&&!hb?' onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+(side==='A'?0:1)+','+team.filter(Boolean).indexOf(p)+')" style="cursor:pointer"':'')+(isSrc?' style="opacity:.5"':'')+'>'+p.name+'</div>'});
-    // score number
-    let numCls='cc-score-num';
-    if(hb&&isWinner)numCls+=' '+sNumWon;
-    else if(hb&&!isWinner)numCls+=' s-lost';
-    else numCls+=' s-empty';
-    s+='<div class="'+numCls+'">'+(hb?scoreVal:'--')+'</div>';
-    if(hb&&isWinner)s+='<div class="cc-winner-badge '+wBadgeCls+'">'+wLabel+'</div>';
-    if(!hb&&adminMode)s+='<div class="cc-tap-hint">Tap to score</div>';
-    if(!hb&&!adminMode)s+='<div class="cc-tap-hint"> </div>';
-    s+='</div>';return s};
-
-  h+='<div class="cc-play">';
-  h+=teamSide(ct.team1,'A',hb?sc.t1:null,w==='A',w==='A');
-  // NET
-  h+='<div class="cc-net"><div class="cc-net-line"></div><div class="cc-net-line"></div><div class="cc-net-label">NET</div><div class="cc-net-line"></div><div class="cc-net-line"></div></div>';
-  h+=teamSide(ct.team2,'B',hb?sc.t2:null,w==='B',w==='B');
-  h+='</div>';
-
-  // Movement footer
-  h+='<div class="cc-footer">';
-  const dotW=isKitchen?'dot-gold':'dot-lime';
+  // SVG court
+  h+=courtSVG;
+  // Panels
   if(hb&&w){
-    const wTeam=w==='A'?ct.team1:ct.team2;
-    const lTeam=w==='A'?ct.team2:ct.team1;
-    const wNames=wTeam.filter(Boolean).map(p=>p.name.split(' ')[0]).join(' + ');
-    const lNames=lTeam.filter(Boolean).map(p=>p.name.split(' ')[0]).join(' + ');
-    if(isTop){h+='<div class="cc-move"><div class="dot-w '+dotW+'"></div><strong>'+wNames+'</strong> stay, split</div>';h+='<div class="cc-move"><div class="dot-w dot-pink"></div><strong>'+lNames+'</strong> → Court '+cName(Math.max(1,ct.court-1),ss)+'</div>'}
-    else if(isBot){h+='<div class="cc-move"><div class="dot-w '+dotW+'"></div><strong>'+wNames+'</strong> → Court '+cName(Math.min(nC,ct.court+1),ss)+'</div>';h+='<div class="cc-move"><div class="dot-w dot-pink"></div><strong>'+lNames+'</strong> stay, split</div>'}
-    else{h+='<div class="cc-move"><div class="dot-w '+dotW+'"></div><strong>'+wNames+'</strong> → Court '+cName(Math.min(nC,ct.court+1),ss)+'</div>';h+='<div class="cc-move"><div class="dot-w dot-pink"></div><strong>'+lNames+'</strong> → Court '+cName(Math.max(1,ct.court-1),ss)+'</div>'}}
-  else{
-    if(isTop){h+='<div class="cc-move"><div class="dot-w '+dotW+'"></div>Winners <strong>stay Court '+nm+'</strong>, split</div>';h+='<div class="cc-move"><div class="dot-w dot-pink"></div>Losers <strong>→ Court '+cName(Math.max(1,ct.court-1),ss)+'</strong></div>'}
-    else if(isBot){h+='<div class="cc-move"><div class="dot-w '+dotW+'"></div>Winners <strong>→ Court '+cName(Math.min(nC,ct.court+1),ss)+'</strong></div>';h+='<div class="cc-move"><div class="dot-w dot-pink"></div>Losers <strong>stay Court '+nm+'</strong>, split</div>'}
-    else{h+='<div class="cc-move"><div class="dot-w '+dotW+'"></div>Winners <strong>→ Court '+cName(Math.min(nC,ct.court+1),ss)+'</strong></div>';h+='<div class="cc-move"><div class="dot-w dot-pink"></div>Losers <strong>→ Court '+cName(Math.max(1,ct.court-1),ss)+'</strong></div>'}}
-  h+='</div>';
-
-  // Admin numpad — inline when this court is open
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr">';
+    h+='<div style="background:'+(isKitchen?'#1a1000':'#0d1f00')+';padding:10px 12px">';
+    h+='<div style="font-size:7px;font-weight:900;color:'+winScoreCol+';text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">Winner</div>';
+    wTeam.filter(Boolean).forEach(p=>{h+='<div style="font-size:10px;font-weight:700;color:#f4f4f0;line-height:1.45"'+(adminMode?' onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+(w==='A'?0:1)+','+wTeam.filter(Boolean).indexOf(p)+')" style="cursor:pointer;font-size:10px;font-weight:700;color:#f4f4f0;line-height:1.45"':'')+'>'+p.name+'</div>';});
+    h+='<div style="font-size:44px;font-weight:900;color:'+winScoreCol+';line-height:1;letter-spacing:-.03em;text-shadow:0 0 18px '+winGlow+',0 0 36px '+winGlowSoft+'">'+wScore+'</div>';
+    h+='<div style="display:inline-block;margin-top:5px;font-size:7px;font-weight:900;background:'+winScoreCol+';color:#000;padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.08em">'+(isKitchen?'&#128081; ':'')+wMove+'</div>';
+    h+='</div>';
+    h+='<div style="background:#1a0000;padding:10px 12px;border-left:1px solid rgba(255,92,71,0.08)">';
+    h+='<div style="font-size:7px;font-weight:900;color:rgba(255,92,71,0.7);text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">Loser</div>';
+    lTeam.filter(Boolean).forEach(p=>{h+='<div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);line-height:1.45"'+(adminMode?' onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+(w==='A'?1:0)+','+lTeam.filter(Boolean).indexOf(p)+')" style="cursor:pointer;font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);line-height:1.45"':'')+'>'+p.name+'</div>';});
+    h+='<div style="font-size:44px;font-weight:900;color:rgba(255,92,71,0.3);line-height:1;letter-spacing:-.03em">'+lScore+'</div>';
+    h+='<div style="display:inline-block;margin-top:5px;font-size:7px;font-weight:900;background:rgba(255,92,71,0.15);color:rgba(255,92,71,0.7);border:1px solid rgba(255,92,71,0.25);padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.08em">'+lMove+'</div>';
+    h+='</div></div>';
+  }else{
+    const mkPanel=(team,side,isRight)=>{
+      const fld=side==='A'?'t1':'t2';const ti=side==='A'?0:1;
+      const onclk=adminMode?` onclick="openNumpad(${vr},${ci},'${fld}')" style="cursor:pointer"`:'';
+      let p='<div style="background:'+acc.bg+';padding:10px 12px;'+(isRight?'border-left:1px solid rgba(255,255,255,0.04)':'')+'"'+onclk+'>';
+      p+='<div style="font-size:7px;font-weight:900;color:'+acc.col+';opacity:.65;text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">Team '+side+'</div>';
+      team.filter(Boolean).forEach(pl=>{
+        const isSrc=swapMode&&swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===ti;
+        p+='<div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);line-height:1.45'+(isSrc?';opacity:.35':'')+'"'+(adminMode&&!onclk?' onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+ti+','+team.filter(Boolean).indexOf(pl)+')" style="cursor:pointer"':'')+'>'+pl.name+'</div>';});
+      p+='<div style="font-size:40px;font-weight:900;line-height:1;color:'+acc.col+';opacity:.1;letter-spacing:-.03em;margin-top:4px">--</div>';
+      if(adminMode)p+='<div style="font-size:7px;color:rgba(255,255,255,0.18);margin-top:4px">Tap to score</div>';
+      p+='</div>';return p};
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr">';
+    h+=mkPanel(ct.team1,'A',false);h+=mkPanel(ct.team2,'B',true);
+    h+='</div>';}
+  // Movement footer
+  if(hb&&w){
+    h+='<div style="padding:5px 12px;font-size:7px;font-weight:700;color:rgba(255,255,255,0.28);background:'+acc.bg+';border-top:1px solid rgba(255,255,255,0.04);letter-spacing:.03em">';
+    h+=wNamesShort+' '+wMove.replace(/&#8594;/g,'→').replace(/&amp;/g,'&').toLowerCase()+' &#183; '+lNamesShort+' '+lMove.replace(/&#8594;/g,'→').replace(/&amp;/g,'&').toLowerCase();
+    h+='</div>';
+  }else{
+    let ft='';
+    if(isTop)ft='Winners stay &amp; split &#183; Losers &#8594; '+cName(Math.max(1,ct.court-1),ss);
+    else if(isBot)ft='Winners &#8594; '+cName(Math.min(nC,ct.court+1),ss)+' &#183; Losers stay &amp; split';
+    else ft='Winners &#8594; '+cName(Math.min(nC,ct.court+1),ss)+' &#183; Losers &#8594; '+cName(Math.max(1,ct.court-1),ss);
+    h+='<div style="padding:5px 12px;font-size:7px;font-weight:700;color:#333;background:'+acc.bg+';border-top:1px solid rgba(255,255,255,0.04)">'+ft+'</div>';}
+  // Admin numpad
   if(adminMode&&npState&&npState.ri===vr&&npState.ci===ci){
     const ct2=ss.rounds[vr].courts[ci];
     const teamLabel=npState.field==='t1'?'Team A':'Team B';
     const teamPlayers=(npState.field==='t1'?ct2.team1:ct2.team2).filter(Boolean).map(p=>p.name).join(' + ')||teamLabel;
     const curDisplay=npState.value===''?'--':npState.value;
     h+='<div class="np-sheet">';
-    h+='<div class="np-sheet-hdr"><div><div class="np-court-label">Court '+nm+' — '+teamLabel+'</div><div class="np-team-name">'+teamPlayers+'</div></div>';
+    h+='<div class="np-sheet-hdr"><div><div class="np-court-label">Court '+nm+' \u2014 '+teamLabel+'</div><div class="np-team-name">'+teamPlayers+'</div></div>';
     h+='<div style="display:flex;align-items:center;gap:8px"><div class="np-score-display" id="npScoreDisplay">'+curDisplay+'</div><button class="np-cancel-btn" onclick="npCancel()">Cancel</button></div></div>';
     h+='<div class="np-quick">';
     [11,15,21].forEach(v=>h+='<button class="np-qbtn hot" onclick="npQuick('+v+')">'+v+'</button>');
     h+='<button class="np-qbtn" onclick="npQuick(0)">0</button>';
-    h+='</div>';
-    h+='<div class="np-grid">';
+    h+='</div><div class="np-grid">';
     [1,2,3,4,5,6,7,8,9].forEach(d=>h+='<button class="np-key" onclick="npPress(\''+d+'\')">'+d+'</button>');
-    h+='<button class="np-key del" onclick="npDel()">⌫</button>';
+    h+='<button class="np-key del" onclick="npDel()">\u232b</button>';
     h+='<button class="np-key" onclick="npPress(\'0\')">0</button>';
-    h+='<button class="np-key confirm" onclick="npConfirm()">Set →</button>';
+    h+='<button class="np-key confirm" onclick="npConfirm()">Set \u2192</button>';
     h+='</div></div>'}
-
   // Win/Loss mode
   if(adminMode&&ss.config.scoreMode==='winloss'){
     h+='<div style="display:flex;gap:8px;padding:8px 12px 10px">';
-    h+='<button class="wlb'+(w==='A'?' aa':'')+'" onclick="setWLRound('+vr+','+ci+',\'A\')">'+(w==='A'?'✓ Winner — ':'')+'Team A</button>';
-    h+='<button class="wlb'+(w==='B'?' ab':'')+'" onclick="setWLRound('+vr+','+ci+',\'B\')">'+(w==='B'?'✓ Winner — ':'')+'Team B</button>';
+    h+='<button class="wlb'+(w==='A'?' aa':'')+'" onclick="setWLRound('+vr+','+ci+',\'A\')">'+(w==='A'?'\u2713 Winner \u2014 ':'')+'Team A</button>';
+    h+='<button class="wlb'+(w==='B'?' ab':'')+'" onclick="setWLRound('+vr+','+ci+',\'B\')">'+(w==='B'?'\u2713 Winner \u2014 ':'')+'Team B</button>';
     h+='</div>'}
-
   // Tie warning
-  if(adminMode&&hb&&!w)h+='<div class="th" style="padding:6px 12px 8px">Scores tied — remove the last point to determine a winner</div>';
-
-  h+='</div></div>';return h}
+  if(adminMode&&hb&&!w)h+='<div class="th" style="padding:6px 12px 8px">Scores tied \u2014 remove the last point to determine a winner</div>';
+  h+='</div>';return h}
 
 // ═══════════════════════════════════════════════════
 // PLAYER VIEW — Now Playing + Up Next
 // ═══════════════════════════════════════════════════
 function rPlayerView(l,ss){
   const nC=ss.config.courts;
-  const vr=ss.currentRound;
+  const isCurrent=viewingRound===-1||viewingRound===ss.currentRound;
+  const vr=isCurrent?ss.currentRound:viewingRound;
   const round=ss.rounds[vr];
   if(!round)return'';
+
+  // Round pills for browsing (always shown for finished, hidden during active play)
+  let h='';
+  if(ss.finished||ss.currentRound>0){
+    h+='<div class="round-pills" style="padding:8px 12px 0">';
+    for(let ri=0;ri<=ss.currentRound;ri++){
+      const isV=(isCurrent&&ri===ss.currentRound)||(!isCurrent&&ri===vr);
+      const done=ss.rounds[ri]?.courts.every(c=>c.score&&c.score.winner);
+      h+='<button class="rd-pill'+(isV?' active':'')+'" onclick="viewRound('+(ri===ss.currentRound?-1:ri)+')">Rd '+(ri+1)+(done?' ✓':'')+'</button>'}
+    h+='</div>'}
 
   // Timer strip
   const timerPct=(timer/(ss.config.roundMin*60))*100;
   const timerColor=timer<=60?'#ff5c47':timer<=180?'#ffcc00':'#c8ff00';
-  let h='';
   if(ss.started&&!ss.finished){
     h+='<div style="background:var(--surf2);border-bottom:1px solid var(--border);padding:8px 14px;display:flex;align-items:center;gap:12px">';
     h+='<div><div style="font-family:\'Sora\',sans-serif;font-size:22px;font-weight:900;color:var(--lime);font-variant-numeric:tabular-nums;letter-spacing:-.03em;line-height:1">'+fmtT(timer)+'</div>';
