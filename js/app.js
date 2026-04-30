@@ -211,6 +211,17 @@ function tkRenderChart(){
   const lgEl=document.getElementById('tkLegend');if(lgEl)lgEl.innerHTML=visible.map((p,i)=>{const ci=ranked.indexOf(p)%tkPal.length;return'<span class="tk-legend-item"><span class="tk-legend-swatch" style="background:'+tkPal[ci]+'"></span>#'+pNum(p,l)+' '+p.name+'</span>'}).join('');
   const chEl=document.getElementById('tkChips');if(chEl)chEl.innerHTML=ranked.map(p=>'<button class="tk-chip'+(tkPicked.has(p.id)?' on':'')+'" onclick="tkTogglePlayer(\''+p.id+'\')">#'+pNum(p,l)+' '+p.name+'</button>').join('')}
 
+// ── Shared round MVP renderer ──
+function rRoundMVPs(round,vr,ss,l){
+  const mvps=getRoundMVPs(round,l);
+  const allScored=round.courts.every(c=>c.score&&c.score.winner);
+  if(!allScored||!mvps.length)return'';
+  let h='<div style="font-size:.7rem;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em">Round '+(vr+1)+' top performers</div>';
+  h+='<div class="mvp-grid">';
+  mvps.forEach((mv,i)=>{const n=pNum(mv.p,l);const isF=mv.p.gender==='F';const clr=isF?'#ff69a0':'#5b9fff';const bg=isF?'rgba(255,45,120,0.1)':'rgba(59,130,246,0.1)';
+    h+='<div class="mvp-card fu"><div class="mvp-header"><div class="mvp-icon" style="background:'+bg+'"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="'+clr+'" stroke-width="3"><path d="M12 2L15 9H22L16 14L18 21L12 17L6 21L8 14L2 9H9Z"/></svg></div><span class="mvp-label">'+(i===0?'MVP':'#'+(i+1))+'</span></div><div class="mvp-name">#'+n+' '+mv.p.name+'</div><div class="mvp-val">'+(mv.diff>0?'+':'')+mv.diff+' diff</div><div class="mvp-sub">Court '+cName(mv.court,ss)+'</div></div>'});
+  h+='</div>';return h}
+
 // ═══════════════════════════════════════════════════
 // COURT CARD RENDERER — Jersey + Split Panel + SVG court
 // ═══════════════════════════════════════════════════
@@ -369,6 +380,7 @@ function rPlayerView(l,ss){
     const ci=round.courts.indexOf(ct);
     h+=rCourtCard(ct,ci,vr,ss,l,false)});
   h+='</div>';
+  h+=rRoundMVPs(round,vr,ss,l);
   // Round progress
   const scored=round.courts.filter(c=>c.score&&c.score.winner).length;
   const total=round.courts.length;
@@ -508,13 +520,7 @@ function rPlay(l,ss){
     h+='<div class="swap-banner fu">Swapping <strong>'+(srcP?.name||'?')+'</strong> — tap another player <button class="edit-btn" style="color:var(--warn);text-decoration:underline;margin-left:8px" onclick="cancelSwap()">Cancel</button></div>'}
 
   // MVPs
-  const mvps=getRoundMVPs(round,l);const allScored=round.courts.every(c=>c.score&&c.score.winner);
-  if(allScored&&mvps.length){
-    h+='<div style="font-size:.7rem;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em">Round '+(vr+1)+' top performers</div>';
-    h+='<div class="mvp-grid">';
-    mvps.forEach((mv,i)=>{const n=pNum(mv.p,l);const isF=mv.p.gender==='F';const clr=isF?'#ff69a0':'#5b9fff';const bg=isF?'rgba(255,45,120,0.1)':'rgba(59,130,246,0.1)';
-      h+='<div class="mvp-card fu"><div class="mvp-header"><div class="mvp-icon" style="background:'+bg+'"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="'+clr+'" stroke-width="3"><path d="M12 2L15 9H22L16 14L18 21L12 17L6 21L8 14L2 9H9Z"/></svg></div><span class="mvp-label">'+(i===0?'MVP':'#'+(i+1))+'</span></div><div class="mvp-name">#'+n+' '+mv.p.name+'</div><div class="mvp-val">'+(mv.diff>0?'+':'')+mv.diff+' diff</div><div class="mvp-sub">Court '+cName(mv.court,ss)+'</div></div>'});
-    h+='</div>'}
+  h+=rRoundMVPs(round,vr,ss,l);
 
   // Court map (collapsible)
   const isOpen=mapOpen||shouldMapOpen(ss);
