@@ -26,7 +26,7 @@ let npState=null; // {ri, ci, field, value}
 function openNumpad(ri,ci,field){
   const l=gL();const ss=gSS();if(!l||!ss)return;
   const ct=ss.rounds[ri].courts[ci];
-  const existing=ct.score?.(field==='t1'?ct.score.t1:ct.score.t2);
+  const existing=ct.score?(field==='t1'?ct.score.t1:ct.score.t2):null;
   npState={ri,ci,field,value:existing!=null?String(existing):''};
   render()}
 function npPress(d){if(!npState)return;if(npState.value.length>=2)return;npState.value+=d;renderNpDisplay()}
