@@ -191,7 +191,7 @@ async function deleteSession(ssid){const l=gL();const s=gS();if(!l||!s)return;co
 
 function go(v,t){view=v;if(t)tab=t;viewingRound=-1;swapMode=null;npState=null;if(v==='newSession')formCourtCount=4;render();if(v==='newSession')setTimeout(updateCourtInputs,10)}
 function selectLadder(id){activeLadderId=id;activeSessionId=null;view='dashboard';tab='overview';viewingRound=-1;render()}
-function openSession(id){activeSessionId=id;view='session';viewingRound=-1;swapMode=null;npState=null;const ss=gSS();const finished=ss?.finished;tab=finished?(isAdmin?'play':'stats'):'play';mapOpen=ss?shouldMapOpen(ss)||ss.started:false;render()}
+function openSession(id){activeSessionId=id;view='session';viewingRound=-1;swapMode=null;npState=null;const ss=gSS();const finished=ss?.finished;tab='play';if(finished&&!isAdmin)pvTab='now';mapOpen=ss?shouldMapOpen(ss)||ss.started:false;render()}
 function setPvTab(t){pvTab=t;render()}
 
 function tkSetMode(m){tkMode=m;tkPicked.clear();render();setTimeout(tkRenderChart,10)}
@@ -336,7 +336,7 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
   h+='</div>';return h}
 
 // ═══════════════════════════════════════════════════
-// PLAYER VIEW — Now Playing + Up Next
+// PLAYER VIEW — Now Playing/Up Next (active) or Round History/Final Stats (completed)
 // ═══════════════════════════════════════════════════
 function rPlayerView(l,ss){
   const nC=ss.config.courts;
@@ -344,118 +344,114 @@ function rPlayerView(l,ss){
   const vr=isCurrent?ss.currentRound:viewingRound;
   const round=ss.rounds[vr];
   if(!round)return'';
-
-  // Round pills for browsing (always shown for finished, hidden during active play)
   let h='';
-  if(ss.finished||ss.currentRound>0){
+
+  // ── COMPLETED LADDER ──
+  if(ss.finished){
+    h+='<div class="round-pills" style="padding:8px 12px 0">';
+    for(let ri=0;ri<=ss.currentRound;ri++){
+      const isV=(!isCurrent&&ri===vr)||(isCurrent&&ri===ss.currentRound);
+      const done=ss.rounds[ri]?.courts.every(c=>c.score&&c.score.winner);
+      h+='<button class="rd-pill'+(isV?' active':'')+'" onclick="viewRound('+(ri===ss.currentRound?-1:ri)+')">Rd '+(ri+1)+(done?' ✓':'')+'</button>'}
+    h+='</div>';
+    h+='<div class="pv-tabs">';
+    h+='<button class="pv-tab'+(pvTab==='now'?' on':'')+'" onclick="setPvTab(\'now\')">Round History</button>';
+    h+='<button class="pv-tab'+(pvTab==='stats'?' on':'')+'" onclick="setPvTab(\'stats\')">Final Stats</button>';
+    h+='</div>';
+    // Round History
+    h+='<div class="pv-panel'+(pvTab==='now'?' active':'')+'" id="pv-now">';
+    h+='<div class="pv-sec-label" style="padding:8px 12px 0">Round '+(vr+1)+' — all courts</div>';
+    h+='<div class="court-grid" style="padding:8px 12px 0">';
+    [...round.courts].sort((a,b)=>b.court-a.court).forEach(ct=>{
+      h+=rCourtCard(ct,round.courts.indexOf(ct),vr,ss,l,false)});
+    h+='</div>';
+    h+=rRoundMVPs(round,vr,ss,l);
+    h+='</div>';
+    // Final Stats
+    h+='<div id="pv-stats" style="display:'+(pvTab==='stats'?'block':'none')+';padding:10px 12px">';
+    const sStats=calcStats([ss],l.players);
+    h+=rStats(sStats,null,l,ss);
+    h+='</div>';
+    return h}
+
+  // ── ACTIVE LADDER ──
+  if(ss.currentRound>0){
     h+='<div class="round-pills" style="padding:8px 12px 0">';
     for(let ri=0;ri<=ss.currentRound;ri++){
       const isV=(isCurrent&&ri===ss.currentRound)||(!isCurrent&&ri===vr);
       const done=ss.rounds[ri]?.courts.every(c=>c.score&&c.score.winner);
       h+='<button class="rd-pill'+(isV?' active':'')+'" onclick="viewRound('+(ri===ss.currentRound?-1:ri)+')">Rd '+(ri+1)+(done?' ✓':'')+'</button>'}
     h+='</div>'}
-
-  // Timer strip
   const timerPct=(timer/(ss.config.roundMin*60))*100;
   const timerColor=timer<=60?'#ff5c47':timer<=180?'#ffcc00':'#c8ff00';
-  if(ss.started&&!ss.finished){
-    h+='<div style="background:var(--surf2);border-bottom:1px solid var(--border);padding:8px 14px;display:flex;align-items:center;gap:12px">';
-    h+='<div><div style="font-family:\'Sora\',sans-serif;font-size:22px;font-weight:900;color:var(--lime);font-variant-numeric:tabular-nums;letter-spacing:-.03em;line-height:1">'+fmtT(timer)+'</div>';
-    h+='<div style="font-size:.65rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.07em;margin-top:2px">On clock</div></div>';
-    h+='<div style="flex:1"><div style="height:4px;background:var(--surf4);border-radius:2px;overflow:hidden;margin-bottom:4px"><div style="height:100%;width:'+timerPct+'%;background:'+timerColor+';border-radius:2px;transition:width 1s linear"></div></div>';
-    h+='<div style="font-size:.78rem;color:var(--muted)">Finish rally when timer hits zero</div></div>';
-    h+='</div>'}
-
-  // Tabs
+  h+='<div style="background:var(--surf2);border-bottom:1px solid var(--border);padding:8px 14px;display:flex;align-items:center;gap:12px">';
+  h+='<div><div style="font-family:\'Sora\',sans-serif;font-size:22px;font-weight:900;color:var(--lime);font-variant-numeric:tabular-nums;letter-spacing:-.03em;line-height:1">'+fmtT(timer)+'</div>';
+  h+='<div style="font-size:.65rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.07em;margin-top:2px">On clock</div></div>';
+  h+='<div style="flex:1"><div style="height:4px;background:var(--surf4);border-radius:2px;overflow:hidden;margin-bottom:4px"><div style="height:100%;width:'+timerPct+'%;background:'+timerColor+';border-radius:2px;transition:width 1s linear"></div></div>';
+  h+='<div style="font-size:.78rem;color:var(--muted)">Finish rally when timer hits zero</div></div></div>';
   h+='<div class="pv-tabs">';
   h+='<button class="pv-tab'+(pvTab==='now'?' on':'')+'" onclick="setPvTab(\'now\')">Now Playing</button>';
   h+='<button class="pv-tab'+(pvTab==='next'?' on':'')+'" onclick="setPvTab(\'next\')">Up Next</button>';
   h+='</div>';
-
-  // NOW PLAYING
+  // Now Playing
   h+='<div class="pv-panel'+(pvTab==='now'?' active':'')+'" id="pv-now">';
   h+='<div class="pv-sec-label">Round '+(vr+1)+' — all courts</div>';
   h+='<div class="court-grid">';
   [...round.courts].sort((a,b)=>b.court-a.court).forEach(ct=>{
-    const ci=round.courts.indexOf(ct);
-    h+=rCourtCard(ct,ci,vr,ss,l,false)});
+    h+=rCourtCard(ct,round.courts.indexOf(ct),vr,ss,l,false)});
   h+='</div>';
   h+=rRoundMVPs(round,vr,ss,l);
-  // Round progress
   const scored=round.courts.filter(c=>c.score&&c.score.winner).length;
   const total=round.courts.length;
-  h+='<div class="round-progress">';
-  h+='<div class="rp-label">Round progress</div>';
-  h+='<div class="rp-dots">';
+  h+='<div class="round-progress"><div class="rp-label">Round progress</div><div class="rp-dots">';
   round.courts.forEach((_,i)=>{
     const done=round.courts[i].score&&round.courts[i].score.winner;
     const partial=round.courts[i].score&&(round.courts[i].score.t1!==null||round.courts[i].score.t2!==null)&&!done;
     h+='<div class="rp-dot'+(done?' done':partial?' partial':'')+'"></div>'});
+  h+='</div><div class="rp-pct">'+scored+' / '+total+' courts</div></div>';
   h+='</div>';
-  h+='<div class="rp-pct">'+scored+' / '+total+' courts</div></div>';
-  h+='</div>';
-
-  // UP NEXT
+  // Up Next
   h+='<div class="pv-panel'+(pvTab==='next'?' active':'')+'" id="pv-next">';
   const nextRd=vr+1;
   const isFinalRound=nextRd>=ss.config.rounds;
   const nextRoundExists=ss.rounds[nextRd]!=null;
   if(isFinalRound){
-    // Last round — see you next time
-    h+='<div class="card" style="text-align:center;padding:32px 24px">';
-    h+='<div style="font-size:2rem;margin-bottom:10px">🥒</div>';
+    h+='<div class="card" style="text-align:center;padding:32px 24px"><div style="font-size:2rem;margin-bottom:10px">🥒</div>';
     h+='<div style="font-weight:900;font-size:1.1rem;color:var(--lime);margin-bottom:6px">See you at the next ladder!</div>';
-    h+='<div class="subtext">This is the final round. Check the Stats tab for final standings.</div>';
-    h+='</div>';
+    h+='<div class="subtext">This is the final round. Check the Stats tab for final standings.</div></div>';
   } else if(nextRoundExists){
-    // Round already played — show real lineups
-    h+='<div class="pv-sec-label">Round '+nextRd+' — actual lineups</div>';
-    const nextRound=ss.rounds[nextRd];
+    h+='<div class="pv-sec-label">Round '+nextRd+' — lineups</div>';
     h+='<div class="court-grid">';
-    [...nextRound.courts].sort((a,b)=>b.court-a.court).forEach(ct=>{
-      h+=rCourtCard(ct,nextRound.courts.indexOf(ct),nextRd,ss,l,false)});
+    [...ss.rounds[nextRd].courts].sort((a,b)=>b.court-a.court).forEach(ct=>{
+      h+=rCourtCard(ct,ss.rounds[nextRd].courts.indexOf(ct),nextRd,ss,l,false)});
     h+='</div>';
   } else {
-    // Current round not yet complete — show projections
-    h+='<div class="pv-sec-label">Round '+nextRd+' — projected assignments</div>';
+    h+='<div class="pv-sec-label">Round '+nextRd+' — projected</div>';
     const allScored=round.courts.every(c=>c.score&&c.score.winner);
-    if(!allScored){
-      h+='<div class="upnext-banner">';
-      h+='<div class="upnext-banner-icon">⏳</div>';
-      h+='<div><div class="upnext-banner-top">Waiting on scores</div>';
-      h+='<div class="upnext-banner-bot">Lineups lock in once all courts are scored</div></div></div>'}
+    if(!allScored){h+='<div class="upnext-banner"><div class="upnext-banner-icon">⏳</div><div><div class="upnext-banner-top">Waiting on scores</div><div class="upnext-banner-bot">Lineups lock in once all courts are scored</div></div></div>'}
     [...round.courts].sort((a,b)=>b.court-a.court).forEach(ct=>{
       const sc=ct.score;const w=sc?.winner;const nm=cName(ct.court,ss);
       const isTop=ct.court===nC;const isBot=ct.court===1;
       const ltrCls=ct.court===nC?'cc-ltr-gold':ct.court===nC-1?'cc-ltr-cyan':ct.court===nC-2?'cc-ltr-blue':'cc-ltr-gray';
-      const isKitchen=isTop;
-      h+='<div class="next-cc">';
-      h+='<div class="next-cc-hdr">';
-      h+='<div style="display:flex;align-items:center;gap:7px"><div class="cc-ltr '+ltrCls+'" style="width:24px;height:24px;border-radius:6px;font-size:12px">'+nm+'</div>';
-      h+='<span class="next-cc-title">Court '+nm+(isKitchen?' · Owns the Kitchen':'')+'</span></div>';
+      h+='<div class="next-cc"><div class="next-cc-hdr"><div style="display:flex;align-items:center;gap:7px"><div class="cc-ltr '+ltrCls+'" style="width:24px;height:24px;border-radius:6px;font-size:12px">'+nm+'</div>';
+      h+='<span class="next-cc-title">Court '+nm+(isTop?' · Owns the Kitchen':'')+'</span></div>';
       if(isTop)h+='<span class="next-cc-cond next-cond-win">Winners stay</span>';
       else if(isBot)h+='<span class="next-cc-cond next-cond-lose">Losers stay</span>';
       else h+='<span class="next-cc-cond" style="color:var(--muted)">Mixed movement</span>';
-      h+='</div><div class="next-cc-body">';
-      h+='<div class="next-team-col">';
+      h+='</div><div class="next-cc-body"><div class="next-team-col">';
       if(isTop){
         h+='<div class="next-from"><div class="cc-ltr '+ltrCls+'" style="width:20px;height:20px;border-radius:4px;font-size:10px">'+nm+'</div><span class="next-from-txt">Winners split</span></div>';
-        if(w){const wt=(w==='A'?ct.team1:ct.team2).filter(Boolean);wt.forEach(p=>h+='<div class="next-name">'+p.name+'</div>')}
-        else{h+='<div class="next-name tbd">Pending score...</div>'}}
-      else{
-        const fromNm=cName(Math.min(nC,ct.court+1),ss);const fromCls=ct.court+1===nC?'cc-ltr-gold':ct.court+1===nC-1?'cc-ltr-cyan':'cc-ltr-blue';
-        h+='<div class="next-from"><div class="cc-ltr '+fromCls+'" style="width:20px;height:20px;border-radius:4px;font-size:10px">'+fromNm+'</div><span class="next-from-txt">Winners of '+fromNm+'</span></div>';
-        h+='<div class="next-name tbd">Pending...</div>'}
-      h+='</div><div class="next-vs">VS</div>';
-      h+='<div class="next-team-col">';
+        if(w){(w==='A'?ct.team1:ct.team2).filter(Boolean).forEach(p=>h+='<div class="next-name">'+p.name+'</div>')}
+        else h+='<div class="next-name tbd">Pending...</div>'}
+      else{const fromNm=cName(Math.min(nC,ct.court+1),ss);const fromCls=ct.court+1===nC?'cc-ltr-gold':ct.court+1===nC-1?'cc-ltr-cyan':'cc-ltr-blue';
+        h+='<div class="next-from"><div class="cc-ltr '+fromCls+'" style="width:20px;height:20px;border-radius:4px;font-size:10px">'+fromNm+'</div><span class="next-from-txt">Winners of '+fromNm+'</span></div><div class="next-name tbd">Pending...</div>'}
+      h+='</div><div class="next-vs">VS</div><div class="next-team-col">';
       if(isBot){
         h+='<div class="next-from"><div class="cc-ltr '+ltrCls+'" style="width:20px;height:20px;border-radius:4px;font-size:10px">'+nm+'</div><span class="next-from-txt">Losers split</span></div>';
-        if(w){const lt=(w==='A'?ct.team2:ct.team1).filter(Boolean);lt.forEach(p=>h+='<div class="next-name">'+p.name+'</div>')}
-        else h+='<div class="next-name tbd">Pending score...</div>'}
-      else{
-        const fromNm2=cName(Math.max(1,ct.court-1),ss);const fromCls2=ct.court-1===0?'cc-ltr-gray':ct.court-1===nC-2?'cc-ltr-blue':'cc-ltr-cyan';
-        h+='<div class="next-from"><div class="cc-ltr '+fromCls2+'" style="width:20px;height:20px;border-radius:4px;font-size:10px">'+fromNm2+'</div><span class="next-from-txt">Losers of '+fromNm2+'</span></div>';
-        h+='<div class="next-name tbd">Pending...</div>'}
+        if(w){(w==='A'?ct.team2:ct.team1).filter(Boolean).forEach(p=>h+='<div class="next-name">'+p.name+'</div>')}
+        else h+='<div class="next-name tbd">Pending...</div>'}
+      else{const fromNm2=cName(Math.max(1,ct.court-1),ss);const fromCls2=ct.court-1===0?'cc-ltr-gray':ct.court-1===nC-2?'cc-ltr-blue':'cc-ltr-cyan';
+        h+='<div class="next-from"><div class="cc-ltr '+fromCls2+'" style="width:20px;height:20px;border-radius:4px;font-size:10px">'+fromNm2+'</div><span class="next-from-txt">Losers of '+fromNm2+'</span></div><div class="next-name tbd">Pending...</div>'}
       h+='</div></div></div>'});}
   h+='</div>';
   return h}
