@@ -674,16 +674,23 @@ function render(){
 
 async function init(){
   applyTextSize();
-  render(); // show UI immediately so screen is never blank
+  // Show loading with status so we can diagnose
+  document.getElementById('app').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0a0f;gap:16px;padding:24px"><div style="font-family:Inter,sans-serif;font-size:1.1rem;font-weight:700;color:#c8ff00" id="initStatus">Connecting...</div><div style="font-size:.75rem;color:#7a7a8a;text-align:center;max-width:280px" id="initDetail">Reaching the server</div></div>';
+  const setStatus=(msg,detail)=>{const s=document.getElementById('initStatus');const d=document.getElementById('initDetail');if(s)s.textContent=msg;if(d)d.textContent=detail||''};
   try{
-    ladders=await Promise.race([
-      apiList(),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))
+    setStatus('Connecting...','Reaching the server');
+    const res=await Promise.race([
+      fetch('/api?action=list'),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('Server took too long to respond (>8s)')),8000))
     ]);
+    setStatus('Loading data...','Parsing response');
+    if(!res.ok)throw new Error('Server error: '+res.status+' '+res.statusText);
+    const data=await res.json();
+    ladders=data.ladders||[];
     if(ladders.length){activeLadderId=ladders[0].id;const l=gL();if(l?.activeSeason)tab='overview'}
+    render();
   }catch(e){
-    console.warn('API init failed:',e.message);
-    ladders=[];
-  }
-  render()}
+    console.error('Init failed:',e);
+    document.getElementById('app').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0a0f;gap:16px;padding:24px"><div style="font-size:2rem">⚠️</div><div style="font-family:Inter,sans-serif;font-size:1rem;font-weight:700;color:#ff5c47;text-align:center">Could not connect</div><div style="font-size:.8rem;color:#7a7a8a;text-align:center;max-width:300px;line-height:1.6">'+e.message+'</div><button onclick="init()" style="margin-top:8px;padding:10px 24px;background:#c8ff00;color:#0a0a0f;border:none;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer">Retry</button></div>';
+  }}
 document.addEventListener('DOMContentLoaded',init);
