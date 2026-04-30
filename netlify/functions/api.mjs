@@ -12,7 +12,7 @@ const headers = {
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers });
 
 function checkPin(req) {
-  const envPin = process.env.ADMIN_PIN || Netlify.env.get("ADMIN_PIN") || "1234";
+  const envPin = Netlify.env.get("ADMIN_PIN") || "1234";
   const sentPin = req.headers.get("x-admin-pin") || "";
   return sentPin === envPin;
 }
