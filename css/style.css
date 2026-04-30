@@ -507,7 +507,8 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
   .content{max-width:1080px;padding:14px 20px 80px}
   .court-grid{grid-template-columns:1fr 1fr}
   .cc{margin-bottom:0}
-  .pv-panel.active{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
-  .pv-sec-label{grid-column:1/-1}
-  .round-progress{grid-column:1/-1}
+  #pv-now.active{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
+  #pv-now .pv-sec-label{grid-column:1/-1}
+  #pv-now .round-progress{grid-column:1/-1}
+  #pv-next.active{display:flex;flex-direction:column;gap:10px;padding:10px 12px}
 }
