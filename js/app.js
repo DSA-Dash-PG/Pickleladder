@@ -67,7 +67,7 @@ async function apiVerifyPin(pin){try{const r=await fetch('/api?action=verify-pin
 function gL(){return ladders.find(l=>l.id===activeLadderId)||null}
 function gS(){const l=gL();if(!l)return null;if(l.activeSeason){const s=l.seasons.find(x=>x.id===l.activeSeason);if(s)return s}return l.seasons.find(x=>!x.archived)||null}
 function gSS(){const s=gS();return s?.sessions.find(ss=>ss.id===activeSessionId)||null}
-function gParts(ss,l){if(!ss||!l)return[];if(!ss.participants||!ss.participants.length)return l.players.filter(p=>p.active!==false);return ss.participants.map(id=>l.players.find(p=>p.id===id)).filter(Boolean)}
+function gParts(ss,l){if(!ss||!l)return[];if(!ss.participants||!ss.participants.length)return l.players.filter(p=>p.active!==false&&!p.subbedOut);return ss.participants.map(id=>l.players.find(p=>p.id===id)).filter(p=>p&&p.active!==false&&!p.subbedOut)}
 async function save(l,skipRender){const i=ladders.findIndex(x=>x.id===l.id);if(i>=0)ladders[i]=l;else ladders.push(l);const r=await apiSave(l);if(r&&!skipRender)render();return r}
 
 let scoreTimer=null;
@@ -210,6 +210,32 @@ function openEditPlayer(pid){const l=gL();if(!l)return;const p=l.players.find(x=
 function closeEditModal(){document.getElementById('editModal').classList.remove('open');editingPid=null}
 async function saveEditPlayer(){const l=gL();if(!l||!editingPid)return;const p=l.players.find(x=>x.id===editingPid);if(!p)return;const nn=document.getElementById('edName').value.trim()||p.name;const ng=document.getElementById('edGender').value;p.name=nn;p.gender=ng;const s=gS();if(s){s.sessions.forEach(sess=>{sess.rounds.forEach(round=>{round.courts.forEach(ct=>{[ct.team1,ct.team2].forEach(team=>{team.forEach((tp,i)=>{if(tp&&tp.id===editingPid){team[i]={...tp,name:nn,gender:ng}}})})})})})}closeEditModal();await save(l)}
 async function replacePlayer(oldPid){const l=gL();if(!l)return;const oldP=l.players.find(x=>x.id===oldPid);if(!oldP)return;const n=prompt('New player name to replace '+oldP.name+':');if(!n?.trim())return;const g=prompt('Gender (M/F):','M');if(g!=='M'&&g!=='F')return;const newP={id:uid(),name:n.trim(),gender:g,active:true};l.players.push(newP);oldP.active=false;const ss=gSS();if(ss){if(ss.participants){const idx=ss.participants.indexOf(oldPid);if(idx>=0)ss.participants[idx]=newP.id}ss.rounds.forEach(round=>{round.courts.forEach(ct=>{[ct.team1,ct.team2].forEach(team=>{team.forEach((tp,i)=>{if(tp&&tp.id===oldPid){team[i]={...newP}}})})})})}await save(l)}
+async function subOutPlayer(pid){
+  const l=gL();const ss=gSS();if(!l||!ss)return;
+  const p=l.players.find(x=>x.id===pid);if(!p)return;
+  p.subbedOut=true;
+  // Remove from participants so next round generation skips them
+  // (current round courts are unaffected)
+  await save(l)}
+
+async function subInPlayer(pid){
+  const l=gL();const ss=gSS();if(!l||!ss)return;
+  const p=l.players.find(x=>x.id===pid);if(!p)return;
+  p.subbedOut=false;
+  await save(l)}
+
+async function addSubPlayer(){
+  const l=gL();const ss=gSS();if(!l||!ss)return;
+  const n=document.getElementById('fSubName')?.value?.trim();
+  const g=document.getElementById('fSubGender')?.value||'M';
+  if(!n)return;
+  const p={id:uid(),name:n,gender:g,active:true,subbedOut:false};
+  l.players.push(p);
+  if(!ss.participants)ss.participants=[];
+  ss.participants.push(p.id);
+  document.getElementById('fSubName').value='';
+  await save(l)}
+
 async function addPlayer(){const l=gL();if(!l)return;const n=document.getElementById('fPN')?.value?.trim();const g=document.getElementById('fPG')?.value||'M';if(!n)return;l.players.push({id:uid(),name:n,gender:g,active:true});document.getElementById('fPN').value='';await save(l)}
 async function deactivatePlayer(pid){const l=gL();if(!l||!confirm('Deactivate this player? They will be hidden from the picker but their historical stats are preserved.'))return;const p=l.players.find(x=>x.id===pid);if(p)p.active=false;await save(l)}
 async function reactivatePlayer(pid){const l=gL();if(!l)return;const p=l.players.find(x=>x.id===pid);if(p)p.active=true;await save(l)}
@@ -354,8 +380,17 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
     const wNameStr=wTeam.filter(Boolean).map(p=>p.name).join(' + ');
     const lNameStr=lTeam.filter(Boolean).map(p=>p.name).join(' + ');
     if(adminMode){
-      wTeam.filter(Boolean).forEach((p,pi)=>{const isSrc=swapMode&&swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===(w==='A'?0:1)&&swapMode.pi===pi;h+='<div style="font-size:12px;font-weight:700;'+(isSrc?'color:#ffcc00;opacity:.5;text-decoration:line-through':'color:#f4f4f0')+';margin-bottom:3px;line-height:1.35;cursor:pointer;background:rgba(255,255,255,0.05);border-radius:8px;padding:3px 8px;display:inline-block" onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+(w==='A'?0:1)+','+pi+')">'+p.name+'</div>'});
-    } else {h+='<div style="font-size:12px;font-weight:700;color:#f4f4f0;margin-bottom:6px;line-height:1.35">'+wNameStr+'</div>';}
+      const wTi=w==='A'?0:1;
+      wTeam.filter(Boolean).forEach((p,pi)=>{const isSrc=swapMode&&swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===wTi&&swapMode.pi===pi;
+        const isTarget=swapMode&&!(swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===wTi&&swapMode.pi===pi);
+        const bg=isSrc?'rgba(255,204,0,0.08)':isTarget?'rgba(0,229,255,0.08)':'rgba(255,255,255,0.05)';
+        const border=isSrc?'1.5px dashed rgba(255,204,0,0.4)':isTarget?'1.5px solid rgba(0,229,255,0.35)':'1.5px solid rgba(255,255,255,0.08)';
+        const col=isSrc?'#ffcc00':isTarget?'#00e5ff':'#f4f4f0';
+        h+='<div style="background:'+bg+';border:'+border+';border-radius:10px;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;cursor:pointer;'+(isSrc?'opacity:.5;text-decoration:line-through':'')+'" onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+wTi+','+pi+')">';
+        h+='<span style="font-size:16px;font-weight:700;color:'+col+'">'+p.name+'</span>';
+        h+=(isSrc?'<span style="font-size:10px;color:#ffcc00;font-weight:700">Moving</span>':isTarget?'<span style="font-size:10px;color:#00e5ff;font-weight:700">Swap in →</span>':'<span style="font-size:10px;color:rgba(255,255,255,0.3)">Tap to move</span>');
+        h+='</div>'});
+    } else {h+='<div style="font-size:15px;font-weight:700;color:#f4f4f0;margin-bottom:6px;line-height:1.35">'+wNameStr+'</div>';}
     h+='<div style="font-size:44px;font-weight:900;color:'+winScoreCol+';line-height:1;letter-spacing:-.03em;text-shadow:0 0 18px '+winGlow+',0 0 36px '+winGlowSoft+'">'+wScore+'</div>';
     h+='<div style="display:inline-flex;align-items:center;gap:3px;margin-top:6px;font-size:8px;font-weight:900;background:'+winScoreCol+';color:#000;padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.06em">'+wMove+'</div>';
     h+='</div>';
@@ -363,8 +398,17 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
     h+='<div style="background:#1a0000;padding:10px 12px;text-align:center;border-left:1px solid rgba(255,92,71,0.08)">';
     h+='<div style="font-size:7px;font-weight:900;color:rgba(255,92,71,0.7);text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">Loser</div>';
     if(adminMode){
-      lTeam.filter(Boolean).forEach((p,pi)=>{const isSrc=swapMode&&swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===(w==='A'?1:0)&&swapMode.pi===pi;h+='<div style="font-size:12px;font-weight:700;'+(isSrc?'color:#ffcc00;opacity:.5;text-decoration:line-through':'color:rgba(255,255,255,0.55)')+';margin-bottom:3px;line-height:1.35;cursor:pointer;background:rgba(255,255,255,0.05);border-radius:8px;padding:3px 8px;display:inline-block" onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+(w==='A'?1:0)+','+pi+')">'+p.name+'</div>'});
-    } else {h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:6px;line-height:1.35">'+lNameStr+'</div>';}
+      const lTi=w==='A'?1:0;
+      lTeam.filter(Boolean).forEach((p,pi)=>{const isSrc=swapMode&&swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===lTi&&swapMode.pi===pi;
+        const isTarget=swapMode&&!(swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===lTi&&swapMode.pi===pi);
+        const bg=isSrc?'rgba(255,204,0,0.08)':isTarget?'rgba(0,229,255,0.08)':'rgba(255,255,255,0.04)';
+        const border=isSrc?'1.5px dashed rgba(255,204,0,0.4)':isTarget?'1.5px solid rgba(0,229,255,0.35)':'1.5px solid rgba(255,255,255,0.06)';
+        const col=isSrc?'#ffcc00':isTarget?'#00e5ff':'rgba(255,255,255,0.55)';
+        h+='<div style="background:'+bg+';border:'+border+';border-radius:10px;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;cursor:pointer;'+(isSrc?'opacity:.5;text-decoration:line-through':'')+'" onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+lTi+','+pi+')">';
+        h+='<span style="font-size:16px;font-weight:700;color:'+col+'">'+p.name+'</span>';
+        h+=(isSrc?'<span style="font-size:10px;color:#ffcc00;font-weight:700">Moving</span>':isTarget?'<span style="font-size:10px;color:#00e5ff;font-weight:700">Swap in →</span>':'<span style="font-size:10px;color:rgba(255,255,255,0.25)">Tap to move</span>');
+        h+='</div>'});
+    } else {h+='<div style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:6px;line-height:1.35">'+lNameStr+'</div>';}
     h+='<div style="font-size:44px;font-weight:900;color:rgba(255,92,71,0.3);line-height:1;letter-spacing:-.03em">'+lScore+'</div>';
     h+='<div style="display:inline-flex;align-items:center;gap:3px;margin-top:6px;font-size:8px;font-weight:900;background:rgba(255,92,71,0.15);color:rgba(255,92,71,0.7);border:1px solid rgba(255,92,71,0.25);padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.06em">'+lMove+'</div>';
     h+='</div></div>';
@@ -379,8 +423,16 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
       const onclk=adminMode?` onclick="openNumpad(${vr},${ci},'${fld}')" style="cursor:pointer;text-align:center;background:${acc.bg};padding:10px 12px${isRight?';border-left:1px solid rgba(255,255,255,0.04)':''}"`:`style="text-align:center;background:${acc.bg};padding:10px 12px${isRight?';border-left:1px solid rgba(255,255,255,0.04)':''}"`;
       let p='<div '+onclk+'>';
       p+='<div style="font-size:7px;font-weight:900;color:'+acc.col+';opacity:.65;text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">Team '+side+'</div>';
-      if(adminMode&&swapMode){team.filter(Boolean).forEach((pl,pi)=>{const isSrc=swapMode&&swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===ti&&swapMode.pi===pi;p+='<div style="font-size:12px;font-weight:700;'+(isSrc?'color:#ffcc00;opacity:.5;text-decoration:line-through':'color:rgba(255,255,255,0.7)')+';margin-bottom:3px;line-height:1.35;cursor:pointer;background:rgba(255,255,255,0.06);border-radius:8px;padding:3px 8px;display:inline-block" onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+ti+','+pi+')">'+pl.name+'</div>'})}
-      else{const nameStr=team.filter(Boolean).map(pl=>pl.name).join(' + ')||'TBD';p+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.6);margin-bottom:6px;line-height:1.35">'+nameStr+'</div>';}
+      if(adminMode){team.filter(Boolean).forEach((pl,pi)=>{const isSrc=swapMode&&swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===ti&&swapMode.pi===pi;
+          const isTarget=swapMode&&!(swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===ti&&swapMode.pi===pi);
+          const bg=isSrc?'rgba(255,204,0,0.08)':isTarget?'rgba(0,229,255,0.08)':'rgba(255,255,255,0.04)';
+          const border=isSrc?'1.5px dashed rgba(255,204,0,0.4)':isTarget?'1.5px solid rgba(0,229,255,0.35)':'1.5px solid rgba(255,255,255,0.07)';
+          const col=isSrc?'#ffcc00':isTarget?'#00e5ff':'rgba(255,255,255,0.7)';
+          p+='<div style="background:'+bg+';border:'+border+';border-radius:10px;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;cursor:pointer;'+(isSrc?'opacity:.5;text-decoration:line-through':'')+'" onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+ti+','+pi+')">';
+          p+='<span style="font-size:16px;font-weight:700;color:'+col+'">'+pl.name+'</span>';
+          p+=(isSrc?'<span style="font-size:10px;color:#ffcc00;font-weight:700">Moving</span>':isTarget?'<span style="font-size:10px;color:#00e5ff;font-weight:700">Swap in →</span>':'<span style="font-size:10px;color:rgba(255,255,255,0.25)">Tap to move</span>');
+          p+='</div>'})}
+      else{const nameStr=team.filter(Boolean).map(pl=>pl.name).join(' + ')||'TBD';p+='<div style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.6);margin-bottom:6px;line-height:1.35">'+nameStr+'</div>';}
       p+='<div style="font-size:40px;font-weight:900;line-height:1;color:'+acc.col+';opacity:.1;letter-spacing:-.03em">--</div>';
       if(adminMode)p+='<div style="font-size:7px;color:rgba(255,255,255,0.18);margin-top:6px">Tap to score</div>';
       p+='</div>';return p};
@@ -583,7 +635,11 @@ function rPlay(l,ss){
   if(swapMode){
     const srcR=ss.rounds[swapMode.ri];const srcCt=srcR?.courts[swapMode.ci];
     const srcT=swapMode.ti===0?srcCt?.team1:srcCt?.team2;const srcP=srcT?.[swapMode.pi];
-    h+='<div class="swap-banner fu">Swapping <strong>'+(srcP?.name||'?')+'</strong> — tap another player <button class="edit-btn" style="color:var(--warn);text-decoration:underline;margin-left:8px" onclick="cancelSwap()">Cancel</button></div>'}
+    h+='<div style="background:rgba(255,204,0,0.1);border:1.5px solid rgba(255,204,0,0.35);border-radius:12px;padding:12px 16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px">';
+    h+='<div><div style="font-size:9px;font-weight:900;color:#ffcc00;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px">Swapping player</div>';
+    h+='<div style="font-size:16px;font-weight:700;color:#f4f4f0">'+(srcP?.name||'?')+' → tap any player below</div></div>';
+    h+='<button onclick="cancelSwap()" style="background:rgba(255,92,71,0.15);border:1px solid rgba(255,92,71,0.3);color:#ff5c47;font-size:12px;font-weight:700;padding:8px 16px;border-radius:8px;cursor:pointer;white-space:nowrap">Cancel</button>';
+    h+='</div>'}
 
   // MVPs
   h+=rRoundMVPs(round,vr,ss,l);
@@ -665,6 +721,36 @@ function rSessionRoster(l,ss){let h='';const parts=ss.participants||[];const act
   h+=activePlayers.map(p=>{const isIn=parts.includes(p.id);const pn=l.players.indexOf(p)+1;const canToggle=isAdmin&&!ss.started;return'<div class="pr pick-row'+(isIn?' pick-in':'')+'"'+(canToggle?' onclick="toggleParticipant(\''+p.id+'\')" style="cursor:pointer"':'')+'><div class="pick-check">'+(isIn?'✓':'')+'</div><div class="pn'+(isIn?'':'" style="background:var(--surf4);color:var(--muted)')+'">'+pn+'</div><span style="flex:1;font-weight:600;font-size:.88rem">'+p.name+'</span><span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span>'+(isAdmin?'<button class="edit-btn" onclick="event.stopPropagation();openEditPlayer(\''+p.id+'\')">Edit</button>':'')+(isAdmin&&ss.started?'<button class="edit-btn" style="color:var(--warn)" onclick="event.stopPropagation();replacePlayer(\''+p.id+'\')">Swap</button>':'')+'</div>'}).join('');
   h+='</div>';
   if(nSelected<4)h+='<div style="text-align:center;padding:10px"><p style="color:var(--warn);font-size:.82rem">Need at least 4 participants to start.</p></div>';
+
+  // Sub out / Sub in section (only during active ladder)
+  if(isAdmin&&ss.started&&!ss.finished){
+    const subbedOut=l.players.filter(p=>p.subbedOut&&ss.participants?.includes(p.id));
+    h+='<div class="card fu"><h3 class="card-t">Player substitutions</h3>';
+    h+='<div style="font-size:.72rem;color:var(--muted);margin-bottom:10px">Sub out a tired or injured player. They keep their stats. Sub them back in anytime.</div>';
+    // Active players with sub out button
+    const activeParts=(ss.participants||[]).map(id=>l.players.find(p=>p.id===id)).filter(p=>p&&p.active!==false&&!p.subbedOut);
+    activeParts.forEach(p=>{
+      h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf2);border-radius:var(--rx);margin-bottom:6px;border:1px solid var(--border)">';
+      h+='<div style="flex:1"><div style="font-size:15px;font-weight:700;color:var(--text)">'+p.name+'</div>';
+      h+='<div style="font-size:.7rem;color:var(--muted)">'+p.gender+' · Playing</div></div>';
+      h+='<button class="bds" style="font-size:.78rem;padding:7px 14px" onclick="subOutPlayer(\''+p.id+'\')"  >Sub out</button>';
+      h+='</div>'});
+    // Subbed out players
+    if(subbedOut.length){
+      h+='<div style="font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:10px 0 6px">Subbed out</div>';
+      subbedOut.forEach(p=>{
+        h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--danger-bg);border-radius:var(--rx);margin-bottom:6px;border:1px solid var(--danger-bd);opacity:.8">';
+        h+='<div style="flex:1"><div style="font-size:15px;font-weight:700;color:var(--danger)">'+p.name+'</div>';
+        h+='<div style="font-size:.7rem;color:var(--danger)">Subbed out this ladder</div></div>';
+        h+='<button class="bp" style="font-size:.78rem;padding:7px 14px" onclick="subInPlayer(\''+p.id+'\')"  >Sub back in</button>';
+        h+='</div>'})}
+    // Add new sub
+    h+='<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">';
+    h+='<div style="font-size:.78rem;font-weight:700;color:var(--text);margin-bottom:8px">Add a new sub</div>';
+    h+='<div style="display:grid;grid-template-columns:1fr 76px;gap:10px;margin-bottom:8px"><input id="fSubName" class="inp" placeholder="Sub player name"><select id="fSubGender" class="inp"><option value="M">M</option><option value="F">F</option></select></div>';
+    h+='<div style="font-size:.68rem;color:var(--muted);margin-bottom:8px">Added to league roster and placed in next round lineup.</div>';
+    h+='<button class="bp full" onclick="addSubPlayer()">Add &amp; sub in</button>';
+    h+='</div></div>'}
   return h}
 
 function rAdmin(l,s){let h='';
