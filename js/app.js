@@ -39,16 +39,15 @@ async function npConfirm(){
   if(!npState)return;
   const v=npState.value===''?null:parseInt(npState.value);
   await _applyScore(npState.ri,npState.ci,npState.field,v);
-  // auto-advance to other team if this one was just set
   const other=npState.field==='t1'?'t2':'t1';
   const l=gL();const ss=gSS();
   if(l&&ss){const sc=ss.rounds[npState.ri].courts[npState.ci].score;
     const otherVal=other==='t1'?sc?.t1:sc?.t2;
-    if(otherVal===null||otherVal===undefined){npState={...npState,field:other,value:''}}
-    else{npState=null}}
-  else{npState=null}
-  render()}
+    if(otherVal===null||otherVal===undefined){npState={...npState,field:other,value:''};render()}
+    else{npState=null;render()}}
+  else{npState=null;render()}}
 function npCancel(){npState=null;render()}
+function npSwitchField(field,existingVal){if(!npState)return;npState.field=field;npState.value=(existingVal!==null&&existingVal!==undefined&&existingVal!=='null')?String(existingVal):'';render()}
 
 let ladders=[],activeLadderId=null,activeSessionId=null,isAdmin=false,adminPin='';
 let view='dashboard',tab='overview',timer=0,timerOn=false,timerInt=null,pinEntry='',editingPid=null,mapOpen=false;
@@ -118,10 +117,14 @@ function calcStats(sessions,players){
   return Object.values(s).sort((a,b)=>b.pf!==a.pf?b.pf-a.pf:(b.pf-b.pa)-(a.pf-a.pa))}
 
 function getRoundMVPs(round,ladder){
-  if(!round||!ladder)return[];const perfs=[];
+  if(!round||!ladder)return{male:[],female:[]};const perfs=[];
   round.courts.forEach(c=>{if(!c.score||!c.score.winner)return;const{t1,t2}=c.score;
     [[c.team1,t1-t2],[c.team2,t2-t1]].forEach(([team,diff])=>{team.filter(Boolean).forEach(p=>{const rosterP=ladder.players.find(x=>x.id===p.id);const gender=rosterP?.gender||p.gender||'M';perfs.push({p:{...p,gender},diff,court:c.court})})})});
-  return perfs.sort((a,b)=>b.diff-a.diff).slice(0,4)}
+  const sorted=perfs.sort((a,b)=>b.diff-a.diff);
+  const seen=new Set();
+  const top=(gender)=>sorted.filter(x=>x.p.gender===gender&&!seen.has(x.p.id)&&seen.add(x.p.id)).slice(0,2);
+  const male=top('M');const female=top('F');
+  return{male,female}}
 
 function calcPartners(sessions,players){
   const pairs={};sessions.forEach(sess=>{sess.rounds.forEach(round=>{round.courts.forEach(c=>{if(!c.score||c.score.t1===null||c.score.t2===null)return;const won=c.score.winner;
@@ -213,13 +216,16 @@ function tkRenderChart(){
 
 // ── Shared round MVP renderer ──
 function rRoundMVPs(round,vr,ss,l){
-  const mvps=getRoundMVPs(round,l);
+  const {male,female}=getRoundMVPs(round,l);
   const allScored=round.courts.every(c=>c.score&&c.score.winner);
-  if(!allScored||!mvps.length)return'';
-  let h='<div style="font-size:.7rem;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em">Round '+(vr+1)+' top performers</div>';
+  if(!allScored||(!male.length&&!female.length))return'';
+  const mkCard=(mv,label,clr,bg)=>{const n=pNum(mv.p,l);return'<div class="mvp-card fu"><div class="mvp-header"><div class="mvp-icon" style="background:'+bg+'"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="'+clr+'" stroke-width="3"><path d="M12 2L15 9H22L16 14L18 21L12 17L6 21L8 14L2 9H9Z"/></svg></div><span class="mvp-label">'+label+'</span></div><div class="mvp-name">#'+n+' '+mv.p.name+'</div><div class="mvp-val">'+(mv.diff>0?'+':'')+mv.diff+' diff</div><div class="mvp-sub">Court '+cName(mv.court,ss)+'</div></div>'};
+  let h='<div style="font-size:.7rem;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em">Round '+(vr+1)+' MVPs</div>';
   h+='<div class="mvp-grid">';
-  mvps.forEach((mv,i)=>{const n=pNum(mv.p,l);const isF=mv.p.gender==='F';const clr=isF?'#ff69a0':'#5b9fff';const bg=isF?'rgba(255,45,120,0.1)':'rgba(59,130,246,0.1)';
-    h+='<div class="mvp-card fu"><div class="mvp-header"><div class="mvp-icon" style="background:'+bg+'"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="'+clr+'" stroke-width="3"><path d="M12 2L15 9H22L16 14L18 21L12 17L6 21L8 14L2 9H9Z"/></svg></div><span class="mvp-label">'+(i===0?'MVP':'#'+(i+1))+'</span></div><div class="mvp-name">#'+n+' '+mv.p.name+'</div><div class="mvp-val">'+(mv.diff>0?'+':'')+mv.diff+' diff</div><div class="mvp-sub">Court '+cName(mv.court,ss)+'</div></div>'});
+  if(male.length)h+=mkCard(male[0],'🏆 Mens MVP','#5b9fff','rgba(59,130,246,0.1)');
+  if(female.length)h+=mkCard(female[0],'🏆 Womens MVP','#ff69a0','rgba(255,45,120,0.1)');
+  if(male.length>1)h+=mkCard(male[1],'Mens #2','#5b9fff','rgba(59,130,246,0.07)');
+  if(female.length>1)h+=mkCard(female[1],'Womens #2','#ff69a0','rgba(255,45,120,0.07)');
   h+='</div>';return h}
 
 // ═══════════════════════════════════════════════════
@@ -240,7 +246,7 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
   const accents={[nC]:{col:'#ffcc00',dim:'rgba(255,204,0,0.18)',bd:'rgba(255,204,0,0.35)',stripe:'#1c1400,#1c1400 5px,#140f00 5px,#140f00 10px',bg:'#0a0800'},
                  [nC-1]:{col:'#00e5ff',dim:'rgba(0,229,255,0.15)',bd:'rgba(0,229,255,0.3)',stripe:'#001618,#001618 5px,#000e10 5px,#000e10 10px',bg:'#000c10'},
                  [nC-2]:{col:'#3b82f6',dim:'rgba(59,130,246,0.12)',bd:'rgba(59,130,246,0.25)',stripe:'#000a20,#000a20 5px,#000718 5px,#000718 10px',bg:'#00081a'}};
-  const acc=accents[ct.court]||{col:'#3a3a55',dim:'rgba(255,255,255,0.06)',bd:'rgba(255,255,255,0.1)',stripe:'#0e0e18,#0e0e18 5px,#080810 5px,#080810 10px',bg:'#08080f'};
+  const acc=accents[ct.court]||{col:'#a78bfa',dim:'rgba(167,139,250,0.12)',bd:'rgba(167,139,250,0.3)',stripe:'#0e0a1a,#0e0a1a 5px,#080612 5px,#080612 10px',bg:'#0a0814'};
 
   const wTeam=w==='A'?ct.team1:ct.team2;
   const lTeam=w==='A'?ct.team2:ct.team1;
@@ -292,8 +298,8 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
     const wNameStr=wTeam.filter(Boolean).map(p=>p.name).join(' + ');
     const lNameStr=lTeam.filter(Boolean).map(p=>p.name).join(' + ');
     if(adminMode){
-      h+='<div style="font-size:12px;font-weight:700;color:#f4f4f0;margin-bottom:6px;line-height:1.35;cursor:pointer" onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+(w==='A'?0:1)+',0)">'+wNameStr+'</div>';}
-    else{h+='<div style="font-size:12px;font-weight:700;color:#f4f4f0;margin-bottom:6px;line-height:1.35">'+wNameStr+'</div>';}
+      wTeam.filter(Boolean).forEach((p,pi)=>{const isSrc=swapMode&&swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===(w==='A'?0:1)&&swapMode.pi===pi;h+='<div style="font-size:12px;font-weight:700;'+(isSrc?'color:#ffcc00;opacity:.5;text-decoration:line-through':'color:#f4f4f0')+';margin-bottom:3px;line-height:1.35;cursor:pointer;background:rgba(255,255,255,0.05);border-radius:8px;padding:3px 8px;display:inline-block" onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+(w==='A'?0:1)+','+pi+')">'+p.name+'</div>'});
+    } else {h+='<div style="font-size:12px;font-weight:700;color:#f4f4f0;margin-bottom:6px;line-height:1.35">'+wNameStr+'</div>';}
     h+='<div style="font-size:44px;font-weight:900;color:'+winScoreCol+';line-height:1;letter-spacing:-.03em;text-shadow:0 0 18px '+winGlow+',0 0 36px '+winGlowSoft+'">'+wScore+'</div>';
     h+='<div style="display:inline-flex;align-items:center;gap:3px;margin-top:6px;font-size:8px;font-weight:900;background:'+winScoreCol+';color:#000;padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.06em">'+wMove+'</div>';
     h+='</div>';
@@ -301,8 +307,8 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
     h+='<div style="background:#1a0000;padding:10px 12px;text-align:center;border-left:1px solid rgba(255,92,71,0.08)">';
     h+='<div style="font-size:7px;font-weight:900;color:rgba(255,92,71,0.7);text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">Loser</div>';
     if(adminMode){
-      h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:6px;line-height:1.35;cursor:pointer" onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+(w==='A'?1:0)+',0)">'+lNameStr+'</div>';}
-    else{h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:6px;line-height:1.35">'+lNameStr+'</div>';}
+      lTeam.filter(Boolean).forEach((p,pi)=>{const isSrc=swapMode&&swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===(w==='A'?1:0)&&swapMode.pi===pi;h+='<div style="font-size:12px;font-weight:700;'+(isSrc?'color:#ffcc00;opacity:.5;text-decoration:line-through':'color:rgba(255,255,255,0.55)')+';margin-bottom:3px;line-height:1.35;cursor:pointer;background:rgba(255,255,255,0.05);border-radius:8px;padding:3px 8px;display:inline-block" onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+(w==='A'?1:0)+','+pi+')">'+p.name+'</div>'});
+    } else {h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:6px;line-height:1.35">'+lNameStr+'</div>';}
     h+='<div style="font-size:44px;font-weight:900;color:rgba(255,92,71,0.3);line-height:1;letter-spacing:-.03em">'+lScore+'</div>';
     h+='<div style="display:inline-flex;align-items:center;gap:3px;margin-top:6px;font-size:8px;font-weight:900;background:rgba(255,92,71,0.15);color:rgba(255,92,71,0.7);border:1px solid rgba(255,92,71,0.25);padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.06em">'+lMove+'</div>';
     h+='</div></div>';
@@ -315,10 +321,10 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
     const mkPanel=(team,side,isRight)=>{
       const fld=side==='A'?'t1':'t2';const ti=side==='A'?0:1;
       const onclk=adminMode?` onclick="openNumpad(${vr},${ci},'${fld}')" style="cursor:pointer;text-align:center;background:${acc.bg};padding:10px 12px${isRight?';border-left:1px solid rgba(255,255,255,0.04)':''}"`:`style="text-align:center;background:${acc.bg};padding:10px 12px${isRight?';border-left:1px solid rgba(255,255,255,0.04)':''}"`;
-      const nameStr=team.filter(Boolean).map(p=>p.name).join(' + ')||'TBD';
       let p='<div '+onclk+'>';
       p+='<div style="font-size:7px;font-weight:900;color:'+acc.col+';opacity:.65;text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">Team '+side+'</div>';
-      p+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.6);margin-bottom:6px;line-height:1.35">'+nameStr+'</div>';
+      if(adminMode&&swapMode){team.filter(Boolean).forEach((pl,pi)=>{const isSrc=swapMode&&swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===ti&&swapMode.pi===pi;p+='<div style="font-size:12px;font-weight:700;'+(isSrc?'color:#ffcc00;opacity:.5;text-decoration:line-through':'color:rgba(255,255,255,0.7)')+';margin-bottom:3px;line-height:1.35;cursor:pointer;background:rgba(255,255,255,0.06);border-radius:8px;padding:3px 8px;display:inline-block" onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+ti+','+pi+')">'+pl.name+'</div>'})}
+      else{const nameStr=team.filter(Boolean).map(pl=>pl.name).join(' + ')||'TBD';p+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.6);margin-bottom:6px;line-height:1.35">'+nameStr+'</div>';}
       p+='<div style="font-size:40px;font-weight:900;line-height:1;color:'+acc.col+';opacity:.1;letter-spacing:-.03em">--</div>';
       if(adminMode)p+='<div style="font-size:7px;color:rgba(255,255,255,0.18);margin-top:6px">Tap to score</div>';
       p+='</div>';return p};
@@ -329,24 +335,7 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
     h+='<div style="padding:5px 12px;font-size:7px;font-weight:700;color:#333;background:'+acc.bg+';border-top:1px solid rgba(255,255,255,0.04)">'+footWin+' &#183; '+footLose+'</div>';
   }
 
-  // ── Admin numpad ──
-  if(adminMode&&npState&&npState.ri===vr&&npState.ci===ci){
-    const ct2=ss.rounds[vr].courts[ci];
-    const teamLabel=npState.field==='t1'?'Team A':'Team B';
-    const teamPlayers=(npState.field==='t1'?ct2.team1:ct2.team2).filter(Boolean).map(p=>p.name).join(' + ')||teamLabel;
-    const curDisplay=npState.value===''?'--':npState.value;
-    h+='<div class="np-sheet">';
-    h+='<div class="np-sheet-hdr"><div><div class="np-court-label">Court '+nm+' \u2014 '+teamLabel+'</div><div class="np-team-name">'+teamPlayers+'</div></div>';
-    h+='<div style="display:flex;align-items:center;gap:8px"><div class="np-score-display" id="npScoreDisplay">'+curDisplay+'</div><button class="np-cancel-btn" onclick="npCancel()">Cancel</button></div></div>';
-    h+='<div class="np-quick">';
-    [11,15,21].forEach(v=>h+='<button class="np-qbtn hot" onclick="npQuick('+v+')">'+v+'</button>');
-    h+='<button class="np-qbtn" onclick="npQuick(0)">0</button>';
-    h+='</div><div class="np-grid">';
-    [1,2,3,4,5,6,7,8,9].forEach(d=>h+='<button class="np-key" onclick="npPress(\''+d+'\')">'+d+'</button>');
-    h+='<button class="np-key del" onclick="npDel()">\u232b</button>';
-    h+='<button class="np-key" onclick="npPress(\'0\')">0</button>';
-    h+='<button class="np-key confirm" onclick="npConfirm()">Set \u2192</button>';
-    h+='</div></div>'}
+  // numpad rendered as centered overlay in render()
 
   // ── Win/Loss mode ──
   if(adminMode&&ss.config.scoreMode==='winloss'){
@@ -714,6 +703,82 @@ function render(){
   if(!isAdmin)h+='<button class="admin-lock-btn" onclick="openPin()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><line x1="12" y1="15" x2="12" y2="18"/></svg> Admin</button>';
   else h+='<button class="admin-lock-btn unlocked" onclick="lockAdmin()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Lock admin</button>';
   h+='</div></div>';
+  // ── Centered score modal overlay ──
+  if(npState&&isAdmin){
+    const ss2=gSS();const l2=gL();
+    if(ss2&&l2){
+      const ct2=ss2.rounds[npState.ri]?.courts[npState.ci];
+      const t1names=(ct2?.team1||[]).filter(Boolean).map(p=>p.name).join(' + ')||'Team A';
+      const t2names=(ct2?.team2||[]).filter(Boolean).map(p=>p.name).join(' + ')||'Team B';
+      const sc2=ct2?.score;
+      const t1val=sc2?.t1!=null?sc2.t1:null;
+      const t2val=sc2?.t2!=null?sc2.t2:null;
+      const nm2=cName(ct2?.court,ss2);
+      const acc2={[ss2.config.courts]:'#ffcc00',[ss2.config.courts-1]:'#00e5ff',[ss2.config.courts-2]:'#3b82f6'};
+      const col2=acc2[ct2?.court]||'#a78bfa';
+      const bothDone=t1val!==null&&t2val!==null;
+      const cur=npState.value===''?'--':npState.value;
+      let ov='<div style="position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:500;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:16px;backdrop-filter:blur(6px)" onclick="npCancel()">';
+      ov+='<div style="background:#111118;border-radius:20px;width:100%;max-width:380px;border:1px solid rgba(255,255,255,0.1);overflow:hidden" onclick="event.stopPropagation()">';
+      // header
+      ov+='<div style="background:#0e0e1a;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center">';
+      ov+='<div><div style="font-size:9px;font-weight:900;color:'+col2+';text-transform:uppercase;letter-spacing:.1em">Court '+nm2+'</div><div style="font-size:13px;font-weight:700;color:#f4f4f0;margin-top:2px">Enter scores</div></div>';
+      ov+='<button onclick="npCancel()" style="background:rgba(255,255,255,0.07);border:none;color:#7a7a8a;font-size:18px;width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center">&#x2715;</button>';
+      ov+='</div>';
+      // score display — both teams side by side
+      ov+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;margin:12px 14px 0;border-radius:12px;overflow:hidden">';
+      // Team 1
+      const t1active=npState.field==='t1';
+      const t1border=t1active?'border:2px solid '+col2+';':'border:2px solid rgba(255,255,255,0.1);';
+      const t1bg=t1active?'background:#000e18':'background:#0a0a14';
+      const t1score=t1val!==null&&!t1active?String(t1val):(t1active?cur:'--');
+      const t1col=t1val!==null&&!t1active?col2:'rgba(255,255,255,0.15)';
+      ov+='<div style="'+t1bg+';padding:12px 8px;text-align:center;'+t1border+'border-radius:12px 0 0 12px;cursor:pointer" onclick="npSwitchField(\'t1\',' + (t1val!==null?t1val:'null') + ')">';
+      ov+='<div style="font-size:8px;font-weight:900;color:'+(t1active?col2:'#555')+';text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">'+t1names+'</div>';
+      ov+='<div style="font-size:44px;font-weight:900;color:'+(t1active?col2:t1col)+';line-height:1;letter-spacing:-.03em">'+(t1active?cur:t1score)+'</div>';
+      ov+='<div style="font-size:8px;margin-top:5px;color:'+(t1val!==null&&!t1active?col2:'#444')+';">'+(t1val!==null&&!t1active?'✓ Entered':t1active?'← Entering now':'--')+'</div>';
+      ov+='</div>';
+      // Team 2
+      const t2active=npState.field==='t2';
+      const t2border=t2active?'border:2px solid '+col2+';':'border:2px solid rgba(255,255,255,0.1);';
+      const t2bg=t2active?'background:#000e18':'background:#0a0a14';
+      const t2score=t2val!==null&&!t2active?String(t2val):(t2active?cur:'--');
+      const t2col=t2val!==null&&!t2active?col2:'rgba(255,255,255,0.15)';
+      ov+='<div style="'+t2bg+';padding:12px 8px;text-align:center;'+t2border+'border-radius:0 12px 12px 0;cursor:pointer" onclick="npSwitchField(\'t2\',' + (t2val!==null?t2val:'null') + ')">';
+      ov+='<div style="font-size:8px;font-weight:900;color:'+(t2active?col2:'#555')+';text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">'+t2names+'</div>';
+      ov+='<div style="font-size:44px;font-weight:900;color:'+(t2active?col2:t2col)+';line-height:1;letter-spacing:-.03em">'+(t2active?cur:t2score)+'</div>';
+      ov+='<div style="font-size:8px;margin-top:5px;color:'+(t2val!==null&&!t2active?col2:'#444')+';">'+(t2val!==null&&!t2active?'✓ Entered':t2active?'← Entering now':'--')+'</div>';
+      ov+='</div></div>';
+      // Confirm or numpad
+      if(bothDone){
+        ov+='<div style="padding:14px 14px 16px"><button onclick="npState=null;render()" style="width:100%;background:#c8ff00;border:none;border-radius:12px;padding:16px;font-size:15px;font-weight:900;color:#000;cursor:pointer">✓ Confirm '+t1val+' – '+t2val+'</button></div>';
+      } else {
+        // quick scores
+        ov+='<div style="display:flex;gap:8px;padding:12px 14px 6px">';
+        [11,15,21].forEach(v=>{ov+='<button onclick="npQuick('+v+')" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 0;font-size:14px;font-weight:900;color:'+col2+';cursor:pointer">'+v+'</button>'});
+        ov+='<button onclick="npQuick(0)" style="flex:1;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:10px 0;font-size:14px;font-weight:900;color:#555;cursor:pointer">0</button>';
+        ov+='</div>';
+        // numpad grid
+        ov+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(255,255,255,0.06);margin:0 14px 14px;border-radius:12px;overflow:hidden">';
+        [1,2,3,4,5,6,7,8,9].forEach(d=>{ov+='<button onclick="npPress(\''+d+'\')" style="background:#0e0e1a;padding:16px 0;text-align:center;font-size:20px;font-weight:700;color:#f4f4f0;cursor:pointer;border:none;width:100%">'+d+'</button>'});
+        ov+='<button onclick="npDel()" style="background:#0e0e1a;padding:16px 0;text-align:center;font-size:16px;color:#ff5c47;cursor:pointer;border:none">⌫</button>';
+        ov+='<button onclick="npPress(\'0\')" style="background:#0e0e1a;padding:16px 0;text-align:center;font-size:20px;font-weight:700;color:#f4f4f0;cursor:pointer;border:none">0</button>';
+        ov+='<button onclick="npConfirm()" style="background:#c8ff00;padding:16px 0;text-align:center;font-size:12px;font-weight:900;color:#000;cursor:pointer;border:none">SET →</button>';
+        ov+='</div>';}
+      ov+='</div></div>';
+      h+=ov;}}
+
+  // ── Swap mode banner (fixed top) ──
+  if(swapMode&&isAdmin){
+    const ss3=gSS();
+    if(ss3){const srcRound=ss3.rounds[swapMode.ri];const srcCt=srcRound?.courts[swapMode.ci];
+      const srcT=swapMode.ti===0?srcCt?.team1:srcCt?.team2;const srcP=srcT?.[swapMode.pi];
+      h+='<div style="position:fixed;top:0;left:0;right:0;z-index:400;background:rgba(255,204,0,0.15);border-bottom:2px solid rgba(255,204,0,0.4);padding:8px 16px;display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(8px)">';
+      h+='<div><div style="font-size:8px;font-weight:900;color:#ffcc00;text-transform:uppercase;letter-spacing:.08em">Swapping player</div>';
+      h+='<div style="font-size:14px;font-weight:700;color:#f4f4f0;margin-top:1px">'+(srcP?.name||'?')+' → tap any player to swap</div></div>';
+      h+='<button onclick="cancelSwap()" style="background:rgba(255,92,71,0.15);border:1px solid rgba(255,92,71,0.3);color:#ff5c47;font-size:9px;font-weight:700;padding:6px 12px;border-radius:6px;cursor:pointer">Cancel</button>';
+      h+='</div>';}}
+
   app.innerHTML=h;
   applyTextSize();
   renderSizeBtns();
