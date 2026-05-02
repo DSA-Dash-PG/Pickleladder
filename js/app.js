@@ -90,20 +90,76 @@ async function setWLRound(ri,ci,w){
   const l=gL();const ss=gSS();if(!l||!ss||!ss.rounds[ri])return;
   ss.rounds[ri].courts[ci].score={t1:w==='A'?1:0,t2:w==='B'?1:0,winner:w};await save(l)}
 
-function makeCoed(group,pp){const males=group.filter(p=>p?.gender==='M'),females=group.filter(p=>p?.gender==='F');let t1,t2;if(males.length>=2&&females.length>=2){t1=[males[0],females[0]];t2=[males[1],females[1]];if(pp&&(pp[t1[0]?.id]===t1[1]?.id||pp[t2[0]?.id]===t2[1]?.id)){t1=[males[0],females[1]];t2=[males[1],females[0]]}}else if(males.length>=1&&females.length>=1){const others=group.filter(p=>p!==males[0]&&p!==females[0]);t1=[males[0],females[0]];t2=[others[0]||null,others[1]||null]}else{t1=[group[0]||null,group[1]||null];t2=[group[2]||null,group[3]||null];if(pp&&(pp[t1[0]?.id]===t1[1]?.id||pp[t2[0]?.id]===t2[1]?.id)){t1=[group[0]||null,group[2]||null];t2=[group[1]||null,group[3]||null]}}return{t1,t2}}
+function makeCoed(group,pp){
+  // Try all possible pairings and pick one with no repeat partners
+  const g=group.filter(Boolean);
+  if(g.length<2)return{t1:[g[0]||null,null],t2:[null,null]};
+  const males=g.filter(p=>p.gender==='M'),females=g.filter(p=>p.gender==='F');
+  // noRepeat: true if neither pair was together last round
+  const noRepeat=(a,b,c,d)=>{if(!pp)return true;return pp[a?.id]!==b?.id&&pp[b?.id]!==a?.id&&pp[c?.id]!==d?.id&&pp[d?.id]!==c?.id};
+  // Generate all valid pairings (A+B vs C+D where A≠C, A≠D)
+  const pairings=[];
+  if(males.length>=2&&females.length>=2){
+    // Mixed doubles options: swap female or male
+    pairings.push([[males[0],females[0]],[males[1],females[1]]]);
+    pairings.push([[males[0],females[1]],[males[1],females[0]]]);
+    if(males.length>2)pairings.push([[males[0],females[0]],[males[2],females[1]]]);
+  } else {
+    // Try all 3 ways to split 4 players into 2 pairs
+    if(g[0]&&g[1]&&g[2]&&g[3]){
+      pairings.push([[g[0],g[1]],[g[2],g[3]]]);
+      pairings.push([[g[0],g[2]],[g[1],g[3]]]);
+      pairings.push([[g[0],g[3]],[g[1],g[2]]]);
+    } else if(males.length>=1&&females.length>=1){
+      const others=g.filter(p=>p!==males[0]&&p!==females[0]);
+      pairings.push([[males[0],females[0]],[others[0]||null,others[1]||null]]);
+    }
+  }
+  // Pick first pairing with no repeat partners; fall back to first pairing
+  const chosen=pairings.find(([a,b])=>noRepeat(a[0],a[1],b[0],b[1]))||pairings[0];
+  if(!chosen)return{t1:[g[0]||null,g[1]||null],t2:[g[2]||null,g[3]||null]};
+  return{t1:[chosen[0][0]||null,chosen[0][1]||null],t2:[chosen[1][0]||null,chosen[1][1]||null]};
+}
 function genR1(players,nC){const males=shuffle(players.filter(p=>p.gender==='M')),females=shuffle(players.filter(p=>p.gender==='F'));const courts=[];let mi=0,fi=0;for(let c=0;c<nC;c++){const g=[];for(let x=0;x<2;x++){if(mi<males.length)g.push(males[mi++])}for(let x=0;x<2;x++){if(fi<females.length)g.push(females[fi++])}while(g.length<4&&mi<males.length)g.push(males[mi++]);while(g.length<4&&fi<females.length)g.push(females[fi++]);const{t1,t2}=makeCoed(g,null);courts.push({court:c+1,team1:[t1[0]||null,t1[1]||null],team2:[t2[0]||null,t2[1]||null],score:null})}return{courts,completed:false}}
 function genNR(prev,nC){
-  const pp={};prev.courts.forEach(c=>{[c.team1,c.team2].forEach(t=>{if(t[0]&&t[1]){pp[t[0].id]=t[1].id;pp[t[1].id]=t[0].id}})});
+  // Build previous-partner map so we can guarantee splits
+  const pp={};
+  prev.courts.forEach(c=>{
+    [c.team1,c.team2].forEach(t=>{
+      if(t[0]&&t[1]){pp[t[0].id]=t[1].id;pp[t[1].id]=t[0].id}})});
+
+  // Movement rules:
+  // Court nC (top/king): winners STAY (move to nC), losers DROP to nC-1
+  // Court 1 (bottom):    winners RISE to 2,         losers STAY (move to 1)
+  // All others:          winners RISE one,           losers DROP one
+  // Everyone SPLITS — no repeat partners enforced by makeCoed
   const mvs=[];
   prev.courts.forEach(c=>{
     const all=[...(c.team1||[]),...(c.team2||[])].filter(Boolean);
-    if(!c.score||!c.score.winner){all.forEach(p=>mvs.push({p,to:c.court}));return}
-    const w=c.score.winner==='A'?c.team1:c.team2,lo=c.score.winner==='A'?c.team2:c.team1;
+    if(!c.score||!c.score.winner){
+      // Unscored — keep on same court
+      all.forEach(p=>mvs.push({p,to:c.court}));return}
+    const w=c.score.winner==='A'?c.team1:c.team2;
+    const lo=c.score.winner==='A'?c.team2:c.team1;
+    // Winners move up (capped at nC — top court winners stay)
     w.filter(Boolean).forEach(p=>mvs.push({p,to:Math.min(nC,c.court+1)}));
-    lo.filter(Boolean).forEach(p=>mvs.push({p,to:Math.max(1,c.court-1)}))
+    // Losers move down (floor at 1 — bottom court losers stay)
+    lo.filter(Boolean).forEach(p=>mvs.push({p,to:Math.max(1,c.court-1)}));
   });
-  const bk={};for(let i=1;i<=nC;i++)bk[i]=[];mvs.forEach(m=>bk[m.to]?.push(m.p));for(let i=1;i<=nC;i++)bk[i]=shuffle(bk[i]);
-  const courts=[];for(let c=0;c<nC;c++){const g=bk[c+1]||[];const{t1,t2}=makeCoed(g.slice(0,4),pp);courts.push({court:c+1,team1:[t1[0]||null,t1[1]||null],team2:[t2[0]||null,t2[1]||null],score:null})}
+
+  // Bucket players by destination court
+  const bk={};for(let i=1;i<=nC;i++)bk[i]=[];
+  mvs.forEach(m=>{if(bk[m.to])bk[m.to].push(m.p)});
+
+  // Shuffle within each bucket (randomises team assignment within the court)
+  // then pair with makeCoed which enforces no-repeat-partner rule
+  for(let i=1;i<=nC;i++)bk[i]=shuffle(bk[i]);
+
+  const courts=[];
+  for(let c=0;c<nC;c++){
+    const g=bk[c+1]||[];
+    const{t1,t2}=makeCoed(g.slice(0,4),pp);
+    courts.push({court:c+1,team1:[t1[0]||null,t1[1]||null],team2:[t2[0]||null,t2[1]||null],score:null})}
   return{courts,completed:false}}
 
 function calcStats(sessions,players){
