@@ -873,7 +873,7 @@ function rSearch(stats,season,l){
   let h='';
   h+='<div style="display:flex;align-items:center;gap:8px;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:10px 12px;margin-bottom:10px">';
   h+='<span style="font-size:14px;color:rgba(255,255,255,0.3)">&#128269;</span>';
-  h+='<input id="statsSearchInput" class="inp" style="background:transparent;border:none;padding:0;font-size:14px" placeholder="Search player name..." value="'+statsSearchQ+'" oninput="statsSearchQ=this.value;render()" autofocus></div>';
+  h+='<input id="statsSearchInput" class="inp" style="background:transparent;border:none;padding:0;font-size:14px" placeholder="Search player name..." value="'+statsSearchQ+'" oninput="statsSearchQ=this.value;render()"></div>';
   const q=statsSearchQ.toLowerCase().trim();
   const matches=q?sorted.filter(s=>s.name.toLowerCase().includes(q)):[];
   if(!q){h+='<div style="text-align:center;padding:20px;font-size:.82rem;color:var(--muted)">Type a name to search</div>';return h;}
@@ -1190,11 +1190,327 @@ function rLeaderboard(stats,season,l){
 
   let h='';
 
+  // 1. Cookin in the Kitchen (most rounds on top court)
+  const kitchenCounts={};
+  stats.forEach(s=>{
+    const refSS=season.sessions.slice().reverse().find(x=>x.started);
+    const nC=refSS?.config?.courts||4;
+    const wins=s.roundRes.filter(x=>x.court===nC&&x.won).length;
+    if(wins>0)kitchenCounts[s.id]={name:s.name,rounds:wins};});
+  const kitchenSorted=Object.values(kitchenCounts).sort((a,b)=>b.rounds-a.rounds);
+  if(kitchenSorted.length){
+    const top=kitchenSorted[0];
+    h+=cat('Cookin\u2019 in the Kitchen','wins on Court A (top court)',top.name,top.rounds+' W','All ladders · Court A wins','#a78bfa','rgba(167,139,250,0.05)',
+      kitchenSorted.slice(1,5).map(k=>({name:k.name,val:k.rounds+' W',pct:k.rounds/top.rounds})));}
+  // 2. Highest single game (from roundRes — actual per-round score)
+  const gamePeaks2=[];
+  stats.forEach(s=>{s.roundRes.forEach(r=>{gamePeaks2.push({id:s.id,name:s.name,pts:r.pf,rd:r.round,court:r.court,won:r.won})})});
+  gamePeaks2.sort((a,b)=>b.pts-a.pts);
+  const topGames2=[];const seenGame2=new Set();
+  gamePeaks2.forEach(g=>{if(!seenGame2.has(g.id)){seenGame2.add(g.id);topGames2.push(g)}});
+  if(topGames2.length){
+    const top=topGames2[0];const topMax=top.pts;
+    h+=cat('Highest single game','most pts scored in one round',top.name,top.pts,'Rd '+top.rd+(top.won?' · W':' · L'),'#00e5ff','rgba(0,229,255,0.05)',
+      topGames2.slice(1,5).map(g=>({name:g.name,val:g.pts,pct:topMax>0?g.pts/topMax:0})));}
+
+  // 3. Most points scored
+  const ptsSorted=[...sorted];
+  if(ptsSorted.length){
+    const top=ptsSorted[0];const topTotal=totalPts(top);
+    const topPtsCrown=bonusData[top.id]?.wins>0?' '+crownStr(bonusData[top.id].wins):'';
+    h+=cat('Most points scored','season total incl. bonus',top.name+topPtsCrown,totalPts(top),'Season — '+top.w+'W '+top.l+'L','#c8ff00','rgba(200,255,0,0.05)',
+      ptsSorted.slice(1,5).map(s=>({name:s.name+(bonusData[s.id]?.wins>0?' '+crownStr(bonusData[s.id].wins):''),val:totalPts(s),pct:totalPts(s)/topTotal})));}
+
+  // 4. Win streak
+  const streakSorted=[...stats].filter(s=>s.maxStreak>0).sort((a,b)=>b.maxStreak-a.maxStreak);
+  if(streakSorted.length){
+    const top=streakSorted[0];const topVal=top.maxStreak;
+    h+=cat('Win streak','longest in season',top.name,'W'+top.maxStreak,'Best streak this season','#4ade80','rgba(74,222,128,0.05)',
+      streakSorted.slice(1,5).map(s=>({name:s.name,val:'W'+s.maxStreak,pct:s.maxStreak/topVal})));}
+
+  // 5. Best duo (partnership win rate)
+  const pairs=calcPartners(sessions,l.players).filter(p=>p.w+p.l>=3);
+  if(pairs.length){
+    const top=pairs[0];const topWR=top.w/(top.w+top.l);
+    const pName=(p)=>p.p1.name.split(' ')[0]+' + '+p.p2.name.split(' ')[0];
+    h+=cat('Best duo','min 3 games together',pName(top),Math.round(topWR*100)+'%',top.w+'\u2013'+top.l+' record','#ffcc00','rgba(255,204,0,0.05)',
+      pairs.slice(1,5).map(p=>{const wr=p.w/(p.w+p.l);return{name:pName(p),val:Math.round(wr*100)+'%',pct:wr/topWR}}));}
+
+
+  return h;}
+
+function rRules(ss){
+  const nC=ss?.config?.courts||4;
+  const names=ss?.config?.courtNames||defaultCourtNames(nC);
+  const kitchenName=names[0]||'A';
+  const bottomName=names[names.length-1]||String.fromCharCode(65+nC-1);
+  let h='';
+  h+='<div style="background:#0d1400;border:1px solid rgba(200,255,0,0.2);border-radius:14px;padding:18px;margin-bottom:10px;position:relative;overflow:hidden">';
+  h+='<div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#c8ff00,#00e5ff)"></div>';
+  h+='<div style="font-size:9px;font-weight:900;color:rgba(200,255,0,0.6);text-transform:uppercase;letter-spacing:.2em;margin-bottom:8px">How it works</div>';
+  h+='<div style="font-size:20px;font-weight:900;color:#f4f4f0;letter-spacing:-.03em;line-height:1.1;margin-bottom:6px">The Society keeps receipts.</div>';
+  h+='<div style="font-size:13px;color:rgba(255,255,255,0.45);line-height:1.6">Ladder play. Every round counts. Win or lose, you move. Points follow you all season.</div>';
+  h+='</div>';
+  h+='<div style="font-size:9px;font-weight:900;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.15em;margin-bottom:8px">Court movement</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">';
+  [
+    {icon:'\u2191',col:'#c8ff00',bg:'rgba(200,255,0,0.07)',bd:'rgba(200,255,0,0.2)',title:'Win \u2192 Move up',body:'Winners advance one court each round.'},
+    {icon:'\u2193',col:'#ff5c47',bg:'rgba(255,92,71,0.07)',bd:'rgba(255,92,71,0.2)',title:'Lose \u2192 Move down',body:'Losers drop one court each round.'},
+    {icon:'\u{1F451}',col:'#ffcc00',bg:'rgba(255,204,0,0.07)',bd:'rgba(255,204,0,0.2)',title:'Owns the Kitchen \u2014 Court '+kitchenName,body:'Top court winners stay but split partners. You hold the throne, new challenge incoming.'},
+    {icon:'\u21d5',col:'rgba(255,255,255,0.4)',bg:'rgba(255,255,255,0.04)',bd:'rgba(255,255,255,0.1)',title:'Bottom court \u2014 Court '+bottomName,body:'Losers stay but split partners. Grind your way back up.'},
+    {icon:'\u21c4',col:'#00e5ff',bg:'rgba(0,229,255,0.07)',bd:'rgba(0,229,255,0.2)',title:'Partners split every round',body:'You never play with the same partner twice in a row. Everyone pairs up fresh.'},
+  ].forEach(m=>{
+    h+='<div style="display:flex;align-items:flex-start;gap:12px;background:'+m.bg+';border:1px solid '+m.bd+';border-radius:10px;padding:12px 14px">';
+    h+='<div style="font-size:18px;flex-shrink:0;width:28px;text-align:center;line-height:1.4">'+m.icon+'</div>';
+    h+='<div><div style="font-size:13px;font-weight:800;color:'+m.col+';margin-bottom:2px">'+m.title+'</div>';
+    h+='<div style="font-size:12px;color:rgba(255,255,255,0.45);line-height:1.5">'+m.body+'</div></div></div>';});
+  h+='</div>';
+  h+='<div style="font-size:9px;font-weight:900;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.15em;margin-bottom:8px">Scoring</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">';
+  [
+    {col:'#c8ff00',title:'Most cumulative points wins',body:'Points scored in every round add up. Every game matters equally.'},
+    {col:'#c8ff00',title:'Tiebreaker: point differential',body:'If tied on total points, the player with the better +/- takes the higher rank.'},
+    {col:'#ff5c47',title:'No ties allowed',body:'If the score is tied when time expires, the last point does not count. Whoever was ahead before it wins.'},
+    {col:'#ffcc00',title:'Bonus points for ladder finishes',body:'1st place +15 pts, 2nd place +10 pts, 3rd place +5 pts. Stacks across all ladders.'},
+  ].forEach(r=>{
+    h+='<div style="display:flex;align-items:flex-start;gap:10px;background:rgba(255,255,255,0.03);border:0.5px solid rgba(255,255,255,0.07);border-radius:10px;padding:12px 14px">';
+    h+='<div style="width:6px;height:6px;border-radius:50%;background:'+r.col+';flex-shrink:0;margin-top:5px"></div>';
+    h+='<div><div style="font-size:13px;font-weight:800;color:#f4f4f0;margin-bottom:2px">'+r.title+'</div>';
+    h+='<div style="font-size:12px;color:rgba(255,255,255,0.4);line-height:1.5">'+r.body+'</div></div></div>';});
+  h+='</div>';
+  h+='<div style="font-size:9px;font-weight:900;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.15em;margin-bottom:8px">Each round</div>';
+  h+='<div style="background:rgba(255,255,255,0.03);border:0.5px solid rgba(255,255,255,0.07);border-radius:10px;overflow:hidden;margin-bottom:12px">';
+  ['Play the full round duration.','When the timer sounds, finish the rally in progress.','Receiving team makes line calls.','There must always be a winner \u2014 no ties.'].forEach((t,i,arr)=>{
+    h+='<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;'+(i<arr.length-1?'border-bottom:0.5px solid rgba(255,255,255,0.06)':'')+'">';
+    h+='<div style="font-size:10px;font-weight:900;color:rgba(200,255,0,0.4);flex-shrink:0;width:18px;text-align:center">'+(i+1)+'</div>';
+    h+='<div style="font-size:13px;color:rgba(255,255,255,0.6)">'+t+'</div></div>';});
+  h+='</div>';
+  if(ss){
+    h+='<div style="font-size:9px;font-weight:900;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.15em;margin-bottom:8px">This ladder</div>';
+    h+='<div style="background:rgba(255,255,255,0.03);border:0.5px solid rgba(255,255,255,0.07);border-radius:10px;overflow:hidden">';
+    [['Courts',names.join(', ')],['Rounds',ss.config.rounds],['Round time',ss.config.roundMin+' min'],['Scoring',ss.config.scoreMode==='points'?'Points':'Win / Loss'],['Location',ss.config.place||'\u2014'],['Start',ss.config.startTime?fmt12(ss.config.startTime):'\u2014']].forEach(([k,v],i,arr)=>{
+      h+='<div class="cfg-row" style="'+(i===arr.length-1?'border:none':'')+'">';
+      h+='<span style="font-size:12px;color:rgba(255,255,255,0.4)">'+k+'</span>';
+      h+='<span style="font-size:12px;font-weight:700;color:#f4f4f0">'+v+'</span></div>';});
+    h+='</div>';}
+  return h;}
+
+
+function rPlayers(l){
+  let h='';
+  const active=l.players.filter(p=>p.active!==false);
+  const inactive=l.players.filter(p=>p.active===false);
+  const s=gS();
+  const bonusData=(s&&!isAdmin)?calcBonusPts(s.sessions,l.players):{};
+  const seasonStats=(s&&!isAdmin)?calcStats(s.sessions,l.players):[];
+  const totalPts=(pid)=>{const st=seasonStats.find(x=>x.id===pid);return(st?.pf||0)+(bonusData[pid]?.bonus||0)};
+  const sortedActive=isAdmin?active:[...active].sort((a,b)=>totalPts(b.id)-totalPts(a.id));
+  if(isAdmin)h+='<div class="card fu"><h3 class="card-t">Add player to league</h3><div style="display:grid;grid-template-columns:1fr 76px;gap:10px;margin-bottom:10px"><input id="fPN" class="inp" placeholder="Player name" onkeydown="if(event.key===\'Enter\')addPlayer()"><select id="fPG" class="inp"><option value="M">M</option><option value="F">F</option></select></div><button class="bp full" onclick="addPlayer()">Add</button></div>';
+  h+='<div class="card fu"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><h3 class="card-t" style="margin:0">Active players</h3><span class="pill ok">'+active.length+'</span></div>';
+  if(!active.length)h+='<p class="subtext" style="text-align:center;padding:20px">No active players.</p>';
+  else if(isAdmin){
+    h+=active.map(p=>'<div class="pr"><div class="pn">'+(l.players.indexOf(p)+1)+'</div><span style="flex:1;font-weight:600;font-size:.88rem">'+p.name+'</span><span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span><button class="edit-btn" onclick="openEditPlayer(\''+p.id+'\')">Edit</button><button class="edit-btn" style="color:var(--loss)" onclick="deactivatePlayer(\''+p.id+'\')">Deactivate</button></div>').join('');
+  } else {
+    h+=sortedActive.map((p,i)=>{
+      const wins=bonusData[p.id]?.wins||0;
+      const pts=totalPts(p.id);
+      const crown=wins>0?(' '+crownStr(wins)):'';
+      const bg=i===0?'background:#0d1400;border:0.5px solid rgba(200,255,0,0.15);':'background:var(--surf2);border:1px solid var(--border);';
+      return'<div style="display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:var(--rx);margin-bottom:6px;'+bg+'">'
+        +'<div style="width:32px;height:32px;border-radius:50%;background:'+(i===0?'rgba(200,255,0,0.15)':'rgba(255,255,255,0.06)')+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:'+(i===0?'#c8ff00':'var(--muted)')+';flex-shrink:0">'+p.name.slice(0,2).toUpperCase()+'</div>'
+        +'<div style="flex:1"><div style="font-size:14px;font-weight:700;color:var(--text)">'+p.name+crown+'</div>'
+        +(wins>0?'<div style="font-size:9px;color:rgba(200,255,0,0.5);margin-top:1px">'+wins+' ladder win'+(wins!==1?'s':'')+'</div>':'<div style="font-size:9px;color:var(--muted);margin-top:1px">no wins yet</div>')
+        +'</div>'
+        +'<span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span>'
+        +(pts>0?'<div style="font-size:13px;font-weight:800;color:rgba(200,255,0,0.7)">'+pts+'</div>':'')
+        +'</div>'}).join('');
+  }
+  h+='</div>';
+  if(inactive.length&&isAdmin){
+    h+='<div class="card fu"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><h3 class="card-t" style="margin:0">Inactive players</h3><span class="pill">'+inactive.length+'</span></div>';
+    h+=inactive.map(p=>'<div class="pr" style="opacity:.5"><div class="pn" style="background:var(--surf4);color:var(--muted)">'+(l.players.indexOf(p)+1)+'</div><span style="flex:1;font-weight:600;font-size:.88rem">'+p.name+'</span><span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span><button class="edit-btn" onclick="openEditPlayer(\''+p.id+'\')">Edit</button><button class="edit-btn" style="color:var(--lime)" onclick="reactivatePlayer(\''+p.id+'\')">Activate</button></div>').join('');
+    h+='</div>'}
+  return h}
+function rSessionRoster(l,ss){let h='';const parts=ss.participants||[];const activePlayers=l.players.filter(p=>p.active!==false);const nSelected=parts.length;
+  if(isAdmin)h+='<div class="card fu"><h3 class="card-t">Add new player</h3><div style="font-size:.72rem;color:var(--muted);margin-bottom:8px">Adds to league roster and selects for this ladder</div><div style="display:grid;grid-template-columns:1fr 76px;gap:10px;margin-bottom:10px"><input id="fPN" class="inp" placeholder="Player name" onkeydown="if(event.key===\'Enter\')addAndSelect()"><select id="fPG" class="inp"><option value="M">M</option><option value="F">F</option></select></div><button class="bp full" onclick="addAndSelect()">Add &amp; select</button></div>';
+  h+='<div class="card fu"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 class="card-t" style="margin:0">Ladder participants</h3><span class="pill '+(nSelected>=4?'ok':'')+'" style="'+(nSelected<4?'background:var(--warn-bg);color:var(--warn);border-color:var(--warn-bd)':'')+'">'+nSelected+' selected</span></div>';
+  h+='<div style="font-size:.72rem;color:var(--muted);margin-bottom:12px">Tap to select who is playing this ladder'+(ss.started?' (locked — ladder started)':'')+'</div>';
+  if(isAdmin&&!ss.started)h+='<div style="display:flex;gap:8px;margin-bottom:12px"><button class="bg-btn" style="flex:1;font-size:.74rem;padding:8px" onclick="selectAllParticipants()">Select all</button><button class="bg-btn" style="flex:1;font-size:.74rem;padding:8px" onclick="deselectAllParticipants()">Deselect all</button></div>';
+  h+=activePlayers.map(p=>{const isIn=parts.includes(p.id);const pn=l.players.indexOf(p)+1;const canToggle=isAdmin&&!ss.started;return'<div class="pr pick-row'+(isIn?' pick-in':'')+'"'+(canToggle?' onclick="toggleParticipant(\''+p.id+'\')" style="cursor:pointer"':'')+'><div class="pick-check">'+(isIn?'✓':'')+'</div><div class="pn'+(isIn?'':'" style="background:var(--surf4);color:var(--muted)')+'">'+pn+'</div><span style="flex:1;font-weight:600;font-size:.88rem">'+p.name+'</span><span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span>'+(isAdmin?'<button class="edit-btn" onclick="event.stopPropagation();openEditPlayer(\''+p.id+'\')">Edit</button>':'')+(isAdmin&&ss.started?'<button class="edit-btn" style="color:var(--warn)" onclick="event.stopPropagation();replacePlayer(\''+p.id+'\')">Swap</button>':'')+'</div>'}).join('');
+  h+='</div>';
+  if(nSelected<4)h+='<div style="text-align:center;padding:10px"><p style="color:var(--warn);font-size:.82rem">Need at least 4 participants to start.</p></div>';
+  if(isAdmin&&ss.started&&!ss.finished){
+    const subbedOut=l.players.filter(p=>p.subbedOut&&ss.participants?.includes(p.id));
+    h+='<div class="card fu"><h3 class="card-t">Player substitutions</h3>';
+    h+='<div style="font-size:.72rem;color:var(--muted);margin-bottom:10px">Sub out a tired or injured player. Stats kept. Sub back in anytime.</div>';
+    const activeParts=(ss.participants||[]).map(id=>l.players.find(p=>p.id===id)).filter(p=>p&&p.active!==false&&!p.subbedOut);
+    activeParts.forEach(p=>{
+      h+='<div style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--surf2);border-radius:var(--rx);margin-bottom:6px;border:1px solid var(--border)">';
+      h+='<div style="flex:1"><div style="font-size:15px;font-weight:700;color:var(--text)">'+p.name+'</div><div style="font-size:.7rem;color:var(--muted)">'+p.gender+' · Playing</div></div>';
+      h+='<button class="bds" style="font-size:.82rem;padding:8px 16px" onclick="subOutPlayer(\''+p.id+'\')"  >Sub out</button>';
+      h+='</div>'});
+    if(subbedOut.length){
+      h+='<div style="font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:10px 0 6px">Subbed out</div>';
+      subbedOut.forEach(p=>{
+        h+='<div style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--danger-bg);border-radius:var(--rx);margin-bottom:6px;border:1px solid var(--danger-bd)">';
+        h+='<div style="flex:1"><div style="font-size:15px;font-weight:700;color:var(--danger)">'+p.name+'</div><div style="font-size:.7rem;color:var(--danger)">Subbed out</div></div>';
+        h+='<button class="bp" style="font-size:.82rem;padding:8px 16px" onclick="subInPlayer(\''+p.id+'\')"  >Sub back in</button>';
+        h+='</div>'});}
+    h+='<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px"><div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:8px">Add a new sub</div>';
+    h+='<div style="display:grid;grid-template-columns:1fr 76px;gap:10px;margin-bottom:8px"><input id="fSubName" class="inp" placeholder="Sub player name"><select id="fSubGender" class="inp"><option value="M">M</option><option value="F">F</option></select></div>';
+    h+='<button class="bp full" onclick="addSubPlayer()">Add &amp; sub in</button></div></div>'}
+  return h}
+
+function rAdmin(l,s){let h='';
+  h+='<div class="admin-hierarchy fu"><div class="ah-title">Setup hierarchy</div><div class="ah-row"><div class="ah-num">1</div><div class="ah-info"><div class="ah-label">League</div><div class="ah-desc">Top level. All stats roll up here.</div></div></div><div class="ah-line"></div><div class="ah-row"><div class="ah-num">2</div><div class="ah-info"><div class="ah-label">Season</div><div class="ah-desc">Time period. Stats combine across all ladders.</div></div></div><div class="ah-line"></div><div class="ah-row"><div class="ah-num">3</div><div class="ah-info"><div class="ah-label">Ladder</div><div class="ah-desc">A single play event.</div></div></div></div>';
+  h+='<div class="admin-section fu s1"><div class="admin-section-t"><span class="ah-badge">1</span> League</div><div class="cfg-row"><span class="subtext">Name</span><span style="font-weight:600">'+l.name+' <button class="edit-btn" onclick="renameLadder()">Edit</button></span></div><div style="display:flex;gap:6px;margin-top:10px"><button class="bp" style="flex:1" onclick="go(\'newLadder\')">New league</button><button class="bd" style="flex:1" onclick="deleteLadderAction()">Delete</button></div></div>';
+  const active=l.seasons.filter(x=>!x.archived),archived=l.seasons.filter(x=>x.archived);
+  h+='<div class="admin-section fu s2"><div class="admin-section-t"><span class="ah-badge">2</span> Season</div><div class="cfg-row"><span class="subtext">Current</span><span style="font-weight:600">'+s.name+' <button class="edit-btn" onclick="renameSeason()">Edit</button></span></div>'+(active.length>1?'<div style="margin-top:8px"><label class="lbl">Switch season</label><select class="inp" onchange="gL().activeSeason=this.value;save(gL())">'+active.map(x=>'<option value="'+x.id+'"'+(x.id===l.activeSeason?' selected':'')+'>'+x.name+'</option>').join('')+'</select></div>':'')+'<div style="display:flex;gap:6px;margin-top:10px"><button class="bp" style="flex:1" onclick="go(\'newSeason\')">New season</button><button class="bg-btn" style="flex:1" onclick="archiveSeason(\''+s.id+'\')">Archive</button></div>'+(archived.length?'<div style="margin-top:10px"><label class="lbl">Archived</label>'+archived.map(a=>'<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;padding:8px 10px;background:var(--surf2);border-radius:var(--rx);border:1px solid var(--border)"><span style="flex:1;font-size:.82rem;font-weight:600;color:var(--muted)">'+a.name+'</span><button class="edit-btn" onclick="unarchiveSeason(\''+a.id+'\')">Restore</button><button class="edit-btn" style="color:var(--danger)" onclick="deleteSeason(\''+a.id+'\')">Delete</button></div>').join('')+'</div>':'')+'</div>';
+  const al=s.sessions.filter(x=>!x.archived),arl=s.sessions.filter(x=>x.archived);
+  h+='<div class="admin-section fu s3"><div class="admin-section-t"><span class="ah-badge">3</span> Ladders</div><button class="bp full" onclick="go(\'newSession\')" style="margin-bottom:10px">New ladder</button>'+(al.length?al.map(x=>'<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;padding:8px 10px;background:var(--surf2);border-radius:var(--rx);border:1px solid var(--border)"><span style="flex:1;font-size:.82rem;font-weight:600">'+(x.name||fmtDate(x.date))+'</span><button class="edit-btn" onclick="archiveSession(\''+x.id+'\')">Archive</button></div>').join(''):'<p class="subtext" style="font-size:.78rem">No active ladders.</p>')+(arl.length?'<div style="margin-top:10px"><label class="lbl">Archived</label>'+arl.map(x=>'<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;padding:8px 10px;background:var(--surf2);border-radius:var(--rx);border:1px solid var(--border)"><span style="flex:1;font-size:.82rem;font-weight:600;color:var(--muted)">'+(x.name||fmtDate(x.date))+'</span><button class="edit-btn" onclick="unarchiveSession(\''+x.id+'\')">Restore</button><button class="edit-btn" style="color:var(--danger)" onclick="deleteSession(\''+x.id+'\')">Delete</button></div>').join('')+'</div>':'')+'</div>';
+  return h}
+
+function rSessionAdmin(l,ss){let h='<div class="admin-bar-bottom">Ladder admin</div>';
+  h+='<div class="admin-section"><div class="admin-section-t">Ladder settings</div>'+[['Name',ss.name||'Untitled','<button class="edit-btn" onclick="editSessionName()">Edit</button>'],['Date',fmtDate(ss.date),'<button class="edit-btn" onclick="editSessionDate()">Edit</button>'],['Start',ss.config.startTime?fmt12(ss.config.startTime):'—','<button class="edit-btn" onclick="editSessionTime()">Edit</button>'],['Location',ss.config.place||'—','<button class="edit-btn" onclick="editSessionPlace()">Edit</button>'],['Courts',ss.config.courtNames?.join(', ')||ss.config.courts,''],['Rounds',ss.config.rounds,''],['Round time',ss.config.roundMin+' min',''],['Scoring',ss.config.scoreMode==='points'?'Points':'Win/Loss',''],['Participants',gParts(ss,l).length+' players','']].map(([k,v,eb])=>'<div class="cfg-row"><span class="subtext">'+k+'</span><span style="font-weight:600">'+v+' '+(eb||'')+'</span></div>').join('')+'</div>';
+  h+='<div class="admin-section"><div class="admin-section-t">Danger zone</div><div style="display:flex;gap:6px"><button class="bg-btn" style="flex:1" onclick="archiveSession(\''+ss.id+'\');go(\'dashboard\',\'overview\')">Archive</button><button class="bd" style="flex:1" onclick="deleteSession(\''+ss.id+'\');go(\'dashboard\',\'overview\')">Delete</button></div></div>';return h}
+
+function rNoLadder(){return'<div style="text-align:center;padding:60px 20px" class="fu"><div style="font-size:2.5rem;margin-bottom:12px">🥒</div><h2 class="heading" style="font-size:1.4rem;color:var(--lime);margin-bottom:8px">Pickle Friends</h2><p class="subtext" style="margin-bottom:24px;line-height:1.6;max-width:320px;margin:0 auto 24px">Pickleball ladder play — automatic lineups, live scoring, and season stats.</p>'+(isAdmin?'<button class="bp" onclick="go(\'newLadder\')" style="padding:14px 28px">Create league</button>':'<p class="subtext">No active leagues yet.</p>')+'</div>'}
+function rNoSeason(){let h='<div class="card fu" style="text-align:center;padding:32px"><h3 class="heading" style="font-size:1.1rem;margin-bottom:6px">No seasons yet</h3>'+(isAdmin?'<button class="bp" onclick="go(\'newSeason\')">Create first season</button>':'<p class="subtext">Check back soon!</p>')+'</div>';if(isAdmin){const l=gL();h+='<div class="admin-section fu" style="margin-top:12px"><div class="admin-section-t">League settings</div><div class="cfg-row"><span class="subtext">Name</span><span style="font-weight:600">'+(l?.name||'')+' <button class="edit-btn" onclick="renameLadder()">Edit</button></span></div><div style="display:flex;gap:6px;margin-top:10px"><button class="bp" style="flex:1" onclick="go(\'newLadder\')">New league</button><button class="bd" style="flex:1" onclick="deleteLadderAction()">Delete</button></div></div>'}return h}
+
+function rOverview(l,s,stats){const as=s.sessions.filter(x=>!x.archived);let h='<div class="card fu"><div class="overline">Current season</div><h2 class="heading" style="font-size:1.2rem;color:var(--lime)">'+s.name+'</h2><div class="subtext" style="margin-top:4px">'+as.length+' ladder'+(as.length!==1?'s':'')+' · '+l.players.filter(p=>p.active!==false).length+' active players</div></div>';
+  if(stats.some(x=>x.w+x.l+x.t>0))h+='<div class="chip-grid fu">'+[{l:'Ladders',v:as.filter(x=>x.started).length},{l:'Games',v:Math.floor(stats.reduce((a,x)=>a+x.w+x.l+x.t,0)/2)},{l:'Players',v:l.players.filter(p=>p.active!==false).length},{l:'High Pts',v:stats.reduce((m,x)=>Math.max(m,x.pf),0)}].map(c=>'<div class="chip"><div class="chip-n">'+c.v+'</div><div class="chip-l">'+c.l+'</div></div>').join('')+'</div>';
+  if(isAdmin)h+='<button class="bp full" onclick="go(\'newSession\')" style="margin-bottom:12px">New ladder</button>';
+  const ladderBtn=(x,dim)=>{const nParts=x.participants?x.participants.length:l.players.filter(p=>p.active!==false).length;const st=x.finished?'<span class="pill ok">Complete</span>':x.started?'<span class="pill live"><span class="dot"></span>Rd '+(x.currentRound+1)+'</span>':'<span class="pill draft">Upcoming</span>';return'<button class="sc" style="'+(dim?'opacity:.6':'')+';" onclick="openSession(\''+x.id+'\')">'+'<div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:700;font-size:.9rem">'+(x.name||fmtDate(x.date))+'</div><div class="subtext" style="font-size:.72rem;margin-top:2px">'+fmtDate(x.date)+(x.config.startTime?' · '+fmt12(x.config.startTime):'')+' · '+nParts+' players · '+x.config.courts+' courts'+(x.config.place?' · '+x.config.place:'')+'</div></div>'+st+'</div></button>'};
+  if(!as.length){h+='<div class="card fu"><h3 class="card-t">Ladders</h3><p class="subtext" style="text-align:center;padding:20px">No ladders scheduled yet.</p></div>'}
+  else{
+    const active_ls=[...as].filter(x=>!x.finished).sort((a,b)=>a.date.localeCompare(b.date));
+    const done_ls=[...as].filter(x=>x.finished).sort((a,b)=>b.date.localeCompare(a.date));
+    if(active_ls.length)h+='<div class="card fu"><h3 class="card-t">Upcoming Ladders</h3>'+active_ls.map(x=>ladderBtn(x,false)).join('')+'</div>';
+    if(done_ls.length)h+='<div class="card fu"><h3 class="card-t" style="color:var(--muted)">Completed</h3>'+done_ls.map(x=>ladderBtn(x,true)).join('')+'</div>';}
+  return h}
+
+
+// ══ STANDINGS TAB ══
+// Full ranked table, top 10 highlighted, gold/silver/bronze for 1-3, rank delta
+function rStandings(stats,season,l){
+  if(!season)return'';
+  const bonusData=calcBonusPts(season.sessions,l.players);
+  const totalPts=(s)=>s.pf+(bonusData[s.id]?.bonus||0);
+  const sorted=[...stats].filter(s=>s.w+s.l>0).sort((a,b)=>totalPts(b)-totalPts(a)||(b.pf-b.pa)-(a.pf-a.pa));
+
+  // prev week rank delta
+  const prevRankMap={};
+  if(season.sessions.filter(x=>x.started).length>=2){
+    const prev=season.sessions.filter(x=>x.started).slice(0,-1);
+    const ps=calcStats(prev,l.players);
+    const pb=calcBonusPts(prev,l.players);
+    [...ps].sort((a,b)=>(b.pf+(pb[b.id]?.bonus||0))-(a.pf+(pb[a.id]?.bonus||0))).forEach((s,i)=>prevRankMap[s.id]=i+1);}
+
+  const topCtName=(s)=>{if(!s.courtHist.length)return'--';const best=Math.max(...s.courtHist.map(x=>x.court));const refSS=season?.sessions?.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
+
+  let h='';
+  // bonus strip
+  h+='<div style="display:flex;background:#0d1400;border:0.5px solid rgba(200,255,0,0.15);border-radius:8px;overflow:hidden;margin-bottom:12px">';
+  [{pos:'1st',b:15},{pos:'2nd',b:10},{pos:'3rd',b:5}].forEach((x,i)=>{
+    h+='<div style="flex:1;text-align:center;padding:8px 4px'+(i<2?';border-right:1px solid rgba(200,255,0,0.1)':'')+'"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">'+x.pos+'</div><div style="font-size:16px;font-weight:900;color:#c8ff00;line-height:1">+'+x.b+'</div><div style="font-size:8px;color:rgba(200,255,0,0.4);margin-top:1px">bonus</div></div>';});
+  h+='<div style="flex:1;text-align:center;padding:8px 4px;border-left:1px solid rgba(200,255,0,0.1)"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">Scope</div><div style="font-size:10px;font-weight:900;color:#c8ff00;line-height:1.3">All<br>ladders</div></div></div>';
+
+  if(!sorted.length){h+='<p class="subtext" style="text-align:center;padding:20px">No scored games yet.</p>';return h;}
+
+  // medal colors
+  const medalBg=['rgba(255,204,0,0.12)','rgba(180,180,180,0.1)','rgba(205,127,50,0.12)'];
+  const medalBd=['rgba(255,204,0,0.35)','rgba(180,180,180,0.25)','rgba(205,127,50,0.3)'];
+  const medalCol=['#ffcc00','#c0c0c0','#cd7f32'];
+  const medalLabel=['1st','2nd','3rd'];
+
+  h+='<div style="display:flex;flex-direction:column;gap:4px">';
+  sorted.forEach((s,i)=>{
+    const rank=i+1;
+    const wins=bonusData[s.id]?.wins||0;
+    const bonus=bonusData[s.id]?.bonus||0;
+    const total=totalPts(s);
+    const d=s.pf-s.pa;
+    const sk=s.streak;
+    const skStr=sk>0?'W'+sk:sk<0?'L'+Math.abs(sk):'--';
+    const avg=s.roundPts.length?(Math.round(s.pf/s.roundPts.length*10)/10).toFixed(1):'--';
+    const tc=topCtName(s);
+    const prevRank=prevRankMap[s.id];
+    const delta=prevRank&&prevRank!==rank
+      ?(prevRank>rank?'<span style="font-size:9px;font-weight:800;color:#4ade80">\u25b2'+(prevRank-rank)+'</span>'
+                     :'<span style="font-size:9px;font-weight:800;color:#ff5c47">\u25bc'+(rank-prevRank)+'</span>')
+      :(prevRank?'<span style="font-size:9px;color:rgba(255,255,255,0.2)">\u2014</span>':'');
+    const isTop3=rank<=3;
+    const isTop10=rank<=10;
+    const bg=isTop3?medalBg[rank-1]:isTop10?'rgba(255,255,255,0.03)':'transparent';
+    const bd=isTop3?medalBd[rank-1]:isTop10?'rgba(255,255,255,0.07)':'rgba(255,255,255,0.04)';
+    const rankCol=isTop3?medalCol[rank-1]:rank<=10?'rgba(255,255,255,0.4)':'rgba(255,255,255,0.2)';
+
+    h+='<div style="background:'+bg+';border:0.5px solid '+bd+';border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:8px">';
+    // rank
+    h+='<div style="font-size:'+( isTop3?'13':'11')+'px;font-weight:900;color:'+rankCol+';width:28px;flex-shrink:0;text-align:center">'+(isTop3?medalLabel[rank-1]:rank)+'</div>';
+    // avatar
+    const avBg=isTop3?medalBg[rank-1]:'rgba(255,255,255,0.06)';
+    h+='<div style="width:32px;height:32px;border-radius:50%;background:'+avBg+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:'+rankCol+';flex-shrink:0">'+s.name.slice(0,2).toUpperCase()+'</div>';
+    // name + crowns + sub info
+    h+='<div style="flex:1;min-width:0"><div style="font-size:'+(isTop3?'14':'13')+'px;font-weight:'+(isTop3?'800':'700')+';color:'+(isTop3?'#f4f4f0':'rgba(255,255,255,0.8)')+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+s.name+(wins>0?' '+crownStr(wins):'')+'</div>';
+    h+='<div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:1px">'+s.w+'W '+s.l+'L'+(bonus>0?' · +'+bonus+' bonus':'')+'</div></div>';
+    // delta
+    h+='<div style="min-width:24px;text-align:center">'+delta+'</div>';
+    // stats mini
+    h+='<div style="display:grid;grid-template-columns:repeat(3,36px);gap:4px;text-align:right">';
+    h+='<div><div style="font-size:10px;font-weight:700;color:'+(d>=0?'var(--lime)':'var(--loss)')+'\">'+(d>0?'+':'')+d+'</div><div style="font-size:7px;color:rgba(255,255,255,0.25)">+/-</div></div>';
+    h+='<div><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.5)">'+avg+'</div><div style="font-size:7px;color:rgba(255,255,255,0.25)">avg</div></div>';
+    h+='<div><div style="font-size:11px;font-weight:900;color:'+(isTop3?rankCol:'rgba(200,255,0,0.7)')+'">'+total+'</div><div style="font-size:7px;color:rgba(255,255,255,0.25)">pts</div></div>';
+    h+='</div></div>';
+  });
+  h+='</div>';
+  return h;}
+
+// ══ LEADERBOARD TAB ══
+// Category leaders: top scorer, win streak, highest game, best duo, cookin in the kitchen
+function rLeaderboard(stats,season,l){
+  if(!season)return'';
+  const bonusData=calcBonusPts(season.sessions,l.players);
+  const totalPts=(s)=>s.pf+(bonusData[s.id]?.bonus||0);
+  const sorted=[...stats].filter(s=>s.w+s.l>0).sort((a,b)=>totalPts(b)-totalPts(a));
+  const sessions=season.sessions;
+  if(!sorted.length)return'<p class="subtext" style="text-align:center;padding:20px">No scored games yet.</p>';
+
+  const topCtName=(s)=>{if(!s.courtHist.length)return'--';const best=Math.max(...s.courtHist.map(x=>x.court));const refSS=season?.sessions?.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
+
+  // helper: render a category card
+  const cat=(lbl,desc,heroName,heroVal,heroSub,heroCol,heroBg,rows)=>{
+    let c='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:12px;overflow:hidden;margin-bottom:10px">';
+    c+='<div style="background:#0a0a0a;padding:7px 14px;border-bottom:1px solid #1a1a1a;display:flex;align-items:baseline;justify-content:space-between">';
+    c+='<div style="font-size:9px;font-weight:900;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.15em">'+lbl+'</div>';
+    c+='<div style="font-size:9px;color:rgba(255,255,255,0.2)">'+desc+'</div></div>';
+    // hero row
+    c+='<div style="padding:12px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #1a1a1a;background:'+heroBg+'">';
+    c+='<div style="width:40px;height:40px;border-radius:50%;background:'+heroCol+'1a;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:'+heroCol+';flex-shrink:0">'+heroName.slice(0,2).toUpperCase()+'</div>';
+    c+='<div style="flex:1"><div style="font-size:18px;font-weight:900;color:#f4f4f0;letter-spacing:-.02em;line-height:1">'+heroName+'</div>';
+    c+='<div style="font-size:9px;color:rgba(255,255,255,0.35);margin-top:2px">'+heroSub+'</div></div>';
+    c+='<div style="text-align:right"><div style="font-size:26px;font-weight:900;color:'+heroCol+';line-height:1;letter-spacing:-.03em">'+heroVal+'</div></div>';
+    c+='</div>';
+    // runner-up rows
+    rows.forEach((r,i)=>{
+      const barW=Math.round(r.pct*100);
+      c+='<div style="display:flex;align-items:center;gap:8px;padding:7px 14px;border-bottom:0.5px solid #111'+(i===rows.length-1?';border:none':'')+(i%2===1?';background:#0a0a0a':'')+'">';
+      c+='<div style="font-size:10px;color:rgba(255,255,255,0.2);width:14px;flex-shrink:0;text-align:center">'+(i+2)+'</div>';
+      c+='<div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.7);flex:1">'+r.name+'</div>';
+      c+='<div style="width:52px;height:3px;background:rgba(255,255,255,0.07);border-radius:2px;overflow:hidden"><div style="height:100%;background:'+heroCol+'70;border-radius:2px;width:'+barW+'%"></div></div>';
+      c+='<div style="font-size:11px;font-weight:800;color:'+heroCol+'99;min-width:36px;text-align:right">'+r.val+'</div>';
+      c+='</div>';});
+    c+='</div>';
+    return c;};
+
+  let h='';
+
   // 1. Most points scored
   const ptsSorted=[...sorted];
   if(ptsSorted.length){
     const top=ptsSorted[0];const topTotal=totalPts(top);
-    h+=cat('Most points scored','season total incl. bonus',top.name,totalPts(top),'Season — '+top.w+'W '+top.l+'L','#c8ff00','rgba(200,255,0,0.05)',
+    const topPtsCrown=bonusData[top.id]?.wins>0?' '+crownStr(bonusData[top.id].wins):'';
+    h+=cat('Most points scored','season total incl. bonus',top.name+topPtsCrown,totalPts(top),'Season — '+top.w+'W '+top.l+'L','#c8ff00','rgba(200,255,0,0.05)',
       ptsSorted.slice(1,5).map(s=>({name:s.name+(bonusData[s.id]?.wins>0?' '+crownStr(bonusData[s.id].wins):''),val:totalPts(s),pct:totalPts(s)/topTotal})));}
 
   // 2. Win streak
@@ -1204,18 +1520,18 @@ function rLeaderboard(stats,season,l){
     h+=cat('Win streak','longest in season',top.name,'W'+top.maxStreak,'Best streak this season','#4ade80','rgba(74,222,128,0.05)',
       streakSorted.slice(1,5).map(s=>({name:s.name,val:'W'+s.maxStreak,pct:s.maxStreak/topVal})));}
 
-  // 3. Highest single game
-  const gamePeaks=[];
-  stats.forEach(s=>{s.roundPts.forEach((p,i)=>{gamePeaks.push({id:s.id,name:s.name,pts:p})})});
-  gamePeaks.sort((a,b)=>b.pts-a.pts);
-  const topGames=[];const seenGame=new Set();
-  gamePeaks.forEach(g=>{if(!seenGame.has(g.id)){seenGame.add(g.id);topGames.push(g)}});
-  if(topGames.length){
-    const top=topGames[0];
-    h+=cat('Highest single game','most pts in one game',top.name,top.pts,'Single game record','#00e5ff','rgba(0,229,255,0.05)',
-      topGames.slice(1,5).map(g=>({name:g.name,val:g.pts,pct:g.pts/top.pts})));}
+  // 3. Highest single game (from roundRes — actual per-round score)
+  const gamePeaks2=[];
+  stats.forEach(s=>{s.roundRes.forEach(r=>{gamePeaks2.push({id:s.id,name:s.name,pts:r.pf,rd:r.round,court:r.court,won:r.won})})});
+  gamePeaks2.sort((a,b)=>b.pts-a.pts);
+  const topGames2=[];const seenGame2=new Set();
+  gamePeaks2.forEach(g=>{if(!seenGame2.has(g.id)){seenGame2.add(g.id);topGames2.push(g)}});
+  if(topGames2.length){
+    const top=topGames2[0];const topMax=top.pts;
+    h+=cat('Highest single game','most pts scored in one round',top.name,top.pts,'Rd '+top.rd+(top.won?' · W':' · L'),'#00e5ff','rgba(0,229,255,0.05)',
+      topGames2.slice(1,5).map(g=>({name:g.name,val:g.pts,pct:topMax>0?g.pts/topMax:0})));}
 
-  // 4. Best duo (partnership win rate)
+  // 5. Best duo (partnership win rate)
   const pairs=calcPartners(sessions,l.players).filter(p=>p.w+p.l>=3);
   if(pairs.length){
     const top=pairs[0];const topWR=top.w/(top.w+top.l);
@@ -1223,18 +1539,6 @@ function rLeaderboard(stats,season,l){
     h+=cat('Best duo','min 3 games together',pName(top),Math.round(topWR*100)+'%',top.w+'\u2013'+top.l+' record','#ffcc00','rgba(255,204,0,0.05)',
       pairs.slice(1,5).map(p=>{const wr=p.w/(p.w+p.l);return{name:pName(p),val:Math.round(wr*100)+'%',pct:wr/topWR}}));}
 
-  // 5. Cookin in the Kitchen (most rounds on top court)
-  const kitchenCounts={};
-  stats.forEach(s=>{
-    const refSS=season.sessions.slice().reverse().find(x=>x.started);
-    const nC=refSS?.config?.courts||4;
-    const rounds=s.courtHist.filter(x=>x.court===nC).length;
-    if(rounds>0)kitchenCounts[s.id]={name:s.name,rounds};});
-  const kitchenSorted=Object.values(kitchenCounts).sort((a,b)=>b.rounds-a.rounds);
-  if(kitchenSorted.length){
-    const top=kitchenSorted[0];
-    h+=cat('Cookin\u2019 in the Kitchen','rounds on top court (Court A)',top.name,top.rounds+' rds','All ladders · top court','#a78bfa','rgba(167,139,250,0.05)',
-      kitchenSorted.slice(1,5).map(k=>({name:k.name,val:k.rounds+' rds',pct:k.rounds/top.rounds})));}
 
   return h;}
 
@@ -1354,6 +1658,9 @@ function render(){
   else h+='<button class="admin-lock-btn unlocked" onclick="lockAdmin()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Lock admin</button>';
   h+='</div></div>';
   // ── Centered score modal overlay ──
+  // Restore search input focus and cursor after re-render
+  const _si=document.getElementById('statsSearchInput');
+  if(_si){if(statsSearchQ){const _l=_si.value.length;_si.focus();_si.setSelectionRange(_l,_l);}else{_si.focus();}}
   if(npState&&isAdmin){
     const ss2=gSS();const l2=gL();
     if(ss2&&l2){
