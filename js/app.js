@@ -1040,13 +1040,13 @@ function render(){
     if(isAdmin){
       const tabs=['Play','Roster','Stats','Admin'];
       h+='<div class="tabs">';
-      tabs.forEach(t=>h+='<button class="tab'+(tab===t.toLowerCase()?' active':'')+'\'+('+'\'onclick="tab=\''+t.toLowerCase()+'\';render()">'+t+'</button>');
+      tabs.forEach(t=>h+='<button class="tab'+(tab===t.toLowerCase()?' active':'')+'" onclick="tab=\''+t.toLowerCase()+'\';render()">'+t+'</button>');
       h+='<button class="tab" style="margin-left:auto;font-size:.68rem" onclick="go(\'dashboard\',\'ladders\')">← Back</button></div>';
     } else {
       const pTab=tab==='courtboard'||tab==='ladder'?'courtboard':tab;
       h+='<div class="tabs">';
-      h+='<button class="tab'+(pTab==='courtboard'?' active':'')+'\'+('+'\'onclick="tab=\'courtboard\';render()">Ladder</button>';
-      h+='<button class="tab'+(pTab==='stats'?' active':'')+'\'+('+'\'onclick="tab=\'stats\';render()">Stats</button>';
+      h+='<button class="tab'+(pTab==='courtboard'?' active':'')+'" onclick="tab=\'courtboard\';render()">Ladder</button>';
+      h+='<button class="tab'+(pTab==='stats'?' active':'')+'" onclick="tab=\'stats\';render()">Stats</button>';
       h+='<button class="tab" style="margin-left:auto;font-size:.68rem" onclick="go(\'dashboard\',\'ladders\')">← Back</button></div>';
     }
   } else if(view==='dashboard'&&s){
@@ -1055,7 +1055,7 @@ function render(){
     dtabs.forEach(t=>{
       const k=t.toLowerCase();
       const on=k==='ladders'?(tab==='overview'||tab==='ladders'):tab===k;
-      h+='<button class="tab'+(on?' active':'')+'\'+('+'\'onclick="tab=\''+k+'\';render()">'+t+'</button>';
+      h+='<button class="tab'+(on?' active':'')+'" onclick="tab=\''+k+'\';render()">'+t+'</button>';
     });
     h+='</div>';
   }
