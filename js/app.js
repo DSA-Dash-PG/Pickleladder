@@ -29,12 +29,16 @@ function openNumpad(ri,ci,field){
   const existing=ct.score?(field==='t1'?ct.score.t1:ct.score.t2):null;
   npState={ri,ci,field,value:existing!=null?String(existing):''};
   render()}
-function npPress(d){if(!npState)return;if(npState.value.length>=2)return;npState.value+=d;renderNpDisplay()}
-function npDel(){if(!npState)return;npState.value=npState.value.slice(0,-1);renderNpDisplay()}
-function npQuick(v){if(!npState)return;npState.value=String(v);renderNpDisplay()}
-function renderNpDisplay(){
-  const el=document.getElementById('npScoreDisplay');
-  if(el)el.textContent=npState.value===''?'--':npState.value+'_'.slice(0,1);}
+function npPress(d){if(!npState)return;if(npState.value.length>=2)return;npState.value+=d;_npUpdateDisplay()}
+function npDel(){if(!npState)return;npState.value=npState.value.slice(0,-1);_npUpdateDisplay()}
+function npQuick(v){if(!npState)return;npState.value=String(v);_npUpdateDisplay()}
+function renderNpDisplay(){_npUpdateDisplay()}
+function _npUpdateDisplay(){
+  const val=npState?.value===''?'--':npState?.value||'--';
+  const el=document.getElementById('npActiveScore');
+  if(el){el.textContent=val;return}
+  // fallback — full render if element not found
+  render()}
 async function npConfirm(){
   if(!npState)return;
   const v=npState.value===''?null:parseInt(npState.value);
@@ -678,7 +682,7 @@ function rStats(stats,season,l,ss){const has=stats.length>0&&stats.some(s=>s.w+s
     h+='<div style="overflow-x:auto;margin:0 -18px;padding:0 18px"><table class="st"><thead><tr>'+['#','Player','LP','W','L','Pts','+/-','Avg','Top Ct','Strk'].map(x=>'<th>'+x+'</th>').join('')+'</tr></thead><tbody>';
     stats.filter(s=>s.w+s.l+s.t>0).forEach((s,i)=>{const d=s.pf-s.pa;const pn=pNum(s,l);const sk=s.streak;const skStr=sk>0?'W'+sk:sk<0?'L'+Math.abs(sk):'—';const avg=s.roundPts.length?(Math.round(s.pf/s.roundPts.length*10)/10).toFixed(1):0;const tc=topCtName(s);
       h+='<tr><td class="'+(i<3?'rt':'')+'">'+(["1st","2nd","3rd"][i]||(i+1))+'</td>';
-      h+='<td style="font-weight:600"><span style="font-family:\'Sora\',sans-serif;color:var(--lime);font-weight:700;font-size:.72rem;margin-right:4px">#'+pn+'</span>'+s.name+'</td>';
+      h+='<td style="font-weight:600">'+s.name+'</td>';
       h+='<td style="color:var(--lime);font-weight:700">'+s.attended+'</td>';
       h+='<td class="at">'+s.w+'</td><td class="rdt">'+s.l+'</td><td>'+s.pf+'</td>';
       h+='<td style="font-weight:700;color:'+(d>=0?'var(--lime)':'var(--loss)')+'">'+(d>0?'+':'')+d+'</td>';
@@ -865,7 +869,7 @@ function render(){
       const t1col=t1val!==null&&!t1active?col2:'rgba(255,255,255,0.15)';
       ov+='<div style="'+t1bg+';padding:12px 8px;text-align:center;'+t1border+'border-radius:12px 0 0 12px;cursor:pointer" onclick="npSwitchField(\'t1\',' + (t1val!==null?t1val:'null') + ')">';
       ov+='<div style="font-size:8px;font-weight:900;color:'+(t1active?col2:'#555')+';text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">'+t1names+'</div>';
-      ov+='<div style="font-size:44px;font-weight:900;color:'+(t1active?col2:t1col)+';line-height:1;letter-spacing:-.03em">'+(t1active?cur:t1score)+'</div>';
+      ov+='<div id="'+(t1active?'npActiveScore':'')+'" style="font-size:44px;font-weight:900;color:'+(t1active?col2:t1col)+';line-height:1;letter-spacing:-.03em">'+(t1active?cur:t1score)+'</div>';
       ov+='<div style="font-size:8px;margin-top:5px;color:'+(t1val!==null&&!t1active?col2:'#444')+';">'+(t1val!==null&&!t1active?'✓ Entered':t1active?'← Entering now':'--')+'</div>';
       ov+='</div>';
       // Team 2
@@ -876,7 +880,7 @@ function render(){
       const t2col=t2val!==null&&!t2active?col2:'rgba(255,255,255,0.15)';
       ov+='<div style="'+t2bg+';padding:12px 8px;text-align:center;'+t2border+'border-radius:0 12px 12px 0;cursor:pointer" onclick="npSwitchField(\'t2\',' + (t2val!==null?t2val:'null') + ')">';
       ov+='<div style="font-size:8px;font-weight:900;color:'+(t2active?col2:'#555')+';text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">'+t2names+'</div>';
-      ov+='<div style="font-size:44px;font-weight:900;color:'+(t2active?col2:t2col)+';line-height:1;letter-spacing:-.03em">'+(t2active?cur:t2score)+'</div>';
+      ov+='<div id="'+(t2active?'npActiveScore':'')+'" style="font-size:44px;font-weight:900;color:'+(t2active?col2:t2col)+';line-height:1;letter-spacing:-.03em">'+(t2active?cur:t2score)+'</div>';
       ov+='<div style="font-size:8px;margin-top:5px;color:'+(t2val!==null&&!t2active?col2:'#444')+';">'+(t2val!==null&&!t2active?'✓ Entered':t2active?'← Entering now':'--')+'</div>';
       ov+='</div></div>';
       // Confirm or numpad
