@@ -4,9 +4,9 @@
    PICKLE FRIENDS — Dark gamified theme
    ═══════════════════════════════════════════════════ */
 :root{
-  --bg:#0a0a0f;
-  --surf1:#111118;
-  --surf2:#18181f;
+  --bg:#08080f;
+  --surf1:#0d0d0d;
+  --surf2:#111;
   --surf3:#22222c;
   --surf4:#2a2a38;
   --border:rgba(255,255,255,0.07);
@@ -65,7 +65,7 @@
 }
 
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
+body{font-family:'Inter',system-ui,sans-serif;background:#08080f;color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
 ::selection{background:var(--lime);color:#0a0a0f}
 
 /* ── Animations ── */
@@ -82,24 +82,27 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .overline{font-family:'Sora',sans-serif;font-size:.6rem;font-weight:700;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
 
 /* ── Header ── */
-.hdr{background:var(--surf1);padding:12px 16px 0;position:sticky;top:0;z-index:50;border-bottom:1px solid var(--border)}
-.hdr-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.hdr{background:#08080f;padding:0 16px 0;position:sticky;top:0;z-index:50;border-bottom:1px solid rgba(200,255,0,0.12)}
+.hdr-accent-bar{height:2px;background:linear-gradient(90deg,#c8ff00 0%,#00e5ff 100%);margin:0 -16px;position:relative}
+.hdr-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0 0;margin-bottom:8px}
 .hdr-left{display:flex;align-items:center;gap:10px}
-.hdr-logo{width:34px;height:34px;border-radius:9px;background:var(--lime);display:flex;align-items:center;justify-content:center}
-.hdr-title{font-family:'Sora',sans-serif;font-size:1.1rem;font-weight:900;color:var(--text);margin:0;line-height:1.2;letter-spacing:-.02em}
-.hdr-sub{font-size:.65rem;color:var(--muted);font-weight:500;margin-top:1px}
+.hdr-logo{width:34px;height:34px;border-radius:8px;background:#c8ff00;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.hdr-logo-text{font-family:'Sora',sans-serif;font-size:13px;font-weight:900;color:#000;letter-spacing:-.02em}
+.hdr-title{font-family:'Sora',sans-serif;font-size:1.05rem;font-weight:900;color:var(--text);margin:0;line-height:1.2;letter-spacing:-.03em;text-transform:uppercase}
+.hdr-sub{font-size:.62rem;color:rgba(200,255,0,0.6);font-weight:700;margin-top:1px;text-transform:uppercase;letter-spacing:.06em}
+.hdr-admin-badge{font-size:.68rem;font-weight:800;padding:3px 10px;border-radius:20px;background:rgba(255,92,71,0.1);color:var(--danger);border:1px solid rgba(255,92,71,0.25);text-transform:uppercase;letter-spacing:.06em}
 
 /* ── Tabs ── */
-.tabs{display:flex;gap:0;overflow-x:auto}
-.tab{background:transparent;color:var(--muted);border:none;padding:8px 14px;font-weight:700;font-size:.78rem;cursor:pointer;font-family:'Inter',sans-serif;transition:all .15s;position:relative;white-space:nowrap;flex-shrink:0;border-bottom:2px solid transparent}
-.tab.active{color:var(--lime);border-bottom-color:var(--lime)}
-.tab:hover:not(.active){color:var(--text-sec)}
+.tabs{display:flex;gap:0;overflow-x:auto;background:#08080f}
+.tab{background:transparent;color:rgba(255,255,255,0.3);border:none;padding:9px 14px;font-weight:800;font-size:.76rem;cursor:pointer;font-family:'Inter',sans-serif;transition:all .15s;position:relative;white-space:nowrap;flex-shrink:0;border-bottom:2px solid transparent;text-transform:uppercase;letter-spacing:.06em}
+.tab.active{color:#c8ff00;border-bottom-color:#c8ff00}
+.tab:hover:not(.active){color:rgba(255,255,255,0.6)}
 
 /* ── Content ── */
 .content{max-width:540px;margin:0 auto;padding:14px 13px 80px}
 
 /* ── Cards ── */
-.card{background:var(--surf1);border-radius:var(--r);padding:16px 18px;margin-bottom:10px;border:1px solid var(--border)}
+.card{background:#0d0d0d;border-radius:var(--r);padding:16px 18px;margin-bottom:10px;border:0.5px solid #1e1e1e}
 .card-t{font-family:'Sora',sans-serif;font-size:.88rem;color:var(--text);margin:0 0 12px;font-weight:700;display:flex;align-items:center;gap:8px}
 
 /* ── Form inputs ── */
@@ -499,16 +502,4 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
   .court-map{grid-template-columns:1fr}
   .mvp-grid{grid-template-columns:1fr}
   .hot-grid{grid-template-columns:1fr}
-}
-
-/* ── Court grid — 2 columns on iPad+ ── */
-.court-grid{display:grid;grid-template-columns:1fr;gap:10px}
-@media(min-width:768px){
-  .content{max-width:1080px;padding:14px 20px 80px}
-  .court-grid{grid-template-columns:1fr 1fr}
-  .cc{margin-bottom:0}
-  #pv-now.active{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
-  #pv-now .pv-sec-label{grid-column:1/-1}
-  #pv-now .round-progress{grid-column:1/-1}
-  #pv-next.active{display:flex;flex-direction:column;gap:10px;padding:10px 12px}
 }
