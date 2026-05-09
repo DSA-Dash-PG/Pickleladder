@@ -77,6 +77,16 @@ function closePlayerStats(){playerStatsModalId=null;render()}
 // (gated by !isAdmin) so the affordance is visible.
 function pClick(pid){return isAdmin?'':' onclick="openPlayerStats(\''+pid+'\')"';}
 function pCur(){return isAdmin?'':';cursor:pointer';}
+// Render a position-change badge for the leaderboard. hasPrev says whether ANY
+// prior ladder exists in the season — without that flag, "no rank found" looks
+// the same as "no prior ladder existed", and we'd flag the first ladder's
+// players all as "new".
+function renderDelta(prevRank,currentRank,hasPrev){
+  if(!hasPrev)return'<span style="color:rgba(255,255,255,0.2)">\u2014</span>';
+  if(!prevRank)return'<span style="color:#4ade80;font-weight:700;font-size:9px">new</span>';
+  if(prevRank===currentRank)return'<span style="color:rgba(255,255,255,0.2)">\u2014</span>';
+  if(prevRank>currentRank)return'<span style="color:#4ade80;font-weight:800">\u25b2'+(prevRank-currentRank)+'</span>';
+  return'<span style="color:#ff5c47;font-weight:800">\u25bc'+(currentRank-prevRank)+'</span>';}
 // Build the inner HTML for the #searchResults container.
 // Used by both the initial render (rFullStats / rSearch) AND the live updateSearch
 // patching path so they produce IDENTICAL markup (no flicker on first keystroke).
@@ -89,7 +99,7 @@ function _buildSearchCardsHTML(q,sorted,bonusData,topCtName){
     const rank=sorted.indexOf(st)+1;
     const d=st.pf-st.pa;const sk=st.streak;const skStr=sk>0?'W'+sk:sk<0?'L'+Math.abs(sk):'--';
     const avg=st.roundPts.length?(Math.round(st.pf/st.roundPts.length*10)/10).toFixed(1):0;
-    const tc=topCtName(st);const wins=bonusData[st.id]?.wins||0;const bonus=bonusData[st.id]?.bonus||0;const total=st.pf+bonus;
+    const tc=topCtName?topCtName(st):'--';const wins=bonusData[st.id]?.wins||0;const bonus=bonusData[st.id]?.bonus||0;const total=st.pf+bonus;const winPct=(st.w+st.l)>0?Math.round(100*st.w/(st.w+st.l))+'%':'\u2014';
     const lr=bonusData[st.id]?.ladderResults||[];
     h+='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:12px;overflow:hidden;margin-bottom:10px">';
     h+='<div style="background:#0a0a0a;padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #1a1a1a">';
@@ -97,10 +107,10 @@ function _buildSearchCardsHTML(q,sorted,bonusData,topCtName){
     h+='<div style="flex:1"><div style="font-size:18px;font-weight:900;color:#f4f4f0;line-height:1">'+st.name+(wins>0?' '+crownStr(wins):'')+'</div><div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:3px">'+st.gender+' \u00b7 Rank #'+rank+'</div></div>';
     h+='<div style="text-align:right"><div style="font-size:28px;font-weight:900;color:#c8ff00;line-height:1">'+total+'</div><div style="font-size:8px;color:rgba(200,255,0,0.5);text-transform:uppercase;letter-spacing:.1em;margin-top:2px">season pts</div></div></div>';
     h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #1a1a1a">';
-    [{v:st.w,l:'W',c:'var(--lime)'},{v:st.l,l:'L',c:'var(--loss)'},{v:avg,l:'Avg',c:'var(--text-sec)'},{v:tc,l:'Top Ct',c:'var(--cyan)'}].forEach((x,i)=>{
+    [{v:st.w,l:'W',c:'var(--lime)'},{v:st.l,l:'L',c:'var(--loss)'},{v:avg,l:'Avg',c:'var(--text-sec)'},{v:winPct,l:'Win %',c:'var(--text-sec)'}].forEach((x,i)=>{
       h+='<div style="padding:12px 8px;text-align:center'+(i<3?';border-right:0.5px solid #1a1a1a':'')+'"><div style="font-size:18px;font-weight:900;color:'+x.c+';line-height:1">'+x.v+'</div><div style="font-size:8px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-top:3px">'+x.l+'</div></div>';});
     h+='</div><div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #1a1a1a">';
-    [{v:st.pf,l:'PS',c:'rgba(255,255,255,0.55)'},{v:st.pa,l:'PA',c:'rgba(255,255,255,0.55)'},{v:(d>0?'+':'')+d,l:'+/-',c:d>=0?'var(--lime)':'var(--loss)'},{v:skStr,l:'Streak',c:sk>0?'var(--lime)':sk<0?'var(--loss)':'var(--muted)'}].forEach((x,i)=>{
+    [{v:st.pf,l:'PS',c:'rgba(255,255,255,0.55)'},{v:st.pa,l:'PA',c:'rgba(255,255,255,0.55)'},{v:(d>0?'+':'')+d,l:'Diff',c:d>=0?'var(--lime)':'var(--loss)'},{v:skStr,l:'Streak',c:sk>0?'var(--lime)':sk<0?'var(--loss)':'var(--muted)'}].forEach((x,i)=>{
       h+='<div style="padding:12px 8px;text-align:center'+(i<3?';border-right:0.5px solid #1a1a1a':'')+'"><div style="font-size:16px;font-weight:900;color:'+x.c+';line-height:1">'+x.v+'</div><div style="font-size:8px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-top:3px">'+x.l+'</div></div>';});
     h+='</div>';
     if(lr.length){
@@ -1562,39 +1572,104 @@ function rLeaderboard(stats,season,l){
 
   return h;}
 
-// ══ FULL STATS TAB ══
+// ══ LEADERBOARD TAB (merged Standings + wide table + Search) ══
+// Top 3 finishers get medium cards with full stat grid (W L Avg Win% / PS PA
+// Diff Streak). Everyone else lives in a compact 7-column table.
+// Tapping any card or row opens the player stats modal — public side only.
 function rFullStats(stats,season,l){
   if(!season)return'';
   const bonusData=calcBonusPts(season.sessions,l.players);
   const totalPts=(s)=>s.pf+(bonusData[s.id]?.bonus||0);
-  const sorted=[...stats].filter(s=>s.w+s.l>0).sort((a,b)=>totalPts(b)-totalPts(a)||(b.pf-b.pa)-(a.pf-a.pa));
-  const topCtName=(s)=>{const wonCs=(s.roundRes||[]).filter(r=>r.won).map(r=>r.court);if(!wonCs.length)return'--';const best=Math.max(...wonCs);const refSS=season?.sessions?.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
+  const sorted=[...stats].filter(s=>s.w+s.l+s.t>0).sort((a,b)=>totalPts(b)-totalPts(a)||(b.pf-b.pa)-(a.pf-a.pa));
   if(!sorted.length)return'<p class="subtext" style="text-align:center;padding:20px">No scored games yet.</p>';
-  let h='<div style="overflow-x:auto;margin:0 -14px;padding:0 14px"><table class="st"><thead><tr>';
-  ['#','Player','LP','W','L','Pts','Bonus','Total','PS','PA','+/-','Avg','Top Ct','Strk'].forEach(x=>h+='<th style="text-align:'+(x==='Player'?'left':'right')+'">'+x+'</th>');
-  h+='</tr></thead><tbody>';
-  sorted.forEach((s,i)=>{
-    const d=s.pf-s.pa;const sk=s.streak;const skStr=sk>0?'W'+sk:sk<0?'L'+Math.abs(sk):'--';
-    const avg=s.roundPts.length?(Math.round(s.pf/s.roundPts.length*10)/10).toFixed(1):0;
-    const tc=topCtName(s);const wins=bonusData[s.id]?.wins||0;const bonus=bonusData[s.id]?.bonus||0;const total=s.pf+bonus;
-    const medalBg=['background:#1a1200','background:#111','background:#12100a'];
-    const rowBg=i<3?medalBg[i]:(i%2===1?'background:#0a0a0a':'');
-    h+='<tr style="'+rowBg+'">';
-    h+='<td class="'+(i<3?'rt':'')+'" style="text-align:right">'+(["1st","2nd","3rd"][i]||(i+1))+'</td>';
-    h+='<td style="font-weight:600;white-space:nowrap;text-align:left">'+s.name+(wins>0?' '+crownStr(wins):'')+'</td>';
-    h+='<td style="color:var(--lime);font-weight:700;text-align:right">'+s.attended+'</td>';
-    h+='<td class="at" style="text-align:right">'+s.w+'</td>';
-    h+='<td class="rdt" style="text-align:right">'+s.l+'</td>';
-    h+='<td style="text-align:right">'+s.pf+'</td>';
-    h+='<td style="text-align:right;font-weight:800;color:var(--lime)">'+(bonus>0?'+'+bonus:'--')+'</td>';
-    h+='<td style="text-align:right;font-weight:900;color:'+(i===0?'#ffcc00':i===1?'#c0c0c0':i===2?'#cd7f32':'var(--lime)')+'">'+total+'</td>';
-    h+='<td style="text-align:right;color:var(--muted)">'+s.pf+'</td>';
-    h+='<td style="text-align:right;color:var(--muted)">'+s.pa+'</td>';
-    h+='<td style="text-align:right;font-weight:700;color:'+(d>=0?'var(--lime)':'var(--loss)')+'">'+(d>0?'+':'')+d+'</td>';
-    h+='<td style="text-align:right;color:var(--text-sec)">'+avg+'</td>';
-    h+='<td style="text-align:right;color:var(--cyan);font-size:.72rem;font-weight:700">'+tc+'</td>';
-    h+='<td style="text-align:right;color:'+(sk>0?'var(--lime)':sk<0?'var(--loss)':'var(--muted)')+';font-weight:600">'+skStr+'</td></tr>';});
-  h+='</tbody></table></div>';
+
+  // Previous-ladder rank map for the Δ column.
+  const prevRankMap={};
+  const hasPrev=season.sessions.filter(x=>x.started).length>=2;
+  if(hasPrev){
+    const prev=season.sessions.filter(x=>x.started).slice(0,-1);
+    const ps=calcStats(prev,l.players);
+    const pb=calcBonusPts(prev,l.players);
+    [...ps].filter(s=>s.w+s.l+s.t>0).sort((a,b)=>(b.pf+(pb[b.id]?.bonus||0))-(a.pf+(pb[a.id]?.bonus||0))||(b.pf-b.pa)-(a.pf-a.pa)).forEach((s,i)=>prevRankMap[s.id]=i+1);
+  }
+
+  let h='';
+
+  // Bonus strip (1st +15 / 2nd +10 / 3rd +5 / Scope: All ladders)
+  h+='<div style="display:flex;background:#0d1400;border:0.5px solid rgba(200,255,0,0.15);border-radius:8px;overflow:hidden;margin-bottom:10px">';
+  [{p:'1st',b:15},{p:'2nd',b:10},{p:'3rd',b:5}].forEach((x,i)=>{
+    h+='<div style="flex:1;text-align:center;padding:8px 4px;border-right:1px solid rgba(200,255,0,0.1)"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">'+x.p+'</div><div style="font-size:16px;font-weight:900;color:#c8ff00;line-height:1">+'+x.b+'</div><div style="font-size:8px;color:rgba(200,255,0,0.4);margin-top:1px">bonus</div></div>';
+  });
+  h+='<div style="flex:1;text-align:center;padding:8px 4px"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">Scope</div><div style="font-size:10px;font-weight:900;color:#c8ff00;line-height:1.3">All<br>ladders</div></div></div>';
+
+  // Top 3 medium cards
+  const podCol=['#ffcc00','#c0c0c0','#cd7f32'];
+  const podBg=['#1a1200','#111','#12100a'];
+  const podBorder=['rgba(255,204,0,0.28)','rgba(192,192,192,0.2)','rgba(205,127,50,0.25)'];
+  const podBonusCol=['rgba(255,204,0,0.55)','rgba(192,192,192,0.55)','rgba(205,127,50,0.6)'];
+  const podLabels=['1st','2nd','3rd'];
+  sorted.slice(0,3).forEach((s,i)=>{
+    const wins=bonusData[s.id]?.wins||0;
+    const bonus=bonusData[s.id]?.bonus||0;
+    const total=s.pf+bonus;
+    const rank=i+1;
+    const winPct=(s.w+s.l)>0?Math.round(100*s.w/(s.w+s.l))+'%':'\u2014';
+    const avg=s.roundPts.length?(Math.round(s.pf/s.roundPts.length*10)/10).toFixed(1):'0';
+    const d=s.pf-s.pa;
+    const sk=s.streak;
+    const skStr=sk>0?'W'+sk:sk<0?'L'+Math.abs(sk):'\u2014';
+    const skCol=sk>0?'#4ade80':sk<0?'#ff5c47':'rgba(255,255,255,0.3)';
+
+    h+='<div'+pClick(s.id)+' style="background:#0d0d0d;border:0.5px solid '+podBorder[i]+';border-radius:12px;overflow:hidden;margin-bottom:8px'+pCur()+'">';
+    // header
+    h+='<div style="background:linear-gradient(90deg,'+podBg[i]+' 0%,#0d0d0d 100%);padding:9px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #1a1a1a">';
+    h+='<div style="font-size:11px;font-weight:900;color:'+podCol[i]+';letter-spacing:.1em;width:30px">'+podLabels[i]+'</div>';
+    h+='<div style="width:24px;text-align:center">'+renderDelta(prevRankMap[s.id],rank,hasPrev)+'</div>';
+    h+='<div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:900;color:#f4f4f0;line-height:1">'+s.name+(wins>0?' '+crownStr(wins):'')+'</div>';
+    if(bonus>0)h+='<div style="font-size:8px;color:'+podBonusCol[i]+';margin-top:2px;letter-spacing:.05em">+'+bonus+' BONUS</div>';
+    h+='</div><div style="text-align:right"><div style="font-size:18px;font-weight:900;color:'+podCol[i]+';line-height:1;font-variant-numeric:tabular-nums">'+total+'</div><div style="font-size:8px;color:'+podBonusCol[i]+';letter-spacing:.08em">TOTAL</div></div></div>';
+    // Row 1: W L Avg Win%
+    h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);background:#0a0a0a;border-bottom:1px solid #1a1a1a">';
+    [{v:s.w,l:'W',c:'#c8ff00'},{v:s.l,l:'L',c:'#ff5c47'},{v:avg,l:'Avg',c:'rgba(255,255,255,0.75)'},{v:winPct,l:'Win %',c:'rgba(255,255,255,0.75)'}].forEach((x,j)=>{
+      h+='<div style="padding:7px 4px;text-align:center'+(j<3?';border-right:0.5px solid #1a1a1a':'')+'"><div style="font-size:13px;font-weight:900;color:'+x.c+';font-variant-numeric:tabular-nums;line-height:1">'+x.v+'</div><div style="font-size:8px;color:rgba(255,255,255,0.3);letter-spacing:.08em;margin-top:2px;text-transform:uppercase">'+x.l+'</div></div>';
+    });
+    h+='</div>';
+    // Row 2: PS PA Diff Streak
+    h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);background:#0a0a0a">';
+    [{v:s.pf,l:'PS',c:'rgba(255,255,255,0.55)'},{v:s.pa,l:'PA',c:'rgba(255,255,255,0.55)'},{v:(d>0?'+':'')+d,l:'Diff',c:d>=0?'#c8ff00':'#ff5c47'},{v:skStr,l:'Streak',c:skCol}].forEach((x,j)=>{
+      h+='<div style="padding:7px 4px;text-align:center'+(j<3?';border-right:0.5px solid #1a1a1a':'')+'"><div style="font-size:12px;font-weight:900;color:'+x.c+';font-variant-numeric:tabular-nums;line-height:1">'+x.v+'</div><div style="font-size:8px;color:rgba(255,255,255,0.3);letter-spacing:.08em;margin-top:2px;text-transform:uppercase">'+x.l+'</div></div>';
+    });
+    h+='</div></div>';
+  });
+
+  // 4+ table — # \u0394 Player W L Bonus Total
+  if(sorted.length>3){
+    h+='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:10px;overflow:hidden">';
+    h+='<div style="display:grid;grid-template-columns:30px 28px 1fr 28px 28px 44px 48px;gap:6px;padding:7px 12px;background:#0a0a0a;border-bottom:1px solid #1a1a1a;font-size:8px;font-weight:700;color:rgba(255,255,255,0.35);letter-spacing:.12em;text-transform:uppercase">';
+    ['#','\u0394','Player','W','L','Bonus','Total'].forEach((c,j)=>{
+      const align=j===2?'left':j===1?'center':'right';
+      h+='<div style="text-align:'+align+'">'+c+'</div>';
+    });
+    h+='</div>';
+    sorted.slice(3).forEach((s,i)=>{
+      const realRank=i+4;
+      const wins=bonusData[s.id]?.wins||0;
+      const bonus=bonusData[s.id]?.bonus||0;
+      const total=s.pf+bonus;
+      const stripeBg=i%2===1?';background:#0a0a0a':'';
+      h+='<div'+pClick(s.id)+' style="display:grid;grid-template-columns:30px 28px 1fr 28px 28px 44px 48px;gap:6px;padding:8px 12px;border-bottom:0.5px solid #111;align-items:center;font-variant-numeric:tabular-nums'+stripeBg+pCur()+'">';
+      h+='<div style="text-align:right;font-size:11px;color:rgba(255,255,255,0.4)">'+realRank+'</div>';
+      h+='<div style="text-align:center;font-size:9px">'+renderDelta(prevRankMap[s.id],realRank,hasPrev)+'</div>';
+      h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.85);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+(wins>0?' '+crownStr(wins):'')+'</div>';
+      h+='<div style="text-align:right;font-size:12px;font-weight:700;color:#c8ff00">'+s.w+'</div>';
+      h+='<div style="text-align:right;font-size:12px;color:rgba(255,255,255,0.45)">'+s.l+'</div>';
+      h+='<div style="text-align:right;font-size:11px;font-weight:800;color:'+(bonus>0?'#c8ff00':'rgba(255,255,255,0.2)')+'">'+(bonus>0?'+'+bonus:'\u2014')+'</div>';
+      h+='<div style="text-align:right;font-size:13px;font-weight:900;color:#c8ff00">'+total+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+
   return h;}
 
 
@@ -1634,19 +1709,25 @@ function render(){
       h+='<button class="tab" style="margin-left:auto;font-size:.68rem" onclick="go(\'dashboard\',\'ladders\')">← Back</button></div>';
     }
   } else if(view==='dashboard'&&s){
-    // Tab labels were renamed (the table-style "Stats" page is the real
-    // leaderboard, and the analytical category page is now "The Kitchen") but
-    // the underlying tab KEYS stay stable so saved links / state still work.
-    const dtabsBase=[
+    // Standings + Search merged into Leaderboard (the old wide table). Players
+    // tab is admin-only now — public lookups happen via the player popup.
+    // Tab keys stay stable so saved state still works; obsolete keys redirect
+    // in the route table below.
+    const dtabsPublic=[
       ['Ladders','ladders'],
-      ['Standings','standings'],
-      ['Leaderboard','stats'],     // ← the wide ranked table (rFullStats)
-      ['The Kitchen','leaderboard'], // ← the analytical category page (rLeaderboard)
-      ['Search','search'],
-      ['Players','players'],
+      ['Leaderboard','stats'],
+      ['The Kitchen','leaderboard'],
       ['Rules','rules']
     ];
-    const dtabs=isAdmin?[...dtabsBase,['Admin','admin']]:dtabsBase;
+    const dtabsAdmin=[
+      ['Ladders','ladders'],
+      ['Leaderboard','stats'],
+      ['The Kitchen','leaderboard'],
+      ['Players','players'],
+      ['Rules','rules'],
+      ['Admin','admin']
+    ];
+    const dtabs=isAdmin?dtabsAdmin:dtabsPublic;
     h+='<div class="tabs">';
     dtabs.forEach(([label,k])=>{
       const on=k==='ladders'?(tab==='overview'||tab==='ladders'):tab===k;
@@ -1665,13 +1746,14 @@ function render(){
   else if(view==='dashboard'){
     if(!s)h+=rNoSeason();
     else if(tab==='overview'||tab==='ladders')h+=rOverview(l,s,stats);
-    else if(tab==='standings')h+=rStandings(stats,s,l);
     else if(tab==='leaderboard')h+=rLeaderboard(stats,s,l);
-    else if(tab==='stats')h+=rFullStats(stats,s,l);
-    else if(tab==='search')h+=rSearch(stats,s,l);
-    else if(tab==='players')h+=rPlayers(l);
+    // 'standings' and 'search' redirected here — the merged Leaderboard
+    // covers both. Old saved tab values keep working.
+    else if(tab==='stats'||tab==='standings'||tab==='search')h+=rFullStats(stats,s,l);
+    else if(tab==='players'&&isAdmin)h+=rPlayers(l);
     else if(tab==='rules')h+=rRules(null);
-    else if(tab==='admin'&&isAdmin)h+=rAdmin(l,s)}
+    else if(tab==='admin'&&isAdmin)h+=rAdmin(l,s);
+    else h+=rOverview(l,s,stats)}
   else if(view==='session'&&ss){
     if(isAdmin){
       if(tab==='play')h+=rPlay(l,ss);
