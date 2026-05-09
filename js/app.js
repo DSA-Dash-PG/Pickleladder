@@ -62,22 +62,28 @@ let pvTab='now'; // 'now' | 'next'
 let statsInnerTab='standings';
 let statsSearchQ='';
 function setStatsInnerTab(t){statsInnerTab=t;statsSearchQ='';render()}
-function updateSearch(val){
-  statsSearchQ=val;
-  // patch only the results container, leaving the input untouched
-  const el=document.getElementById('searchResults');
-  if(!el){render();return;}
-  const l=gL();const s=gS();if(!l||!s)return;
-  const allStats=calcStats(s.sessions,l.players);
-  const bonusData=calcBonusPts(s.sessions,l.players);
-  const totalPts=(st)=>st.pf+(bonusData[st.id]?.bonus||0);
-  const sorted=[...allStats].filter(st=>st.w+st.l>0).sort((a,b)=>totalPts(b)-totalPts(a)||(b.pf-b.pa)-(a.pf-a.pa));
-  const q=val.toLowerCase().trim();
-  if(!q){el.innerHTML='<div style="text-align:center;padding:20px;font-size:.82rem;color:var(--muted)">Type a name to search</div>';return;}
+
+// ── Player profile modal (public-side only) ──
+// Tapping a player's name in standings/leaderboard opens a card with their
+// season stats. Admin is intentionally excluded — admins are mid-flow during a
+// ladder (entering scores, swapping players, advancing rounds) and an
+// accidental tap on a name shouldn't pop a modal over their workflow.
+let playerStatsModalId=null;
+function openPlayerStats(pid){if(isAdmin)return;playerStatsModalId=pid;render()}
+function closePlayerStats(){playerStatsModalId=null;render()}
+// Helper: returns an `onclick=...` attribute string for a player name row —
+// but ONLY for non-admins. Admins get an empty string so the row is inert.
+// Callers should ALSO append ';cursor:pointer' to their existing style attr
+// (gated by !isAdmin) so the affordance is visible.
+function pClick(pid){return isAdmin?'':' onclick="openPlayerStats(\''+pid+'\')"';}
+function pCur(){return isAdmin?'':';cursor:pointer';}
+// Build the inner HTML for the #searchResults container.
+// Used by both the initial render (rFullStats / rSearch) AND the live updateSearch
+// patching path so they produce IDENTICAL markup (no flicker on first keystroke).
+function _buildSearchCardsHTML(q,sorted,bonusData,topCtName){
+  if(!q)return'<div style="text-align:center;padding:20px;font-size:.82rem;color:var(--muted)">Type a name to search</div>';
   const matches=sorted.filter(st=>st.name.toLowerCase().includes(q));
-  if(!matches.length){el.innerHTML='<div style="text-align:center;padding:20px;font-size:.82rem;color:var(--muted)">No players found for "'+val+'"</div>';return;}
-  // build cards HTML and inject
-  const topCtName=(st)=>{if(!st.courtHist.length)return'--';const best=Math.max(...st.courtHist.map(x=>x.court));const refSS=s.sessions.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
+  if(!matches.length)return'<div style="text-align:center;padding:20px;font-size:.82rem;color:var(--muted)">No players found for "'+q+'"</div>';
   let h='';
   matches.forEach(st=>{
     const rank=sorted.indexOf(st)+1;
@@ -114,7 +120,27 @@ function updateSearch(val){
         h+='</div>';});
       h+='</div>';}
     h+='</div>';});
-  el.innerHTML=h;}
+  return h;
+}
+
+// Live patch \u2014 DO NOT call render(). render() rebuilds the input element and
+// kills focus on every keystroke (the bug we are fixing). If we cannot find
+// the results container we silently bail; the next render() will pick up the
+// new query string from statsSearchQ.
+function updateSearch(val){
+  statsSearchQ=val;
+  const el=document.getElementById('searchResults');
+  if(!el)return;
+  const l=gL();const s=gS();if(!l||!s)return;
+  const allStats=calcStats(s.sessions,l.players);
+  const bonusData=calcBonusPts(s.sessions,l.players);
+  const totalPts=(st)=>st.pf+(bonusData[st.id]?.bonus||0);
+  // Match the same filter predicate used by initial render so live-patching the
+  // results doesn't change which players appear once the user starts typing.
+  const sorted=[...allStats].filter(st=>st.w+st.l+st.t>0).sort((a,b)=>totalPts(b)-totalPts(a)||(b.pf-b.pa)-(a.pf-a.pa));
+  const topCtName=(st)=>{const wonCs=(st.roundRes||[]).filter(r=>r.won).map(r=>r.court);if(!wonCs.length)return'--';const best=Math.max(...wonCs);const refSS=s.sessions.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
+  el.innerHTML=_buildSearchCardsHTML(val.toLowerCase().trim(),sorted,bonusData,topCtName);
+}
 const tkPal=['#c8ff00','#00e5ff','#ffcc00','#ff5c47','#a78bfa','#34d399','#f472b6','#60a5fa','#fb923c','#4ade80','#e879f9','#38bdf8'];
 const tkDash=[[],[5,5],[2,3],[8,4],[4,2,1,2],[1,4],[6,3],[3,6],[10,3],[2,6],[6,2],[4,4]];
 
@@ -230,13 +256,21 @@ function calcBonusPts(sessions,players){
   const bonus={};
   players.forEach(p=>bonus[p.id]={bonus:0,wins:0,ladderResults:[]});
   sessions.forEach(sess=>{
-    if(!sess.started)return;
+    // NOTE: do NOT filter by `sess.started`. calcStats() doesn't filter by it
+    // either, so a session whose `started` flag is missing/false but DOES have
+    // scored rounds (e.g. an older ladder, or a session whose flag got cleared
+    // by a restart/edit) was correctly counted in stats but silently skipped
+    // for bonuses. That's why podium finishes from previous ladders were
+    // missing (Clement +5 for 3rd, etc.). The empty-rounds case is harmless:
+    // the inner court loop produces no points, so no one gets bonus anyway.
+    if(!sess||!Array.isArray(sess.rounds)||!sess.rounds.length)return;
     const pts={};players.forEach(p=>{pts[p.id]=0});
     sess.rounds.forEach(round=>{round.courts.forEach(c=>{
       if(!c.score||c.score.t1===null||c.score.t2===null||!c.score.winner)return;
       const{t1,t2}=c.score;
       [[c.team1,t1],[c.team2,t2]].forEach(([team,sc])=>{team.filter(Boolean).forEach(p=>{if(pts[p.id]!==undefined)pts[p.id]+=sc})})})});
     const ranked=Object.entries(pts).filter(([id,p])=>p>0).sort((a,b)=>b[1]-a[1]);
+    if(!ranked.length)return; // no scored games in this session — nothing to award
     const bonusMap={0:15,1:10,2:5};
     ranked.forEach(([id],i)=>{
       if(!bonus[id])return;
@@ -757,7 +791,12 @@ function rStats(stats,season,l,ss){
   let h='';
   const sessions=ss?[ss]:(season?season.sessions:[]);
   const isSeasonView=!ss&&!!season;
-  const bonusData=isSeasonView?calcBonusPts(season.sessions,l.players):{};
+  // Find the parent season so we can render career bonus/win info even when
+  // the user is looking at a single completed ladder ("Final Stats" view).
+  // Without this, every runner-up in session view shows "no wins yet" because
+  // bonusData was an empty object — the user's exact complaint.
+  const parentSeason=season||(ss&&l?l.seasons?.find(s=>s.sessions?.some(x=>x.id===ss.id))||null:null);
+  const bonusData=parentSeason?calcBonusPts(parentSeason.sessions,l.players):{};
   const totalPts=(s)=>s.pf+(bonusData[s.id]?.bonus||0);
   const sorted=isSeasonView?[...stats].sort((a,b)=>totalPts(b)-totalPts(a)||((b.pf-b.pa)-(a.pf-a.pa))):stats;
 
@@ -771,8 +810,9 @@ function rStats(stats,season,l,ss){
     prevSorted.forEach((s,i)=>prevRankMap[s.id]=i+1);}
 
   const topCtName=(s)=>{
-    if(!s.courtHist.length)return'--';
-    const best=Math.max(...s.courtHist.map(x=>x.court));
+    const wonCs=(s.roundRes||[]).filter(r=>r.won).map(r=>r.court);
+    if(!wonCs.length)return'--';
+    const best=Math.max(...wonCs);
     const refSS=ss||(season?.sessions?.slice().reverse().find(x=>x.started));
     const nC=refSS?.config?.courts||4;
     const idx=(refSS?.config?.courtNames?.length||0)-best;
@@ -800,8 +840,12 @@ function rStats(stats,season,l,ss){
     if(top){
       const topBonus=bonusData[top.id];const topWins=topBonus?.wins||0;const topTotal=totalPts(top);
       h+='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:12px;overflow:hidden;margin-bottom:8px">';
-      h+='<div style="background:#0a0a0a;padding:6px 14px;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;justify-content:space-between"><div style="font-size:8px;font-weight:900;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.15em">Season leader</div><div style="font-size:8px;background:rgba(200,255,0,0.12);color:#c8ff00;border:1px solid rgba(200,255,0,0.25);padding:2px 8px;border-radius:3px;font-weight:700">'+(season?.sessions?.filter(x=>x.started).length||0)+' ladders</div></div>';
-      h+='<div style="padding:12px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #1a1a1a;background:#0d1400">';
+      // In session view this is THIS ladder's #1, not the cumulative season leader.
+      const headerLabel=isSeasonView?'Season leader':'Ladder leader';
+      const ladderCount=parentSeason?.sessions?.filter(x=>x.started).length||0;
+      const pillText=isSeasonView?(ladderCount+' ladders'):'This ladder';
+      h+='<div style="background:#0a0a0a;padding:6px 14px;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;justify-content:space-between"><div style="font-size:8px;font-weight:900;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.15em">'+headerLabel+'</div><div style="font-size:8px;background:rgba(200,255,0,0.12);color:#c8ff00;border:1px solid rgba(200,255,0,0.25);padding:2px 8px;border-radius:3px;font-weight:700">'+pillText+'</div></div>';
+      h+='<div'+pClick(top.id)+' style="padding:12px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #1a1a1a;background:#0d1400'+pCur()+'">';
       h+='<div style="width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#c8ff00,#4ade80);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#000;flex-shrink:0">'+top.name.slice(0,2).toUpperCase()+'</div>';
       h+='<div style="flex:1"><div style="font-size:20px;font-weight:900;color:#f4f4f0;letter-spacing:-.02em;line-height:1">'+top.name+(topWins>0?' '+crownStr(topWins):'')+'</div>';
       if(topWins>0)h+='<div style="font-size:9px;color:rgba(200,255,0,0.5);margin-top:3px">'+topWins+' ladder win'+(topWins!==1?'s':'')+(isSeasonView&&(topBonus?.bonus||0)>0?' \u00b7 +'+(topBonus.bonus)+' bonus':'')+'</div>';
@@ -818,7 +862,7 @@ function rStats(stats,season,l,ss){
         const rank=i+2;const wins=bonusData[s.id]?.wins||0;const total=totalPts(s);
         const barW=Math.round(total/topTotal*100);
         const prevRank=prevRankMap[s.id];const delta=prevRank&&prevRank!==rank?(prevRank>rank?'<span style="color:#4ade80;font-size:9px;font-weight:800">\u25b2'+(prevRank-rank)+'</span>':'<span style="color:#ff5c47;font-size:9px;font-weight:800">\u25bc'+(rank-prevRank)+'</span>'):(prevRank?'<span style="color:rgba(255,255,255,0.2);font-size:9px">\u2014</span>':'');
-        h+='<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:0.5px solid #111'+(i%2===1?';background:#0a0a0a':'')+'">';
+        h+='<div'+pClick(s.id)+' style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:0.5px solid #111'+(i%2===1?';background:#0a0a0a':'')+pCur()+'">';
         h+='<div style="font-size:11px;color:rgba(255,255,255,0.2);width:14px;text-align:center;flex-shrink:0">'+rank+'</div>';
         h+='<div style="flex:1"><div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.8)">'+s.name+(wins>0?' '+crownStr(wins):'')+'</div>';
         if(wins>0)h+='<div style="font-size:9px;color:rgba(255,255,255,0.25)">'+wins+' win'+(wins!==1?'s':'')+'</div>';
@@ -833,7 +877,7 @@ function rStats(stats,season,l,ss){
       h+='<div style="padding:7px 14px;background:#0a0a0a;border-bottom:1px solid #1a1a1a;font-size:9px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.12em">All players \u00b7 '+activeStats.length+' ranked</div>';
       activeStats.slice(5).forEach((s,i)=>{
         const wins=bonusData[s.id]?.wins||0;const total=totalPts(s);
-        h+='<div style="display:flex;align-items:center;gap:8px;padding:7px 14px;border-bottom:0.5px solid #111'+(i%2===1?';background:#0a0a0a':'')+'">';
+        h+='<div'+pClick(s.id)+' style="display:flex;align-items:center;gap:8px;padding:7px 14px;border-bottom:0.5px solid #111'+(i%2===1?';background:#0a0a0a':'')+pCur()+'">';
         h+='<div style="font-size:10px;color:rgba(255,255,255,0.2);width:20px;text-align:right;flex-shrink:0">'+(i+6)+'</div>';
         h+='<div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.7);flex:1">'+s.name+(wins>0?' '+crownStr(wins):'')+'</div>';
         h+='<div style="font-size:12px;font-weight:800;color:rgba(200,255,0,0.6)">'+total+'</div></div>'});
@@ -866,53 +910,15 @@ function rStats(stats,season,l,ss){
     h+='</tbody></table></div>';}
 
   // ══ SEARCH ══
+  // Results live inside #searchResults so updateSearch() can patch ONLY that
+  // div on every keystroke without rebuilding the input element (which would
+  // kill focus and cause the per-character flicker the staff hit during play).
   if(statsInnerTab==='search'){
     h+='<div style="display:flex;align-items:center;gap:8px;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:10px 12px;margin-bottom:10px">';
     h+='<span style="font-size:14px;color:rgba(255,255,255,0.3)">&#128269;</span>';
     h+='<input id="statsSearchInput" class="inp" style="background:transparent;border:none;padding:0;font-size:14px" placeholder="Search player name..." value="'+statsSearchQ+'" oninput="updateSearch(this.value)"></div>';
-    const q=statsSearchQ.toLowerCase().trim();
-    const matches=q?sorted.filter(s=>(s.w+s.l+s.t>0)&&s.name.toLowerCase().includes(q)):[];
-    if(!q){h+='<div style="text-align:center;padding:20px;font-size:.82rem;color:var(--muted)">Type a name to search</div>';}
-    else if(!matches.length){h+='<div style="text-align:center;padding:20px;font-size:.82rem;color:var(--muted)">No players found for "'+statsSearchQ+'"</div>';}
-    else{matches.forEach(s=>{
-      const rank=sorted.filter(x=>x.w+x.l+x.t>0).indexOf(s)+1;
-      const d=s.pf-s.pa;const sk=s.streak;const skStr=sk>0?'W'+sk:sk<0?'L'+Math.abs(sk):'--';
-      const avg=s.roundPts.length?(Math.round(s.pf/s.roundPts.length*10)/10).toFixed(1):0;
-      const tc=topCtName(s);const wins=bonusData[s.id]?.wins||0;const bonus=bonusData[s.id]?.bonus||0;const total=s.pf+bonus;
-      const ladderBreakdown=bonusData[s.id]?.ladderResults||[];
-      h+='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:12px;overflow:hidden;margin-bottom:8px">';
-      h+='<div style="background:#0a0a0a;padding:12px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #1a1a1a">';
-      h+='<div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#c8ff00,#4ade80);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#000;flex-shrink:0">'+s.name.slice(0,2).toUpperCase()+'</div>';
-      h+='<div style="flex:1"><div style="font-size:16px;font-weight:900;color:#f4f4f0">'+s.name+(wins>0?' '+crownStr(wins):'')+'</div><div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px">'+s.gender+' \u00b7 Rank #'+rank+'</div></div>';
-      h+='<div style="text-align:right"><div style="font-size:22px;font-weight:900;color:#c8ff00;line-height:1">'+total+'</div><div style="font-size:8px;color:rgba(200,255,0,0.5);text-transform:uppercase;letter-spacing:.1em;margin-top:1px">pts</div></div></div>';
-      h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #1a1a1a">';
-      [{v:s.w,l:'W',c:'var(--lime)'},{v:s.l,l:'L',c:'var(--loss)'},{v:avg,l:'Avg',c:'var(--text-sec)'},{v:tc,l:'Top Ct',c:'var(--cyan)'}].forEach((x,i)=>{
-        h+='<div style="padding:10px 8px;text-align:center'+(i<3?';border-right:0.5px solid #1a1a1a':'')+'">';
-        h+='<div style="font-size:15px;font-weight:900;color:'+x.c+';line-height:1">'+x.v+'</div>';
-        h+='<div style="font-size:8px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-top:2px">'+x.l+'</div></div>'});
-      h+='</div><div style="display:grid;grid-template-columns:repeat(4,1fr)">';
-      [{v:s.pf,l:'PS',c:'rgba(255,255,255,0.5)'},{v:s.pa,l:'PA',c:'rgba(255,255,255,0.5)'},{v:(d>0?'+':'')+d,l:'+/-',c:d>=0?'var(--lime)':'var(--loss)'},{v:skStr,l:'Streak',c:sk>0?'var(--lime)':sk<0?'var(--loss)':'var(--muted)'}].forEach((x,i)=>{
-        h+='<div style="padding:10px 8px;text-align:center'+(i<3?';border-right:0.5px solid #1a1a1a':'')+'">';
-        h+='<div style="font-size:14px;font-weight:900;color:'+x.c+';line-height:1">'+x.v+'</div>';
-        h+='<div style="font-size:8px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-top:2px">'+x.l+'</div></div>'});
-      h+='</div>';
-      if(ladderBreakdown.length){
-        const maxPts=Math.max(...ladderBreakdown.map(x=>x.pts),1);
-        h+='<div style="padding:10px 14px;border-top:1px solid #1a1a1a"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px">Per-ladder</div>';
-        ladderBreakdown.slice().reverse().forEach(lr=>{
-          const w=Math.round(lr.pts/maxPts*100);
-          const rankStr=['1st','2nd','3rd'][lr.rank-1]||(lr.rank+'th');
-          const d2=new Date(lr.date+'T12:00:00');const dateStr=(d2.getMonth()+1)+'/'+(d2.getDate());
-          const bCol=lr.rank===1?'1':lr.rank===2?'0.7':'0.5';
-          h+='<div style="display:flex;align-items:center;gap:8px;padding:4px 0">';
-          h+='<div style="font-size:10px;color:rgba(255,255,255,0.4);width:28px;flex-shrink:0">'+dateStr+'</div>';
-          h+='<div style="flex:1;height:4px;background:rgba(255,255,255,0.07);border-radius:2px;overflow:hidden"><div style="height:100%;background:rgba(200,255,0,'+bCol+');border-radius:2px;width:'+w+'%"></div></div>';
-          h+='<div style="font-size:11px;font-weight:800;color:rgba(200,255,0,'+bCol+');width:24px;text-align:right">'+lr.pts+'</div>';
-          h+='<div style="font-size:9px;font-weight:800;color:rgba(200,255,0,'+bCol+');width:24px;text-align:right">'+rankStr+'</div>';
-          if(lr.bonus)h+='<div style="font-size:9px;font-weight:800;color:rgba(200,255,0,0.6);width:24px;text-align:right">+'+lr.bonus+'</div>';
-          h+='</div>'});
-        h+='</div>';}
-      h+='</div>'});}
+    const sortedActive=sorted.filter(x=>x.w+x.l+x.t>0);
+    h+='<div id="searchResults">'+_buildSearchCardsHTML(statsSearchQ.toLowerCase().trim(),sortedActive,bonusData,topCtName)+'</div>';
   }
   return h}
 
@@ -922,60 +928,12 @@ function rSearch(stats,season,l){
   const bonusData=calcBonusPts(season.sessions,l.players);
   const totalPts=(s)=>s.pf+(bonusData[s.id]?.bonus||0);
   const sorted=[...stats].filter(s=>s.w+s.l>0).sort((a,b)=>totalPts(b)-totalPts(a)||(b.pf-b.pa)-(a.pf-a.pa));
-  const topCtName=(s)=>{if(!s.courtHist.length)return'--';const best=Math.max(...s.courtHist.map(x=>x.court));const refSS=season?.sessions?.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
+  const topCtName=(s)=>{const wonCs=(s.roundRes||[]).filter(r=>r.won).map(r=>r.court);if(!wonCs.length)return'--';const best=Math.max(...wonCs);const refSS=season?.sessions?.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
   let h='';
   h+='<div style="display:flex;align-items:center;gap:8px;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:10px 12px;margin-bottom:10px">';
   h+='<span style="font-size:14px;color:rgba(255,255,255,0.3)">&#128269;</span>';
   h+='<input id="statsSearchInput" class="inp" style="background:transparent;border:none;padding:0;font-size:14px" placeholder="Search player name..." value="'+statsSearchQ+'" oninput="updateSearch(this.value)"></div>';
-  const q=statsSearchQ.toLowerCase().trim();
-  const matches=q?sorted.filter(s=>s.name.toLowerCase().includes(q)):[];
-  h+='<div id="searchResults">';
-  if(!q){h+='<div style="text-align:center;padding:20px;font-size:.82rem;color:var(--muted)">Type a name to search</div></div>';return h;}
-  if(!matches.length){h+='<div style="text-align:center;padding:20px;font-size:.82rem;color:var(--muted)">No players found for "'+statsSearchQ+'"</div></div>';return h;}
-  matches.forEach(s=>{
-    const rank=sorted.indexOf(s)+1;
-    const d=s.pf-s.pa;const sk=s.streak;const skStr=sk>0?'W'+sk:sk<0?'L'+Math.abs(sk):'--';
-    const avg=s.roundPts.length?(Math.round(s.pf/s.roundPts.length*10)/10).toFixed(1):0;
-    const tc=topCtName(s);const wins=bonusData[s.id]?.wins||0;const bonus=bonusData[s.id]?.bonus||0;const total=s.pf+bonus;
-    const ladderBreakdown=bonusData[s.id]?.ladderResults||[];
-    h+='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:12px;overflow:hidden;margin-bottom:10px">';
-    // header
-    h+='<div style="background:#0a0a0a;padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #1a1a1a">';
-    h+='<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#c8ff00,#4ade80);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#000;flex-shrink:0">'+s.name.slice(0,2).toUpperCase()+'</div>';
-    h+='<div style="flex:1"><div style="font-size:18px;font-weight:900;color:#f4f4f0;line-height:1">'+s.name+(wins>0?' '+crownStr(wins):'')+'</div><div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:3px">'+s.gender+' \u00b7 Rank #'+rank+(season?' season':'')+'</div></div>';
-    h+='<div style="text-align:right"><div style="font-size:28px;font-weight:900;color:#c8ff00;line-height:1">'+total+'</div><div style="font-size:8px;color:rgba(200,255,0,0.5);text-transform:uppercase;letter-spacing:.1em;margin-top:2px">season pts</div></div></div>';
-    // stat grid row 1
-    h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #1a1a1a">';
-    [{v:s.w,l:'W',c:'var(--lime)'},{v:s.l,l:'L',c:'var(--loss)'},{v:avg,l:'Avg',c:'var(--text-sec)'},{v:tc,l:'Top Ct',c:'var(--cyan)'}].forEach((x,i)=>{
-      h+='<div style="padding:12px 8px;text-align:center'+(i<3?';border-right:0.5px solid #1a1a1a':'')+'">';
-      h+='<div style="font-size:18px;font-weight:900;color:'+x.c+';line-height:1">'+x.v+'</div>';
-      h+='<div style="font-size:8px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-top:3px">'+x.l+'</div></div>'});
-    h+='</div>';
-    // stat grid row 2
-    h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #1a1a1a">';
-    [{v:s.pf,l:'PS',c:'rgba(255,255,255,0.55)'},{v:s.pa,l:'PA',c:'rgba(255,255,255,0.55)'},{v:(d>0?'+':'')+d,l:'+/-',c:d>=0?'var(--lime)':'var(--loss)'},{v:skStr,l:'Streak',c:sk>0?'var(--lime)':sk<0?'var(--loss)':'var(--muted)'}].forEach((x,i)=>{
-      h+='<div style="padding:12px 8px;text-align:center'+(i<3?';border-right:0.5px solid #1a1a1a':'')+'">';
-      h+='<div style="font-size:16px;font-weight:900;color:'+x.c+';line-height:1">'+x.v+'</div>';
-      h+='<div style="font-size:8px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-top:3px">'+x.l+'</div></div>'});
-    h+='</div>';
-    // per-ladder breakdown
-    if(ladderBreakdown.length){
-      const maxPts=Math.max(...ladderBreakdown.map(x=>x.pts),1);
-      h+='<div style="padding:12px 16px"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px">Per-ladder</div>';
-      ladderBreakdown.slice().reverse().forEach(lr=>{
-        const w=Math.round(lr.pts/maxPts*100);
-        const rankStr=['1st','2nd','3rd'][lr.rank-1]||(lr.rank+'th');
-        const d2=new Date(lr.date+'T12:00:00');const dateStr=(d2.getMonth()+1)+'/'+(d2.getDate());
-        const bCol=lr.rank===1?'1':lr.rank===2?'0.7':'0.45';
-        h+='<div style="display:flex;align-items:center;gap:8px;padding:5px 0">';
-        h+='<div style="font-size:10px;color:rgba(255,255,255,0.4);width:28px;flex-shrink:0">'+dateStr+'</div>';
-        h+='<div style="flex:1;height:4px;background:rgba(255,255,255,0.07);border-radius:2px;overflow:hidden"><div style="height:100%;background:rgba(200,255,0,'+bCol+');border-radius:2px;width:'+w+'%"></div></div>';
-        h+='<div style="font-size:11px;font-weight:800;color:rgba(200,255,0,'+bCol+');width:26px;text-align:right">'+lr.pts+'</div>';
-        h+='<div style="font-size:9px;font-weight:800;color:rgba(200,255,0,'+bCol+');width:26px;text-align:right">'+rankStr+'</div>';
-        if(lr.bonus)h+='<div style="font-size:9px;font-weight:800;color:rgba(200,255,0,0.6);width:26px;text-align:right">+'+lr.bonus+'</div>';
-        h+='</div>'});
-      h+='</div>';}
-    h+='</div>';});
+  h+='<div id="searchResults">'+_buildSearchCardsHTML(statsSearchQ.toLowerCase().trim(),sorted,bonusData,topCtName)+'</div>';
   return h;}
 
 function rRules(ss){
@@ -1149,7 +1107,7 @@ function rStandings(stats,season,l){
     const pb=calcBonusPts(prev,l.players);
     [...ps].sort((a,b)=>(b.pf+(pb[b.id]?.bonus||0))-(a.pf+(pb[a.id]?.bonus||0))).forEach((s,i)=>prevRankMap[s.id]=i+1);}
 
-  const topCtName=(s)=>{if(!s.courtHist.length)return'--';const best=Math.max(...s.courtHist.map(x=>x.court));const refSS=season?.sessions?.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
+  const topCtName=(s)=>{const wonCs=(s.roundRes||[]).filter(r=>r.won).map(r=>r.court);if(!wonCs.length)return'--';const best=Math.max(...wonCs);const refSS=season?.sessions?.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
 
   let h='';
   // bonus strip
@@ -1219,7 +1177,7 @@ function rLeaderboard(stats,season,l){
   const sessions=season.sessions;
   if(!sorted.length)return'<p class="subtext" style="text-align:center;padding:20px">No scored games yet.</p>';
 
-  const topCtName=(s)=>{if(!s.courtHist.length)return'--';const best=Math.max(...s.courtHist.map(x=>x.court));const refSS=season?.sessions?.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
+  const topCtName=(s)=>{const wonCs=(s.roundRes||[]).filter(r=>r.won).map(r=>r.court);if(!wonCs.length)return'--';const best=Math.max(...wonCs);const refSS=season?.sessions?.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
 
   // helper: render a category card
   const cat=(lbl,desc,heroName,heroVal,heroSub,heroCol,heroBg,rows)=>{
@@ -1468,7 +1426,7 @@ function rStandings(stats,season,l){
     const pb=calcBonusPts(prev,l.players);
     [...ps].sort((a,b)=>(b.pf+(pb[b.id]?.bonus||0))-(a.pf+(pb[a.id]?.bonus||0))).forEach((s,i)=>prevRankMap[s.id]=i+1);}
 
-  const topCtName=(s)=>{if(!s.courtHist.length)return'--';const best=Math.max(...s.courtHist.map(x=>x.court));const refSS=season?.sessions?.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
+  const topCtName=(s)=>{const wonCs=(s.roundRes||[]).filter(r=>r.won).map(r=>r.court);if(!wonCs.length)return'--';const best=Math.max(...wonCs);const refSS=season?.sessions?.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
 
   let h='';
   // bonus strip
@@ -1538,7 +1496,7 @@ function rLeaderboard(stats,season,l){
   const sessions=season.sessions;
   if(!sorted.length)return'<p class="subtext" style="text-align:center;padding:20px">No scored games yet.</p>';
 
-  const topCtName=(s)=>{if(!s.courtHist.length)return'--';const best=Math.max(...s.courtHist.map(x=>x.court));const refSS=season?.sessions?.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
+  const topCtName=(s)=>{const wonCs=(s.roundRes||[]).filter(r=>r.won).map(r=>r.court);if(!wonCs.length)return'--';const best=Math.max(...wonCs);const refSS=season?.sessions?.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
 
   // helper: render a category card
   const cat=(lbl,desc,heroName,heroVal,heroSub,heroCol,heroBg,rows)=>{
@@ -1610,7 +1568,7 @@ function rFullStats(stats,season,l){
   const bonusData=calcBonusPts(season.sessions,l.players);
   const totalPts=(s)=>s.pf+(bonusData[s.id]?.bonus||0);
   const sorted=[...stats].filter(s=>s.w+s.l>0).sort((a,b)=>totalPts(b)-totalPts(a)||(b.pf-b.pa)-(a.pf-a.pa));
-  const topCtName=(s)=>{if(!s.courtHist.length)return'--';const best=Math.max(...s.courtHist.map(x=>x.court));const refSS=season?.sessions?.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
+  const topCtName=(s)=>{const wonCs=(s.roundRes||[]).filter(r=>r.won).map(r=>r.court);if(!wonCs.length)return'--';const best=Math.max(...wonCs);const refSS=season?.sessions?.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
   if(!sorted.length)return'<p class="subtext" style="text-align:center;padding:20px">No scored games yet.</p>';
   let h='<div style="overflow-x:auto;margin:0 -14px;padding:0 14px"><table class="st"><thead><tr>';
   ['#','Player','LP','W','L','Pts','Bonus','Total','PS','PA','+/-','Avg','Top Ct','Strk'].forEach(x=>h+='<th style="text-align:'+(x==='Player'?'left':'right')+'">'+x+'</th>');
@@ -1676,12 +1634,23 @@ function render(){
       h+='<button class="tab" style="margin-left:auto;font-size:.68rem" onclick="go(\'dashboard\',\'ladders\')">← Back</button></div>';
     }
   } else if(view==='dashboard'&&s){
-    const dtabs=isAdmin?['Ladders','Standings','Leaderboard','Stats','Search','Players','Rules','Admin']:['Ladders','Standings','Leaderboard','Stats','Search','Players','Rules'];
+    // Tab labels were renamed (the table-style "Stats" page is the real
+    // leaderboard, and the analytical category page is now "The Kitchen") but
+    // the underlying tab KEYS stay stable so saved links / state still work.
+    const dtabsBase=[
+      ['Ladders','ladders'],
+      ['Standings','standings'],
+      ['Leaderboard','stats'],     // ← the wide ranked table (rFullStats)
+      ['The Kitchen','leaderboard'], // ← the analytical category page (rLeaderboard)
+      ['Search','search'],
+      ['Players','players'],
+      ['Rules','rules']
+    ];
+    const dtabs=isAdmin?[...dtabsBase,['Admin','admin']]:dtabsBase;
     h+='<div class="tabs">';
-    dtabs.forEach(t=>{
-      const k=t.toLowerCase();
+    dtabs.forEach(([label,k])=>{
       const on=k==='ladders'?(tab==='overview'||tab==='ladders'):tab===k;
-      h+='<button class="tab'+(on?' active':'')+'" onclick="tab=\''+k+'\';render()">'+t+'</button>';
+      h+='<button class="tab'+(on?' active':'')+'" onclick="tab=\''+k+'\';render()">'+label+'</button>';
     });
     h+='</div>';
   }
@@ -1765,19 +1734,48 @@ function render(){
       ov+='<div style="font-size:44px;font-weight:900;color:'+(t2active?col2:t2col)+';line-height:1;letter-spacing:-.03em">'+(t2active?cur:t2score)+'</div>';
       ov+='<div style="font-size:8px;margin-top:5px;color:'+(t2val!==null&&!t2active?col2:'#444')+';">'+(t2val!==null&&!t2active?'✓ Entered':t2active?'← Entering now':'--')+'</div>';
       ov+='</div></div>';
-      // Confirm or numpad
+      // Confirm bar (only when both teams have scores) — stays ABOVE the numpad
+      // so the ⌫ delete button is always reachable on touch devices (mobile fix).
       if(bothDone){
-        ov+='<div style="padding:14px 14px 16px"><button onclick="npState=null;render()" style="width:100%;background:#c8ff00;border:none;border-radius:12px;padding:16px;font-size:15px;font-weight:900;color:#000;cursor:pointer">✓ Confirm '+t1val+' – '+t2val+'</button></div>';
-      } else {
-        // numpad grid
-        ov+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(255,255,255,0.06);margin:0 14px 14px;border-radius:12px;overflow:hidden">';
-        [1,2,3,4,5,6,7,8,9].forEach(d=>{ov+='<button onclick="npPress(\''+d+'\')" style="background:#0e0e1a;padding:16px 0;text-align:center;font-size:20px;font-weight:700;color:#f4f4f0;cursor:pointer;border:none;width:100%">'+d+'</button>'});
-        ov+='<button onclick="npDel()" style="background:#0e0e1a;padding:16px 0;text-align:center;font-size:16px;color:#ff5c47;cursor:pointer;border:none">⌫</button>';
-        ov+='<button onclick="npPress(\'0\')" style="background:#0e0e1a;padding:16px 0;text-align:center;font-size:20px;font-weight:700;color:#f4f4f0;cursor:pointer;border:none">0</button>';
-        ov+='<button onclick="npConfirm()" style="background:#c8ff00;padding:16px 0;text-align:center;font-size:12px;font-weight:900;color:#000;cursor:pointer;border:none">SET →</button>';
-        ov+='</div>';}
+        ov+='<div style="padding:14px 14px 6px"><button onclick="npState=null;render()" style="width:100%;background:#c8ff00;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:900;color:#000;cursor:pointer">✓ Confirm '+t1val+' – '+t2val+'</button></div>';
+      }
+      // numpad grid — ALWAYS rendered so users can correct a score on mobile
+      ov+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(255,255,255,0.06);margin:'+(bothDone?'8px':'0')+' 14px 14px;border-radius:12px;overflow:hidden">';
+      [1,2,3,4,5,6,7,8,9].forEach(d=>{ov+='<button onclick="npPress(\''+d+'\')" style="background:#0e0e1a;padding:16px 0;text-align:center;font-size:20px;font-weight:700;color:#f4f4f0;cursor:pointer;border:none;width:100%">'+d+'</button>'});
+      ov+='<button onclick="npDel()" style="background:#0e0e1a;padding:16px 0;text-align:center;font-size:16px;color:#ff5c47;cursor:pointer;border:none">⌫</button>';
+      ov+='<button onclick="npPress(\'0\')" style="background:#0e0e1a;padding:16px 0;text-align:center;font-size:20px;font-weight:700;color:#f4f4f0;cursor:pointer;border:none">0</button>';
+      ov+='<button onclick="npConfirm()" style="background:#c8ff00;padding:16px 0;text-align:center;font-size:12px;font-weight:900;color:#000;cursor:pointer;border:none">SET &rarr;</button>';
+      ov+='</div>';
       ov+='</div></div>';
       h+=ov;}}
+
+  // ── Player profile modal (public-side only) ──
+  // Shows the same stat-card markup as the Search tab so users get one
+  // consistent view of a player's season performance no matter where they
+  // tapped from. Skipped entirely for admins — see openPlayerStats().
+  if(playerStatsModalId&&!isAdmin){
+    const lp=gL();const sp=gS();
+    if(lp&&sp){
+      const allStatsP=calcStats(sp.sessions,lp.players);
+      const bonusDataP=calcBonusPts(sp.sessions,lp.players);
+      const totalPtsP=(st)=>st.pf+(bonusDataP[st.id]?.bonus||0);
+      const sortedP=[...allStatsP].filter(st=>st.w+st.l+st.t>0).sort((a,b)=>totalPtsP(b)-totalPtsP(a)||(b.pf-b.pa)-(a.pf-a.pa));
+      const topCtNameP=(st)=>{const wonCs=(st.roundRes||[]).filter(r=>r.won).map(r=>r.court);if(!wonCs.length)return'--';const best=Math.max(...wonCs);const refSS=sp.sessions.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
+      const target=sortedP.find(st=>st.id===playerStatsModalId);
+      let pv='<div style="position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:500;display:flex;justify-content:center;align-items:flex-start;padding:24px 14px;backdrop-filter:blur(6px);overflow-y:auto" onclick="closePlayerStats()">';
+      pv+='<div style="width:100%;max-width:420px" onclick="event.stopPropagation()">';
+      pv+='<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button onclick="closePlayerStats()" style="background:rgba(255,255,255,0.07);border:none;color:#7a7a8a;font-size:18px;width:34px;height:34px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center">&#x2715;</button></div>';
+      if(target){
+        // Reuse the search card builder by passing the exact player name so
+        // the helper renders just this one card.
+        pv+=_buildSearchCardsHTML(target.name.toLowerCase(),sortedP,bonusDataP,topCtNameP);
+      } else {
+        pv+='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:12px;padding:24px;text-align:center;color:var(--muted);font-size:.85rem">No stats yet for this player.</div>';
+      }
+      pv+='</div></div>';
+      h+=pv;
+    }
+  }
 
   // ── Swap mode banner (fixed top) ──
   if(swapMode&&isAdmin){
