@@ -168,7 +168,7 @@ function renderDelta(prevRank,currentRank,hasPrev){
 // Build the inner HTML for the #searchResults container.
 // Used by both the initial render (rFullStats / rSearch) AND the live updateSearch
 // patching path so they produce IDENTICAL markup (no flicker on first keystroke).
-function _buildSearchCardsHTML(q,sorted,bonusData,topCtName,mvpCount){
+function _buildSearchCardsHTML(q,sorted,bonusData,topCtName,mvpCount,courtNames){
   if(!q)return'<div style="text-align:center;padding:20px;font-size:.82rem;color:var(--muted)">Type a name to search</div>';
   const matches=sorted.filter(st=>st.name.toLowerCase().includes(q));
   if(!matches.length)return'<div style="text-align:center;padding:20px;font-size:.82rem;color:var(--muted)">No players found for "'+q+'"</div>';
@@ -215,6 +215,60 @@ function _buildSearchCardsHTML(q,sorted,bonusData,topCtName,mvpCount){
       h+='<span><span style="display:inline-block;width:8px;height:8px;background:#c8ff00;border-radius:1px;vertical-align:-1px;margin-right:3px"></span>won</span>';
       h+='<span><span style="display:inline-block;width:8px;height:8px;background:#ff5c47;border-radius:1px;vertical-align:-1px;margin-right:3px"></span>lost</span>';
       h+='<span style="margin-left:auto;font-weight:700;color:rgba(255,255,255,0.55)">'+wCount+'W \u00b7 '+lCount+'L \u00b7 '+(netDiff>0?'+':'')+netDiff+' net</span>';
+      h+='</div>';
+      h+='</div>';
+    }
+    // \u2500\u2500 Court Movement line chart \u2500\u2500
+    // Plots which court the player was on for every round across the season.
+    // Y axis = court (top court at top), X axis = chronological rounds, dashed
+    // verticals split sessions (detected by round-number resetting). Dots
+    // colored by W/L. Pure SVG over data already in roundRes.
+    const rrAll=st.roundRes||[];
+    if(rrAll.length>=2){
+      const boundaries=[];
+      for(let bi=1;bi<rrAll.length;bi++){if(rrAll[bi].round<rrAll[bi-1].round)boundaries.push(bi);}
+      const nC=Math.max(2,...rrAll.map(r=>r.court));
+      const labelFor=(court)=>{
+        if(courtNames&&courtNames.length>=nC)return courtNames[nC-court]||String.fromCharCode(65+nC-court);
+        return String.fromCharCode(65+nC-court);
+      };
+      // Peak court counts
+      const courtCounts={};
+      rrAll.forEach(r=>{courtCounts[r.court]=(courtCounts[r.court]||0)+1;});
+      const peakCourt=Math.max(...rrAll.map(r=>r.court));
+      const peakCount=courtCounts[peakCourt]||0;
+      const W=320,xL=22,xR=314,yT=14,yB=98;
+      const n=rrAll.length;
+      const xStep=n>1?(xR-xL)/(n-1):0;
+      const yFor=(court)=>nC>1?yT+(nC-court)*((yB-yT)/(nC-1)):(yT+yB)/2;
+      h+='<div style="padding:10px 14px;border-bottom:1px solid #1a1a1a;background:rgba(0,229,255,0.025)">';
+      h+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px"><div style="font-size:8px;font-weight:700;color:#00e5ff;letter-spacing:.1em">COURT MOVEMENT</div><div style="font-size:8px;color:rgba(255,255,255,0.3)">round &rarr; court</div></div>';
+      h+='<svg viewBox="0 0 '+W+' 110" style="width:100%;height:110px;display:block">';
+      // Y grid + labels
+      for(let c=1;c<=nC;c++){
+        const y=yFor(c);
+        h+='<line x1="'+xL+'" y1="'+y+'" x2="'+xR+'" y2="'+y+'" stroke="rgba(255,255,255,0.06)" stroke-dasharray="2,3"/>';
+        h+='<text x="'+(xL-8)+'" y="'+(y+3)+'" font-size="8" fill="rgba(255,255,255,0.4)" text-anchor="end" font-family="Sora,sans-serif" font-weight="700">'+labelFor(c)+'</text>';
+      }
+      // Session dividers
+      boundaries.forEach(bi=>{
+        const x=xL+bi*xStep-xStep/2;
+        h+='<line x1="'+x+'" y1="6" x2="'+x+'" y2="100" stroke="rgba(255,255,255,0.12)" stroke-dasharray="3,2"/>';
+      });
+      // Polyline
+      const points=rrAll.map((r,i)=>(xL+i*xStep)+','+yFor(r.court)).join(' ');
+      h+='<polyline fill="none" stroke="#00e5ff" stroke-width="1.5" points="'+points+'"/>';
+      // Dots colored by W/L
+      rrAll.forEach((r,i)=>{
+        const x=xL+i*xStep;
+        const y=yFor(r.court);
+        h+='<circle cx="'+x+'" cy="'+y+'" r="2.5" fill="'+(r.won?'#c8ff00':'#ff5c47')+'"/>';
+      });
+      h+='</svg>';
+      h+='<div style="display:flex;align-items:center;gap:10px;margin-top:6px;font-size:8px;color:rgba(255,255,255,0.4)">';
+      h+='<span><span style="display:inline-block;width:6px;height:6px;background:#c8ff00;border-radius:50%;vertical-align:middle;margin-right:3px"></span>won</span>';
+      h+='<span><span style="display:inline-block;width:6px;height:6px;background:#ff5c47;border-radius:50%;vertical-align:middle;margin-right:3px"></span>lost</span>';
+      h+='<span style="margin-left:auto;color:rgba(255,255,255,0.55);font-weight:700">peak: '+labelFor(peakCourt)+' \u00b7 '+peakCount+' round'+(peakCount!==1?'s':'')+'</span>';
       h+='</div>';
       h+='</div>';
     }
@@ -2026,7 +2080,9 @@ function render(){
         // Reuse the search card builder by passing the exact player name so
         // the helper renders just this one card.
         const mvpCountP=calcMvpCount(sp.sessions,lp);
-        pv+=_buildSearchCardsHTML(target.name.toLowerCase(),sortedP,bonusDataP,topCtNameP,mvpCountP);
+        const _refSSP=sp.sessions.slice().reverse().find(x=>x.started);
+        const courtNamesP=_refSSP?.config?.courtNames||null;
+        pv+=_buildSearchCardsHTML(target.name.toLowerCase(),sortedP,bonusDataP,topCtNameP,mvpCountP,courtNamesP);
       } else {
         pv+='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:12px;padding:24px;text-align:center;color:var(--muted);font-size:.85rem">No stats yet for this player.</div>';
       }
