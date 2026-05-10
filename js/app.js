@@ -2107,17 +2107,16 @@ function render(){
           ov+='<div style="padding:14px 14px 6px"><button onclick="npState=null;render()" style="width:100%;background:#c8ff00;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:900;color:#000;cursor:pointer">✓ Confirm '+t1val+' – '+t2val+'</button></div>';
         }
       }
-      // numpad grid — number keys + ⌫ always work (so admin can fix a tie).
-      // SET is disabled when tied to prevent committing a tied score.
+      // Numpad grid — ALL keys (including SET) always work. SET is the path
+      // OUT of a tie — pressing it applies the current edit, which may or
+      // may not still tie. After SET, if still tied, the modal stays open
+      // (npConfirm handles that). The lockout is only on the modal-EXIT
+      // controls (Confirm bar, close ✕, backdrop), not on SET itself.
       ov+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(255,255,255,0.06);margin:'+(bothDone?'8px':'0')+' 14px 14px;border-radius:12px;overflow:hidden">';
       [1,2,3,4,5,6,7,8,9].forEach(d=>{ov+='<button onclick="npPress(\''+d+'\')" style="background:#0e0e1a;padding:16px 0;text-align:center;font-size:20px;font-weight:700;color:#f4f4f0;cursor:pointer;border:none;width:100%">'+d+'</button>'});
       ov+='<button onclick="npDel()" style="background:'+(isTied?'#1a0606':'#0e0e1a')+';padding:16px 0;text-align:center;font-size:16px;color:#ff5c47;cursor:pointer;'+(isTied?'border:1px solid rgba(255,92,71,0.4);font-weight:800':'border:none')+'">⌫</button>';
       ov+='<button onclick="npPress(\'0\')" style="background:#0e0e1a;padding:16px 0;text-align:center;font-size:20px;font-weight:700;color:#f4f4f0;cursor:pointer;border:none">0</button>';
-      if(isTied){
-        ov+='<button disabled style="background:rgba(255,92,71,0.15);border:1px dashed rgba(255,92,71,0.3);padding:16px 0;text-align:center;font-size:11px;color:rgba(255,92,71,0.7);font-weight:800;cursor:not-allowed">SET &#x2715;</button>';
-      } else {
-        ov+='<button onclick="npConfirm()" style="background:#c8ff00;padding:16px 0;text-align:center;font-size:12px;font-weight:900;color:#000;cursor:pointer;border:none">SET &rarr;</button>';
-      }
+      ov+='<button onclick="npConfirm()" style="background:#c8ff00;padding:16px 0;text-align:center;font-size:12px;font-weight:900;color:#000;cursor:pointer;border:none">SET &rarr;</button>';
       ov+='</div>';
       ov+='</div></div>';
       h+=ov;}}
