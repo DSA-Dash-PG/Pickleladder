@@ -1561,7 +1561,7 @@ function rStandings(stats,season,l){
   h+='</div>';
   return h;}
 
-// ══ THE KITCHEN — Category awards (One-Night Wonder, King of the Court, etc.) ══
+// ══ THE KITCHEN — all categories rendered as uniform compact cards (top 5) ══
 function rLeaderboard(stats,season,l){
   if(!season)return'';
   const bonusData=calcBonusPts(season.sessions,l.players);
@@ -1573,38 +1573,36 @@ function rLeaderboard(stats,season,l){
   const refSS0=season.sessions.slice().reverse().find(x=>x.started);
   const nC=refSS0?.config?.courts||4;
 
-  const cat=(lbl,desc,heroName,heroVal,heroSub,heroCol,heroBg,rows)=>{
-    let c='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:12px;overflow:hidden;margin-bottom:10px">';
-    c+='<div style="background:#0a0a0a;padding:7px 14px;border-bottom:1px solid #1a1a1a;display:flex;align-items:baseline;justify-content:space-between">';
-    c+='<div style="font-size:9px;font-weight:900;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.15em">'+lbl+'</div>';
-    c+='<div style="font-size:9px;color:rgba(255,255,255,0.2)">'+desc+'</div></div>';
-    c+='<div style="padding:12px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #1a1a1a;background:'+heroBg+'">';
-    c+='<div style="width:40px;height:40px;border-radius:50%;background:'+heroCol+'1a;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:'+heroCol+';flex-shrink:0">'+heroName.slice(0,2).toUpperCase()+'</div>';
-    c+='<div style="flex:1;min-width:0"><div style="font-size:18px;font-weight:900;color:#f4f4f0;letter-spacing:-.02em;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+heroName+'</div>';
-    c+='<div style="font-size:9px;color:rgba(255,255,255,0.35);margin-top:2px">'+heroSub+'</div></div>';
-    c+='<div style="text-align:right"><div style="font-size:24px;font-weight:900;color:'+heroCol+';line-height:1;letter-spacing:-.03em">'+heroVal+'</div></div>';
-    c+='</div>';
-    rows.forEach((r,i)=>{
-      const barW=Math.round((r.pct||0)*100);
-      c+='<div style="display:flex;align-items:center;gap:8px;padding:7px 14px;border-bottom:0.5px solid #111'+(i===rows.length-1?';border:none':'')+(i%2===1?';background:#0a0a0a':'')+'">';
-      c+='<div style="font-size:10px;color:rgba(255,255,255,0.2);width:14px;flex-shrink:0;text-align:center">'+(i+2)+'</div>';
-      c+='<div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.7);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.name+'</div>';
-      if(r.sub)c+='<div style="font-size:9px;color:rgba(255,255,255,0.3);margin-right:4px">'+r.sub+'</div>';
-      c+='<div style="width:52px;height:3px;background:rgba(255,255,255,0.07);border-radius:2px;overflow:hidden"><div style="height:100%;background:'+heroCol+'70;border-radius:2px;width:'+barW+'%"></div></div>';
-      c+='<div style="font-size:11px;font-weight:800;color:'+heroCol+'99;min-width:36px;text-align:right">'+r.val+'</div>';
-      c+='</div>';});
-    c+='</div>';
-    return c;};
-
-  const compact=(lbl,desc,heroCol,top3)=>{
-    if(!top3.length)return'';
+  // One unified card renderer. `rows` is an array of {name, val, sub?, id?}.
+  // When id is present, the name is wrapped with the player-popup click handler.
+  const card=(lbl,desc,heroCol,rows)=>{
+    if(!rows||!rows.length)return'';
     let c='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:10px;padding:10px 12px;margin-bottom:8px">';
-    c+='<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px"><div style="font-size:10px;font-weight:900;color:'+heroCol+';letter-spacing:.05em">'+lbl+'</div><div style="font-size:8px;color:rgba(255,255,255,0.25)">'+desc+'</div></div>';
-    top3.forEach((r,i)=>{
-      c+='<div style="display:flex;justify-content:space-between;font-size:'+(i===0?'12':'11')+'px;font-weight:'+(i===0?'800':'500')+';color:'+(i===0?'#fff':'rgba(255,255,255,0.55)')+';padding:2px 0"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;margin-right:8px">'+r.name+'</span><span style="color:'+(i===0?heroCol:'rgba(255,255,255,0.5)')+'">'+r.val+'</span></div>';
+    c+='<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">';
+    c+='<div style="font-size:11px;font-weight:900;color:'+heroCol+';letter-spacing:.04em">'+lbl+'</div>';
+    c+='<div style="font-size:8px;color:rgba(255,255,255,0.3)">'+desc+'</div></div>';
+    rows.slice(0,5).forEach((r,i)=>{
+      const rankCol=i===0?heroCol:'rgba(255,255,255,0.25)';
+      const nameCol=i===0?'#fff':'rgba(255,255,255,0.7)';
+      const valCol=i===0?heroCol:'rgba(255,255,255,0.5)';
+      const fSize=i===0?'12':'11';
+      const fWeight=i===0?'800':'500';
+      // Clickable name only when an id is provided
+      const nameSpan=r.id
+        ? '<span'+pClick(r.id)+' style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:'+nameCol+';cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px">'+r.name+'</span>'
+        : '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:'+nameCol+'">'+r.name+'</span>';
+      c+='<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:'+fSize+'px;font-weight:'+fWeight+'">';
+      c+='<div style="width:12px;text-align:center;color:'+rankCol+';font-weight:800">'+(i+1)+'</div>';
+      c+='<div style="flex:1;min-width:0">'+nameSpan+'</div>';
+      if(r.sub)c+='<div style="font-size:9px;color:rgba(255,255,255,0.3);font-weight:500">'+r.sub+'</div>';
+      c+='<div style="color:'+valCol+';min-width:36px;text-align:right;font-variant-numeric:tabular-nums">'+r.val+'</div>';
+      c+='</div>';
     });
     c+='</div>';
-    return c;};
+    return c;
+  };
+
+  const fmtD=(d)=>{const dt=new Date(d+'T12:00:00');return(dt.getMonth()+1)+'/'+dt.getDate();};
 
   let h='';
 
@@ -1614,94 +1612,79 @@ function rLeaderboard(stats,season,l){
   oneNightAll.sort((a,b)=>b.pts-a.pts);
   const bestPerPlayer={};oneNightAll.forEach(x=>{if(!bestPerPlayer[x.id])bestPerPlayer[x.id]=x;});
   const oneNightSorted=Object.values(bestPerPlayer).sort((a,b)=>b.pts-a.pts);
-  if(oneNightSorted.length){
-    const top=oneNightSorted[0];
-    const fmtD=(d)=>{const dt=new Date(d+'T12:00:00');return(dt.getMonth()+1)+'/'+dt.getDate();};
-    h+=cat('One-Night Wonder','most pts in a single ladder',top.name,top.pts,fmtD(top.date),'#ffcc00','rgba(255,204,0,0.06)',
-      oneNightSorted.slice(1,5).map(x=>({name:x.name,sub:fmtD(x.date),val:x.pts,pct:x.pts/top.pts})));
-  }
+  h+=card('\u{1F373} One-Night Wonder','most pts in a single ladder','#ffcc00',
+    oneNightSorted.map(x=>({id:x.id,name:x.name,sub:fmtD(x.date),val:x.pts})));
 
   // King of the Court
   const kingCounts={};
-  stats.forEach(s=>{const wins=s.roundRes.filter(x=>x.court===nC&&x.won).length;if(wins>0)kingCounts[s.id]={name:s.name,rounds:wins};});
+  stats.forEach(s=>{const wins=s.roundRes.filter(x=>x.court===nC&&x.won).length;if(wins>0)kingCounts[s.id]={id:s.id,name:s.name,rounds:wins};});
   const kingSorted=Object.values(kingCounts).sort((a,b)=>b.rounds-a.rounds);
-  if(kingSorted.length){
-    const top=kingSorted[0];
-    h+=cat('King of the Court','wins on the top court',top.name,top.rounds+' W','Court '+(refSS0?.config?.courtNames?.[0]||'A'),'#c8ff00','rgba(200,255,0,0.05)',
-      kingSorted.slice(1,5).map(k=>({name:k.name,val:k.rounds+' W',pct:k.rounds/top.rounds})));
-  }
+  h+=card('\u{1F451} King of the Court','wins on the top court','#c8ff00',
+    kingSorted.map(k=>({id:k.id,name:k.name,val:k.rounds+' W'})));
 
   // Per-Round Top
-  const avgPlayers=stats.filter(s=>s.roundPts.length>=6).map(s=>({name:s.name,id:s.id,avg:Math.round(s.pf/s.roundPts.length*10)/10,games:s.roundPts.length}));
+  const avgPlayers=stats.filter(s=>s.roundPts.length>=6).map(s=>({id:s.id,name:s.name,avg:Math.round(s.pf/s.roundPts.length*10)/10,games:s.roundPts.length}));
   avgPlayers.sort((a,b)=>b.avg-a.avg);
-  if(avgPlayers.length){
-    const top=avgPlayers[0];
-    h+=cat('Per-Round Top','highest avg pts per round (min 6 games)',top.name,top.avg.toFixed(1),top.games+' games','#00e5ff','rgba(0,229,255,0.05)',
-      avgPlayers.slice(1,5).map(p=>({name:p.name,sub:p.games+'g',val:p.avg.toFixed(1),pct:p.avg/top.avg})));
-  }
+  h+=card('\u{1F4C8} Per-Round Top','highest avg pts (min 6 games)','#00e5ff',
+    avgPlayers.map(p=>({id:p.id,name:p.name,sub:p.games+'g',val:p.avg.toFixed(1)})));
 
   // Most Points (season)
   const ptsSorted=[...sorted];
-  if(ptsSorted.length){
-    const top=ptsSorted[0];const topTotal=totalPts(top);
-    const topPtsCrown=bonusData[top.id]?.wins>0?' '+crownStr(bonusData[top.id].wins):'';
-    h+=cat('Most Points (season)','season total incl. bonus',top.name+topPtsCrown,totalPts(top),top.w+'W '+top.l+'L','#85ff44','rgba(132,255,68,0.05)',
-      ptsSorted.slice(1,5).map(s=>({name:s.name+(bonusData[s.id]?.wins>0?' '+crownStr(bonusData[s.id].wins):''),val:totalPts(s),pct:totalPts(s)/topTotal})));
-  }
+  h+=card('\u{1F3C6} Most Points','season total incl. bonus','#85ff44',
+    ptsSorted.map(s=>({id:s.id,name:s.name+(bonusData[s.id]?.wins>0?' '+crownStr(bonusData[s.id].wins):''),val:totalPts(s)})));
 
-  // 2-col compact grid
-  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-
+  // Hot Streak
   const streakSorted=[...stats].filter(s=>s.maxStreak>0).sort((a,b)=>b.maxStreak-a.maxStreak);
-  h+=compact('\u{1F525} Hot Streak','longest run of wins','#a78bfa',
-    streakSorted.slice(0,3).map(s=>({name:s.name,val:'W'+s.maxStreak})));
+  h+=card('\u{1F525} Hot Streak','longest run of wins','#a78bfa',
+    streakSorted.map(s=>({id:s.id,name:s.name,val:'W'+s.maxStreak})));
 
+  // Best Duo (no clickable names — pair, not individual)
   const pairs=calcPartners(sessions,l.players).filter(p=>p.w+p.l>=3);
   const pName=(p)=>p.p1.name.split(' ')[0]+' + '+p.p2.name.split(' ')[0];
-  h+=compact('\u{1F91D} Best Duo','win % (min 3 games)','#ff5c47',
-    pairs.slice(0,3).map(p=>({name:pName(p),val:Math.round(p.w/(p.w+p.l)*100)+'%'})));
+  h+=card('\u{1F91D} Best Duo','win % (min 3 games together)','#ff5c47',
+    pairs.map(p=>({name:pName(p),sub:p.w+'-'+p.l,val:Math.round(p.w/(p.w+p.l)*100)+'%'})));
 
-  const wallSorted=stats.filter(s=>s.roundPts.length>=6&&s.pa>0).map(s=>({name:s.name,avgPA:s.pa/s.roundPts.length})).sort((a,b)=>a.avgPA-b.avgPA);
-  h+=compact('\u{1F6E1}\uFE0F The Wall','lowest avg pts allowed','#85ff44',
-    wallSorted.slice(0,3).map(p=>({name:p.name,val:p.avgPA.toFixed(1)})));
+  // The Wall
+  const wallSorted=stats.filter(s=>s.roundPts.length>=6&&s.pa>0).map(s=>({id:s.id,name:s.name,avgPA:s.pa/s.roundPts.length})).sort((a,b)=>a.avgPA-b.avgPA);
+  h+=card('\u{1F6E1}\uFE0F The Wall','lowest avg pts allowed (min 6 games)','#85ff44',
+    wallSorted.map(p=>({id:p.id,name:p.name,val:p.avgPA.toFixed(1)})));
 
+  // Iron Player
   const ironSorted=[...stats].filter(s=>s.attended>0).sort((a,b)=>b.attended-a.attended);
-  h+=compact('\u2693 Iron Player','most ladders attended','#f472b6',
-    ironSorted.slice(0,3).map(s=>({name:s.name,val:String(s.attended)})));
+  h+=card('\u2693 Iron Player','most ladders attended','#f472b6',
+    ironSorted.map(s=>({id:s.id,name:s.name,val:String(s.attended)})));
 
+  // Big Mover
   const moverAll={};
-  sessions.forEach(sess=>{if(!sess||!sess.started)return;const sStats=calcStats([sess],l.players);sStats.forEach(p=>{if(!p.courtHist.length)return;const courts=p.courtHist.map(x=>x.court);const climb=Math.max(...courts)-Math.min(...courts);if(climb<=0)return;if(!moverAll[p.id]||moverAll[p.id].climb<climb){moverAll[p.id]={name:p.name,climb};}});});
+  sessions.forEach(sess=>{if(!sess||!sess.started)return;const sStats=calcStats([sess],l.players);sStats.forEach(p=>{if(!p.courtHist.length)return;const courts=p.courtHist.map(x=>x.court);const climb=Math.max(...courts)-Math.min(...courts);if(climb<=0)return;if(!moverAll[p.id]||moverAll[p.id].climb<climb){moverAll[p.id]={id:p.id,name:p.name,climb,date:sess.date};}});});
   const moverSorted=Object.values(moverAll).sort((a,b)=>b.climb-a.climb);
-  h+=compact('\u{1F4CA} Big Mover','biggest court climb in a ladder','#60a5fa',
-    moverSorted.slice(0,3).map(p=>({name:p.name,val:'+'+p.climb})));
+  h+=card('\u{1F4CA} Big Mover','biggest court climb in a ladder','#60a5fa',
+    moverSorted.map(p=>({id:p.id,name:p.name,sub:fmtD(p.date),val:'+'+p.climb})));
 
+  // Beat Down (biggest single-game point margin per player)
   const beatDownAll=[];
-  stats.forEach(s=>{s.roundRes.forEach(r=>{if(r.won&&r.diff>0)beatDownAll.push({id:s.id,name:s.name,diff:r.diff});});});
+  stats.forEach(s=>{s.roundRes.forEach(r=>{if(r.won&&r.diff>0)beatDownAll.push({id:s.id,name:s.name,diff:r.diff,rd:r.round});});});
   beatDownAll.sort((a,b)=>b.diff-a.diff);
   const beatBest={};beatDownAll.forEach(x=>{if(!beatBest[x.id])beatBest[x.id]=x;});
   const beatSorted=Object.values(beatBest).sort((a,b)=>b.diff-a.diff);
-  h+=compact('\u{1F4A5} Beat Down','biggest single-game margin','#fb923c',
-    beatSorted.slice(0,3).map(p=>({name:p.name,val:'+'+p.diff})));
+  h+=card('\u{1F4A5} Beat Down','biggest single-game margin','#fb923c',
+    beatSorted.map(p=>({id:p.id,name:p.name,sub:'Rd '+p.rd,val:'+'+p.diff})));
 
+  // Comeback Kid
   const comebackCounts={};
-  stats.forEach(s=>{let count=0;for(let i=1;i<s.roundRes.length;i++){if(s.roundRes[i].won&&!s.roundRes[i-1].won)count++;}if(count>0)comebackCounts[s.id]={name:s.name,count};});
+  stats.forEach(s=>{let count=0;for(let i=1;i<s.roundRes.length;i++){if(s.roundRes[i].won&&!s.roundRes[i-1].won)count++;}if(count>0)comebackCounts[s.id]={id:s.id,name:s.name,count};});
   const comebackSorted=Object.values(comebackCounts).sort((a,b)=>b.count-a.count);
-  h+=compact('\u{1F3A2} Comeback Kid','wins after a loss','#e879f9',
-    comebackSorted.slice(0,3).map(p=>({name:p.name,val:String(p.count)})));
+  h+=card('\u{1F3A2} Comeback Kid','wins after a loss','#e879f9',
+    comebackSorted.map(p=>({id:p.id,name:p.name,val:String(p.count)})));
 
-  h+='</div>';
-
-  // Highest single game
+  // Highest Single Game
   const gamePeaks=[];
-  stats.forEach(s=>{s.roundRes.forEach(r=>{gamePeaks.push({id:s.id,name:s.name,pts:r.pf,rd:r.round,court:r.court,won:r.won})})});
+  stats.forEach(s=>{s.roundRes.forEach(r=>{gamePeaks.push({id:s.id,name:s.name,pts:r.pf,rd:r.round,won:r.won})})});
   gamePeaks.sort((a,b)=>b.pts-a.pts);
   const topGames=[];const seenG=new Set();
   gamePeaks.forEach(g=>{if(!seenG.has(g.id)){seenG.add(g.id);topGames.push(g)}});
-  if(topGames.length){
-    const top=topGames[0];const topMax=top.pts;
-    h+=cat('Highest Single Game','most pts scored in one round',top.name,top.pts,'Rd '+top.rd+(top.won?' \u00b7 W':' \u00b7 L'),'#a78bfa','rgba(167,139,250,0.05)',
-      topGames.slice(1,5).map(g=>({name:g.name,sub:'Rd '+g.rd,val:g.pts,pct:topMax>0?g.pts/topMax:0})));
-  }
+  h+=card('\u{1F3AF} Highest Single Game','most pts in one round','#a78bfa',
+    topGames.map(g=>({id:g.id,name:g.name,sub:'Rd '+g.rd,val:g.pts})));
 
   return h;}
 
