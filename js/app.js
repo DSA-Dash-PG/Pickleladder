@@ -191,22 +191,58 @@ async function setWLRound(ri,ci,w){
   const l=gL();const ss=gSS();if(!l||!ss||!ss.rounds[ri])return;
   ss.rounds[ri].courts[ci].score={t1:w==='A'?1:0,t2:w==='B'?1:0,winner:w};await save(l)}
 
-function makeCoed(group,pp){
-  // Try all possible pairings and pick one with no repeat partners
+// Build the two teams for a single court.
+//
+// Priority of rules (highest → lowest):
+//   1. Gender balance — if 2M+2F on the court, teams MUST be mixed (M+F vs
+//      M+F). If 3M+1F (or 1M+3F), the lone player teams up with the strongest
+//      opposite-gender player on the court so a single woman never has to
+//      face two guys.
+//   2. No-repeat-partner — among gender-balance-valid pairings, prefer ones
+//      where neither team was together in the previous round.
+//   3. Snake-draft for strength — among the remaining valid pairings, prefer
+//      the one that splits playing strength most evenly (strongest paired
+//      with weakest of the opposite-gender / different-tier player).
+//
+// `strength` is a `(playerId)=>number` lookup; falsy/missing → 0. Higher
+// means stronger.
+function makeCoed(group,pp,strength){
+  const str=typeof strength==='function'?strength:(()=>0);
   const g=group.filter(Boolean);
   if(g.length<2)return{t1:[g[0]||null,null],t2:[null,null]};
-  const males=g.filter(p=>p.gender==='M'),females=g.filter(p=>p.gender==='F');
-  // noRepeat: true if neither pair was together last round
+  const males=g.filter(p=>p.gender==='M').slice().sort((a,b)=>str(b.id)-str(a.id));
+  const females=g.filter(p=>p.gender==='F').slice().sort((a,b)=>str(b.id)-str(a.id));
   const noRepeat=(a,b,c,d)=>{if(!pp)return true;return pp[a?.id]!==b?.id&&pp[b?.id]!==a?.id&&pp[c?.id]!==d?.id&&pp[d?.id]!==c?.id};
-  // Generate all valid pairings (A+B vs C+D where A≠C, A≠D)
+  // teamStrength sum for snake-draft scoring; balance score = |Δ| (lower=better)
+  const teamStr=(a,b)=>str(a?.id)+str(b?.id);
+  const balanceScore=([a,b])=>Math.abs(teamStr(a[0],a[1])-teamStr(b[0],b[1]));
+
   const pairings=[];
-  if(males.length>=2&&females.length>=2){
-    // Mixed doubles options: swap female or male
-    pairings.push([[males[0],females[0]],[males[1],females[1]]]);
-    pairings.push([[males[0],females[1]],[males[1],females[0]]]);
-    if(males.length>2)pairings.push([[males[0],females[0]],[males[2],females[1]]]);
+  if(males.length===2&&females.length===2){
+    // 2M+2F → mixed only. Two valid mixed pairings; rank by balance.
+    pairings.push([[males[0],females[1]],[males[1],females[0]]]); // snake
+    pairings.push([[males[0],females[0]],[males[1],females[1]]]); // straight
+  } else if(males.length===3&&females.length===1){
+    // 3M+1F → F always plays WITH a male. Prefer her with the strongest, then
+    // 2nd strongest as fallback for no-repeat. Other team is the leftover Ms.
+    pairings.push([[males[0],females[0]],[males[1],males[2]]]);
+    pairings.push([[males[1],females[0]],[males[0],males[2]]]);
+    pairings.push([[males[2],females[0]],[males[0],males[1]]]);
+  } else if(males.length===1&&females.length===3){
+    // 1M+3F mirror.
+    pairings.push([[females[0],males[0]],[females[1],females[2]]]);
+    pairings.push([[females[1],males[0]],[females[0],females[2]]]);
+    pairings.push([[females[2],males[0]],[females[0],females[1]]]);
+  } else if(males.length===4||females.length===4){
+    // Single-gender court → snake-draft so the two strongest aren't paired.
+    const arr=males.length===4?males:females;
+    pairings.push([[arr[0],arr[3]],[arr[1],arr[2]]]); // snake
+    pairings.push([[arr[0],arr[2]],[arr[1],arr[3]]]);
+    pairings.push([[arr[0],arr[1]],[arr[2],arr[3]]]);
   } else {
-    // Try all 3 ways to split 4 players into 2 pairs
+    // Odd group sizes (court underfilled or stray sub). Fallback: keep the
+    // existing 3-split logic, but if we have at least one M and one F, pair
+    // them together first.
     if(g[0]&&g[1]&&g[2]&&g[3]){
       pairings.push([[g[0],g[1]],[g[2],g[3]]]);
       pairings.push([[g[0],g[2]],[g[1],g[3]]]);
@@ -216,13 +252,21 @@ function makeCoed(group,pp){
       pairings.push([[males[0],females[0]],[others[0]||null,others[1]||null]]);
     }
   }
-  // Pick first pairing with no repeat partners; fall back to first pairing
-  const chosen=pairings.find(([a,b])=>noRepeat(a[0],a[1],b[0],b[1]))||pairings[0];
+
+  // Pick: first no-repeat pairing; if none, take the most balanced one we have.
+  const noRepeatOpts=pairings.filter(([a,b])=>noRepeat(a[0],a[1],b[0],b[1]));
+  let chosen;
+  if(noRepeatOpts.length){
+    // Among no-repeat options, prefer the most balanced
+    chosen=noRepeatOpts.slice().sort((x,y)=>balanceScore(x)-balanceScore(y))[0];
+  } else if(pairings.length){
+    chosen=pairings.slice().sort((x,y)=>balanceScore(x)-balanceScore(y))[0];
+  }
   if(!chosen)return{t1:[g[0]||null,g[1]||null],t2:[g[2]||null,g[3]||null]};
   return{t1:[chosen[0][0]||null,chosen[0][1]||null],t2:[chosen[1][0]||null,chosen[1][1]||null]};
 }
-function genR1(players,nC){const males=shuffle(players.filter(p=>p.gender==='M')),females=shuffle(players.filter(p=>p.gender==='F'));const courts=[];let mi=0,fi=0;for(let c=0;c<nC;c++){const g=[];for(let x=0;x<2;x++){if(mi<males.length)g.push(males[mi++])}for(let x=0;x<2;x++){if(fi<females.length)g.push(females[fi++])}while(g.length<4&&mi<males.length)g.push(males[mi++]);while(g.length<4&&fi<females.length)g.push(females[fi++]);const{t1,t2}=makeCoed(g,null);courts.push({court:c+1,team1:[t1[0]||null,t1[1]||null],team2:[t2[0]||null,t2[1]||null],score:null})}return{courts,completed:false}}
-function genNR(prev,nC){
+function genR1(players,nC,strength){const males=shuffle(players.filter(p=>p.gender==='M')),females=shuffle(players.filter(p=>p.gender==='F'));const courts=[];let mi=0,fi=0;for(let c=0;c<nC;c++){const g=[];for(let x=0;x<2;x++){if(mi<males.length)g.push(males[mi++])}for(let x=0;x<2;x++){if(fi<females.length)g.push(females[fi++])}while(g.length<4&&mi<males.length)g.push(males[mi++]);while(g.length<4&&fi<females.length)g.push(females[fi++]);const{t1,t2}=makeCoed(g,null,strength);courts.push({court:c+1,team1:[t1[0]||null,t1[1]||null],team2:[t2[0]||null,t2[1]||null],score:null})}return{courts,completed:false}}
+function genNR(prev,nC,strength){
   // Build previous-partner map so we can guarantee splits
   const pp={};
   prev.courts.forEach(c=>{
@@ -259,7 +303,7 @@ function genNR(prev,nC){
   const courts=[];
   for(let c=0;c<nC;c++){
     const g=bk[c+1]||[];
-    const{t1,t2}=makeCoed(g.slice(0,4),pp);
+    const{t1,t2}=makeCoed(g.slice(0,4),pp,strength);
     courts.push({court:c+1,team1:[t1[0]||null,t1[1]||null],team2:[t2[0]||null,t2[1]||null],score:null})}
   return{courts,completed:false}}
 
@@ -350,25 +394,108 @@ function openEditPlayer(pid){const l=gL();if(!l)return;const p=l.players.find(x=
 function closeEditModal(){document.getElementById('editModal').classList.remove('open');editingPid=null}
 async function saveEditPlayer(){const l=gL();if(!l||!editingPid)return;const p=l.players.find(x=>x.id===editingPid);if(!p)return;const nn=document.getElementById('edName').value.trim()||p.name;const ng=document.getElementById('edGender').value;p.name=nn;p.gender=ng;const s=gS();if(s){s.sessions.forEach(sess=>{sess.rounds.forEach(round=>{round.courts.forEach(ct=>{[ct.team1,ct.team2].forEach(team=>{team.forEach((tp,i)=>{if(tp&&tp.id===editingPid){team[i]={...tp,name:nn,gender:ng}}})})})})})}closeEditModal();await save(l)}
 async function replacePlayer(oldPid){const l=gL();if(!l)return;const oldP=l.players.find(x=>x.id===oldPid);if(!oldP)return;const n=prompt('New player name to replace '+oldP.name+':');if(!n?.trim())return;const g=prompt('Gender (M/F):','M');if(g!=='M'&&g!=='F')return;const newP={id:uid(),name:n.trim(),gender:g,active:true};l.players.push(newP);oldP.active=false;const ss=gSS();if(ss){if(ss.participants){const idx=ss.participants.indexOf(oldPid);if(idx>=0)ss.participants[idx]=newP.id}ss.rounds.forEach(round=>{round.courts.forEach(ct=>{[ct.team1,ct.team2].forEach(team=>{team.forEach((tp,i)=>{if(tp&&tp.id===oldPid){team[i]={...newP}}})})})})}await save(l)}
+// Sub out: mark the player as subbedOut AND actually remove them from the
+// current round's courts. If there's a bench player (a participant who
+// isn't currently on any court — same gender preferred), drop them in to
+// fill the empty slot. Otherwise the slot becomes null and admin can swap
+// someone in manually.
 async function subOutPlayer(pid){
   const l=gL();const ss=gSS();if(!l||!ss)return;
   const p=l.players.find(x=>x.id===pid);if(!p)return;
-  p.subbedOut=true;await save(l)}
+  p.subbedOut=true;
+  // Pull them out of the current round's courts (only if a round is active)
+  const round=ss.rounds&&ss.rounds[ss.currentRound];
+  if(round){
+    // Build a bench: active participants who are NOT currently on a court
+    const onCourt=new Set();
+    round.courts.forEach(c=>{[...(c.team1||[]),...(c.team2||[])].forEach(x=>{if(x)onCourt.add(x.id);});});
+    // Bench tier 1: participants of THIS ladder who aren\u2019t on a court right now
+    const partBench=(ss.participants||[]).map(id=>l.players.find(x=>x.id===id))
+      .filter(x=>x&&x.active!==false&&!x.subbedOut&&!x.temp&&x.id!==pid&&!onCourt.has(x.id));
+    // Bench tier 2: active league players not in this ladder. Pulled in
+    // automatically as a participant so their stats accumulate normally.
+    const partIds=new Set(ss.participants||[]);
+    const leagueBench=l.players
+      .filter(x=>x&&x.active!==false&&!x.subbedOut&&!x.temp&&x.id!==pid&&!partIds.has(x.id));
+    const bench=[...partBench,...leagueBench];
+    const benchIsLeague=(b)=>!partIds.has(b.id);
+    // Replace the subbedOut player on each court team slot
+    round.courts.forEach(c=>{
+      [c.team1,c.team2].forEach(team=>{
+        team.forEach((slot,i)=>{
+          if(slot&&slot.id===pid){
+            // Prefer same-gender bench player so gender balance survives
+            const same=bench.findIndex(b=>b.gender===p.gender);
+            const idx=same>=0?same:(bench.length?0:-1);
+            if(idx>=0){const picked=bench[idx];if(benchIsLeague(picked)){if(!ss.participants)ss.participants=[];ss.participants.push(picked.id);partIds.add(picked.id);}team[i]={...picked};bench.splice(idx,1);}
+            else{team[i]=null;}
+          }
+        });
+      });
+    });
+  }
+  await save(l);
+}
+// Sub back in: clear the flag. Player is now eligible for the next round.
+// (We don't auto-insert into the current round — admin can swap them in if
+// they want, since someone else may already be filling the slot.)
 async function subInPlayer(pid){
   const l=gL();const ss=gSS();if(!l||!ss)return;
   const p=l.players.find(x=>x.id===pid);if(!p)return;
   p.subbedOut=false;await save(l)}
-async function addSubPlayer(){
-  const l=gL();const ss=gSS();if(!l||!ss)return;
-  const n=document.getElementById('fSubName')?.value?.trim();
-  const g=document.getElementById('fSubGender')?.value||'M';
-  if(!n)return;
-  const p={id:uid(),name:n,gender:g,active:true,subbedOut:false};
+// Two kinds of sub-in additions:
+//   - Permanent sub: full league member, stats roll up to season leaderboard.
+//   - Temp sub (one-night): marked `temp:true`, plays this ladder, counts in
+//     this ladder\u2019s stats, but excluded from season leaderboard. Useful
+//     for "a friend showed up to fill in" so the score keeping stays clean.
+async function _addSub(name,gender,opts){
+  const l=gL();const ss=gSS();if(!l||!ss)return null;
+  const p={id:uid(),name:name,gender:gender,active:true,subbedOut:false};
+  if(opts&&opts.temp)p.temp=true;
   l.players.push(p);
   if(!ss.participants)ss.participants=[];
   ss.participants.push(p.id);
-  document.getElementById('fSubName').value='';
-  await save(l)}
+  return p;
+}
+async function addSubPlayer(){
+  const n=document.getElementById('fSubName')?.value?.trim();
+  const g=document.getElementById('fSubGender')?.value||'M';
+  if(!n)return;
+  await _addSub(n,g,{temp:false});
+  const fld=document.getElementById('fSubName');if(fld)fld.value='';
+  const l=gL();await save(l);
+}
+async function addTempSubPlayer(){
+  const n=document.getElementById('fTempSubName')?.value?.trim();
+  const g=document.getElementById('fTempSubGender')?.value||'M';
+  if(!n)return;
+  await _addSub(n,g,{temp:true});
+  const fld=document.getElementById('fTempSubName');if(fld)fld.value='';
+  const l=gL();await save(l);
+}
+// Pull an existing-but-not-in-ladder league player into the active ladder.
+// They become a participant and (if there\u2019s an empty slot in the current
+// round) get auto-placed there. Otherwise they sit on the bench until the
+// next round generation picks them up.
+async function pullFromBench(pid){
+  const l=gL();const ss=gSS();if(!l||!ss)return;
+  const p=l.players.find(x=>x.id===pid);if(!p)return;
+  if(!ss.participants)ss.participants=[];
+  if(!ss.participants.includes(p.id))ss.participants.push(p.id);
+  // Try to fill an empty court slot in the current round
+  const round=ss.rounds&&ss.rounds[ss.currentRound];
+  if(round){
+    let placed=false;
+    round.courts.forEach(c=>{
+      [c.team1,c.team2].forEach(team=>{
+        team.forEach((slot,i)=>{
+          if(!slot&&!placed){team[i]={...p};placed=true;}
+        });
+      });
+    });
+  }
+  await save(l);
+}
 async function addPlayer(){const l=gL();if(!l)return;const n=document.getElementById('fPN')?.value?.trim();const g=document.getElementById('fPG')?.value||'M';if(!n)return;l.players.push({id:uid(),name:n,gender:g,active:true});document.getElementById('fPN').value='';await save(l)}
 async function deactivatePlayer(pid){const l=gL();if(!l||!confirm('Deactivate this player? They will be hidden from the picker but their historical stats are preserved.'))return;const p=l.players.find(x=>x.id===pid);if(p)p.active=false;await save(l)}
 async function reactivatePlayer(pid){const l=gL();if(!l)return;const p=l.players.find(x=>x.id===pid);if(p)p.active=true;await save(l)}
@@ -386,10 +513,21 @@ async function createLadder(){const n=document.getElementById('fLN')?.value?.tri
 async function deleteLadderAction(){const l=gL();if(!l||!confirm('Delete this league permanently?'))return;await apiDel(l.id);ladders=ladders.filter(x=>x.id!==l.id);activeLadderId=ladders[0]?.id||null;view='dashboard';render()}
 async function createSeason(){const n=document.getElementById('fSN')?.value?.trim();const l=gL();if(!l||!n)return;const s={id:uid(),name:n,sessions:[],createdAt:Date.now()};l.seasons.push(s);l.activeSeason=s.id;await save(l);view='dashboard';tab='overview';render()}
 async function createSessionAction(){const l=gL();const s=gS();if(!l||!s)return;const cn=getFormCourtNames();const ss={id:uid(),name:document.getElementById('fSName')?.value?.trim()||'',date:document.getElementById('fSD')?.value||new Date().toISOString().split('T')[0],config:{courts:formCourtCount,rounds:parseInt(document.getElementById('fSR')?.value)||6,roundMin:parseInt(document.getElementById('fSM')?.value)||12,scoreMode:document.getElementById('fSO')?.value||'points',place:document.getElementById('fSP')?.value||'',startTime:document.getElementById('fST')?.value||'',courtNames:cn},participants:l.players.filter(p=>p.active!==false).map(p=>p.id),rounds:[],currentRound:-1,started:false,finished:false,createdAt:Date.now()};s.sessions.push(ss);await save(l);activeSessionId=ss.id;view='session';tab='play';render()}
-async function startSessionAction(){const l=gL();const ss=gSS();if(!l||!ss)return;const parts=gParts(ss,l);if(parts.length<4)return alert('Need at least 4 participants. Go to the Roster tab to select players.');ss.rounds=[genR1(parts,ss.config.courts)];ss.currentRound=0;ss.started=true;resetTimer(ss);tab='play';mapOpen=true;await save(l)}
+// Strength = average season game pts per round, used for pairing balance.
+// New players (no roundPts yet) score 0 → end up at the bottom of the snake
+// draft, which is fair: they get matched up before being trusted as anchors.
+function _buildStrengthFn(l){
+  const s=gS();
+  if(!s||!l)return()=>0;
+  const stats=calcStats(s.sessions,l.players);
+  const m={};
+  stats.forEach(x=>{m[x.id]=x.roundPts.length?x.pf/x.roundPts.length:0;});
+  return(id)=>m[id]||0;
+}
+async function startSessionAction(){const l=gL();const ss=gSS();if(!l||!ss)return;const parts=gParts(ss,l);if(parts.length<4)return alert('Need at least 4 participants. Go to the Roster tab to select players.');const strength=_buildStrengthFn(l);ss.rounds=[genR1(parts,ss.config.courts,strength)];ss.currentRound=0;ss.started=true;resetTimer(ss);tab='play';mapOpen=true;await save(l)}
 async function finishLadderEarly(){const l=gL();const ss=gSS();if(!l||!ss)return;if(!confirm('End this ladder now?'))return;ss.finished=true;tab='stats';await save(l)}
-async function nextRound(){const l=gL();const ss=gSS();if(!l||!ss)return;const tied=ss.rounds[ss.currentRound].courts.filter(c=>c.score&&c.score.t1!==null&&c.score.t2!==null&&!c.score.winner);if(tied.length)return alert(tied.length+' court(s) have tied scores. There are no ties — remove the last point so there is a winner.');const un=ss.rounds[ss.currentRound].courts.filter(c=>!c.score);if(un.length&&!confirm(un.length+' court(s) unscored. Continue?'))return;if(ss.currentRound>=ss.config.rounds-1){ss.finished=true;tab='stats';await save(l);return}ss.rounds.push(genNR(ss.rounds[ss.currentRound],ss.config.courts));ss.currentRound++;viewingRound=-1;npState=null;resetTimer(ss);await save(l)}
-async function reshuffleRound(){const l=gL();const ss=gSS();if(!l||!ss||!confirm('Reshuffle? Scores cleared.'))return;const all=[];ss.rounds[ss.currentRound].courts.forEach(c=>[...c.team1,...c.team2].filter(Boolean).forEach(p=>all.push(p)));ss.rounds[ss.currentRound]=genR1(all,ss.config.courts);npState=null;await save(l)}
+async function nextRound(){const l=gL();const ss=gSS();if(!l||!ss)return;const tied=ss.rounds[ss.currentRound].courts.filter(c=>c.score&&c.score.t1!==null&&c.score.t2!==null&&!c.score.winner);if(tied.length)return alert(tied.length+' court(s) have tied scores. There are no ties — remove the last point so there is a winner.');const un=ss.rounds[ss.currentRound].courts.filter(c=>!c.score);if(un.length&&!confirm(un.length+' court(s) unscored. Continue?'))return;if(ss.currentRound>=ss.config.rounds-1){ss.finished=true;tab='stats';await save(l);return}const strength=_buildStrengthFn(l);ss.rounds.push(genNR(ss.rounds[ss.currentRound],ss.config.courts,strength));ss.currentRound++;viewingRound=-1;npState=null;resetTimer(ss);await save(l)}
+async function reshuffleRound(){const l=gL();const ss=gSS();if(!l||!ss||!confirm('Reshuffle? Scores cleared.'))return;const all=[];ss.rounds[ss.currentRound].courts.forEach(c=>[...c.team1,...c.team2].filter(Boolean).forEach(p=>all.push(p)));const strength=_buildStrengthFn(l);ss.rounds[ss.currentRound]=genR1(all,ss.config.courts,strength);npState=null;await save(l)}
 async function restartRound(ri){const l=gL();const ss=gSS();if(!l||!ss)return;if(!confirm('Restart Round '+(ri+1)+'? All rounds after it will be removed.'))return;ss.rounds[ri].courts.forEach(c=>{c.score=null});ss.rounds=ss.rounds.slice(0,ri+1);ss.currentRound=ri;ss.finished=false;viewingRound=-1;npState=null;resetTimer(ss);await save(l)}
 function beginSwap(ri,ci,ti,pi){if(!isAdmin)return;if(swapMode){doSwap(ri,ci,ti,pi);return}swapMode={ri,ci,ti,pi};render()}
 async function doSwap(ri,ci,ti,pi){if(!swapMode)return;const l=gL();const ss=gSS();if(!l||!ss)return;const round=ss.rounds[ri];if(!round)return;const src=swapMode;const srcTeam=src.ti===0?round.courts[src.ci].team1:round.courts[src.ci].team2;const dstTeam=ti===0?round.courts[ci].team1:round.courts[ci].team2;const tmp=srcTeam[src.pi];srcTeam[src.pi]=dstTeam[pi];dstTeam[pi]=tmp;swapMode=null;await save(l)}
@@ -525,7 +663,12 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
         h+=(isSrc?'<span style="font-size:10px;color:#ffcc00;font-weight:700">Moving</span>':isTarget?'<span style="font-size:10px;color:#00e5ff;font-weight:700">Swap →</span>':'<span style="font-size:10px;color:rgba(255,255,255,0.3)">Tap to move</span>');
         h+='</div>'});
     } else {h+='<div style="font-size:15px;font-weight:700;color:#f4f4f0;margin-bottom:6px;line-height:1.35">'+wNameStr+'</div>';}
-    h+='<div style="font-size:44px;font-weight:900;color:'+winScoreCol+';line-height:1;letter-spacing:-.03em;text-shadow:0 0 18px '+winGlow+',0 0 36px '+winGlowSoft+'">'+wScore+'</div>';
+    // Score is tappable in admin mode so a miskey can be corrected without
+    // having to clear the round. Calls openNumpad with the winner team's
+    // field key so the existing value loads ready to edit.
+    const wFld=w==='A'?'t1':'t2';
+    const wScClk=adminMode?' onclick="event.stopPropagation();openNumpad('+vr+','+ci+',\''+wFld+'\')" style="cursor:pointer;font-size:44px;font-weight:900;color:'+winScoreCol+';line-height:1;letter-spacing:-.03em;text-shadow:0 0 18px '+winGlow+',0 0 36px '+winGlowSoft+'"':' style="font-size:44px;font-weight:900;color:'+winScoreCol+';line-height:1;letter-spacing:-.03em;text-shadow:0 0 18px '+winGlow+',0 0 36px '+winGlowSoft+'"';
+    h+='<div'+wScClk+'>'+wScore+'</div>';
     h+='<div style="display:inline-flex;align-items:center;gap:3px;margin-top:6px;font-size:8px;font-weight:900;background:'+winScoreCol+';color:#000;padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.06em">'+wMove+'</div>';
     h+='</div>';
     // Loser panel
@@ -544,7 +687,9 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
         h+=(isSrc?'<span style="font-size:10px;color:#ffcc00;font-weight:700">Moving</span>':isTarget?'<span style="font-size:10px;color:#00e5ff;font-weight:700">Swap →</span>':'<span style="font-size:10px;color:rgba(255,255,255,0.25)">Tap to move</span>');
         h+='</div>'});
     } else {h+='<div style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:6px;line-height:1.35">'+lNameStr+'</div>';}
-    h+='<div style="font-size:44px;font-weight:900;color:rgba(255,92,71,0.3);line-height:1;letter-spacing:-.03em">'+lScore+'</div>';
+    const lFld=w==='A'?'t2':'t1';
+    const lScClk=adminMode?' onclick="event.stopPropagation();openNumpad('+vr+','+ci+',\''+lFld+'\')" style="cursor:pointer;font-size:44px;font-weight:900;color:rgba(255,92,71,0.3);line-height:1;letter-spacing:-.03em"':' style="font-size:44px;font-weight:900;color:rgba(255,92,71,0.3);line-height:1;letter-spacing:-.03em"';
+    h+='<div'+lScClk+'>'+lScore+'</div>';
     h+='<div style="display:inline-flex;align-items:center;gap:3px;margin-top:6px;font-size:8px;font-weight:900;background:rgba(255,92,71,0.15);color:rgba(255,92,71,0.7);border:1px solid rgba(255,92,71,0.25);padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.06em">'+lMove+'</div>';
     h+='</div></div>';
     // Footer
@@ -850,9 +995,12 @@ function rStats(stats,season,l,ss){
     return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
 
   // ── inner tab bar ──
+  // Search inner tab dropped — public lookups go via the row-tap profile popup.
+  // If the user had statsInnerTab='search' from old state, fall back to standings.
+  if(statsInnerTab==='search')statsInnerTab='standings';
   h+='<div style="display:flex;background:#111;border-radius:6px;overflow:hidden;padding:2px;gap:2px;margin-bottom:10px">';
-  ['standings','fullstats','search'].forEach(t=>{
-    const labels={standings:'Standings',fullstats:'Full Stats',search:'Search'};
+  ['standings','fullstats'].forEach(t=>{
+    const labels={standings:'Standings',fullstats:'Full Stats'};
     const on=statsInnerTab===t;
     h+='<button style="flex:1;padding:7px 6px;font-size:9px;font-weight:800;color:'+(on?'#000':'rgba(255,255,255,0.3)')+';text-align:center;text-transform:uppercase;letter-spacing:.07em;border-radius:4px;border:none;cursor:pointer;background:'+(on?'#c8ff00':'transparent')+"\" onclick=\"setStatsInnerTab('"+t+"')\">"+labels[t]+'</button>';});
   h+='</div>';
@@ -934,17 +1082,7 @@ function rStats(stats,season,l,ss){
       h+='<td style="text-align:right;color:'+(sk>0?'var(--lime)':sk<0?'var(--loss)':'var(--muted)')+';font-weight:600">'+skStr+'</td></tr>'});
     h+='</tbody></table></div>';}
 
-  // ══ SEARCH ══
-  // Results live inside #searchResults so updateSearch() can patch ONLY that
-  // div on every keystroke without rebuilding the input element (which would
-  // kill focus and cause the per-character flicker the staff hit during play).
-  if(statsInnerTab==='search'){
-    h+='<div style="display:flex;align-items:center;gap:8px;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:10px 12px;margin-bottom:10px">';
-    h+='<span style="font-size:14px;color:rgba(255,255,255,0.3)">&#128269;</span>';
-    h+='<input id="statsSearchInput" class="inp" style="background:transparent;border:none;padding:0;font-size:14px" placeholder="Search player name..." value="'+statsSearchQ+'" oninput="updateSearch(this.value)"></div>';
-    const sortedActive=sorted.filter(x=>x.w+x.l+x.t>0);
-    h+='<div id="searchResults">'+_buildSearchCardsHTML(statsSearchQ.toLowerCase().trim(),sortedActive,bonusData,topCtName)+'</div>';
-  }
+  // (Search inner tab removed — players now look up stats by tapping a row.)
   return h}
 
 
@@ -1082,9 +1220,32 @@ function rSessionRoster(l,ss){let h='';const parts=ss.participants||[];const act
         h+='<div style="flex:1"><div style="font-size:15px;font-weight:700;color:var(--danger)">'+p.name+'</div><div style="font-size:.7rem;color:var(--danger)">Subbed out</div></div>';
         h+='<button class="bp" style="font-size:.82rem;padding:8px 16px" onclick="subInPlayer(\''+p.id+'\')"  >Sub back in</button>';
         h+='</div>'});}
-    h+='<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px"><div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:8px">Add a new sub</div>';
-    h+='<div style="display:grid;grid-template-columns:1fr 76px;gap:10px;margin-bottom:8px"><input id="fSubName" class="inp" placeholder="Sub player name"><select id="fSubGender" class="inp"><option value="M">M</option><option value="F">F</option></select></div>';
-    h+='<button class="bp full" onclick="addSubPlayer()">Add &amp; sub in</button></div></div>'}
+    // ─── Bench: existing league players not in this ladder (other 2 of 18) ───
+    const partIdSet=new Set(ss.participants||[]);
+    const benchPlayers=l.players.filter(p=>p&&p.active!==false&&!p.subbedOut&&!p.temp&&!partIdSet.has(p.id));
+    if(benchPlayers.length){
+      h+='<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px"><div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:4px">Pull from bench</div>';
+      h+='<div style="font-size:.7rem;color:var(--muted);margin-bottom:8px">League players not in this ladder. They\u2019ll be added as a participant and auto-placed in any open court slot.</div>';
+      benchPlayers.forEach(p=>{
+        h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf2);border-radius:var(--rx);margin-bottom:6px;border:1px solid var(--border)">';
+        h+='<div style="flex:1;font-size:14px;font-weight:600;color:var(--text)">'+p.name+'</div>';
+        h+='<span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span>';
+        h+='<button class="bp" style="font-size:.78rem;padding:6px 12px" onclick="pullFromBench(\''+p.id+'\')">Pull in</button>';
+        h+='</div>';
+      });
+      h+='</div>';
+    }
+    // ─── Add new permanent sub (full stats) ───
+    h+='<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px"><div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:4px">Add new permanent sub</div>';
+    h+='<div style="font-size:.7rem;color:var(--muted);margin-bottom:8px">Adds to league roster. Stats roll up to the season leaderboard.</div>';
+    h+='<div style="display:grid;grid-template-columns:1fr 76px;gap:10px;margin-bottom:8px"><input id="fSubName" class="inp" placeholder="New player name"><select id="fSubGender" class="inp"><option value="M">M</option><option value="F">F</option></select></div>';
+    h+='<button class="bp full" onclick="addSubPlayer()">Add &amp; sub in</button></div>';
+    // ─── Add one-round / random temp sub (no leaderboard) ───
+    h+='<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px"><div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:4px">Add one-round sub</div>';
+    h+='<div style="font-size:.7rem;color:var(--muted);margin-bottom:8px">For a one-night fill-in. Counts in this ladder\u2019s stats so the round is correct, but does NOT appear on the season leaderboard.</div>';
+    h+='<div style="display:grid;grid-template-columns:1fr 76px;gap:10px;margin-bottom:8px"><input id="fTempSubName" class="inp" placeholder="Sub name (e.g. \u201cSub\u201d or actual name)"><select id="fTempSubGender" class="inp"><option value="M">M</option><option value="F">F</option></select></div>';
+    h+='<button class="bg-btn full" onclick="addTempSubPlayer()">Add as temp sub</button></div>';
+    h+='</div>'}
   return h}
 
 function rAdmin(l,s){let h='';
@@ -1401,9 +1562,32 @@ function rSessionRoster(l,ss){let h='';const parts=ss.participants||[];const act
         h+='<div style="flex:1"><div style="font-size:15px;font-weight:700;color:var(--danger)">'+p.name+'</div><div style="font-size:.7rem;color:var(--danger)">Subbed out</div></div>';
         h+='<button class="bp" style="font-size:.82rem;padding:8px 16px" onclick="subInPlayer(\''+p.id+'\')"  >Sub back in</button>';
         h+='</div>'});}
-    h+='<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px"><div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:8px">Add a new sub</div>';
-    h+='<div style="display:grid;grid-template-columns:1fr 76px;gap:10px;margin-bottom:8px"><input id="fSubName" class="inp" placeholder="Sub player name"><select id="fSubGender" class="inp"><option value="M">M</option><option value="F">F</option></select></div>';
-    h+='<button class="bp full" onclick="addSubPlayer()">Add &amp; sub in</button></div></div>'}
+    // ─── Bench: existing league players not in this ladder (other 2 of 18) ───
+    const partIdSet=new Set(ss.participants||[]);
+    const benchPlayers=l.players.filter(p=>p&&p.active!==false&&!p.subbedOut&&!p.temp&&!partIdSet.has(p.id));
+    if(benchPlayers.length){
+      h+='<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px"><div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:4px">Pull from bench</div>';
+      h+='<div style="font-size:.7rem;color:var(--muted);margin-bottom:8px">League players not in this ladder. They\u2019ll be added as a participant and auto-placed in any open court slot.</div>';
+      benchPlayers.forEach(p=>{
+        h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf2);border-radius:var(--rx);margin-bottom:6px;border:1px solid var(--border)">';
+        h+='<div style="flex:1;font-size:14px;font-weight:600;color:var(--text)">'+p.name+'</div>';
+        h+='<span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span>';
+        h+='<button class="bp" style="font-size:.78rem;padding:6px 12px" onclick="pullFromBench(\''+p.id+'\')">Pull in</button>';
+        h+='</div>';
+      });
+      h+='</div>';
+    }
+    // ─── Add new permanent sub (full stats) ───
+    h+='<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px"><div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:4px">Add new permanent sub</div>';
+    h+='<div style="font-size:.7rem;color:var(--muted);margin-bottom:8px">Adds to league roster. Stats roll up to the season leaderboard.</div>';
+    h+='<div style="display:grid;grid-template-columns:1fr 76px;gap:10px;margin-bottom:8px"><input id="fSubName" class="inp" placeholder="New player name"><select id="fSubGender" class="inp"><option value="M">M</option><option value="F">F</option></select></div>';
+    h+='<button class="bp full" onclick="addSubPlayer()">Add &amp; sub in</button></div>';
+    // ─── Add one-round / random temp sub (no leaderboard) ───
+    h+='<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px"><div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:4px">Add one-round sub</div>';
+    h+='<div style="font-size:.7rem;color:var(--muted);margin-bottom:8px">For a one-night fill-in. Counts in this ladder\u2019s stats so the round is correct, but does NOT appear on the season leaderboard.</div>';
+    h+='<div style="display:grid;grid-template-columns:1fr 76px;gap:10px;margin-bottom:8px"><input id="fTempSubName" class="inp" placeholder="Sub name (e.g. \u201cSub\u201d or actual name)"><select id="fTempSubGender" class="inp"><option value="M">M</option><option value="F">F</option></select></div>';
+    h+='<button class="bg-btn full" onclick="addTempSubPlayer()">Add as temp sub</button></div>';
+    h+='</div>'}
   return h}
 
 function rAdmin(l,s){let h='';
@@ -1595,7 +1779,11 @@ function rFullStats(stats,season,l){
   if(!season)return'';
   const bonusData=calcBonusPts(season.sessions,l.players);
   const totalPts=(s)=>s.pf+(bonusData[s.id]?.bonus||0);
-  const sorted=[...stats].filter(s=>s.w+s.l+s.t>0).sort((a,b)=>totalPts(b)-totalPts(a)||(b.pf-b.pa)-(a.pf-a.pa));
+  // Skip temp/one-round subs on the season leaderboard. Their per-ladder
+  // stats still display in the session view, but they don\u2019t pollute
+  // season standings.
+  const isTemp=(id)=>!!l.players.find(p=>p.id===id&&p.temp);
+  const sorted=[...stats].filter(s=>s.w+s.l+s.t>0&&!isTemp(s.id)).sort((a,b)=>totalPts(b)-totalPts(a)||(b.pf-b.pa)-(a.pf-a.pa));
   if(!sorted.length)return'<p class="subtext" style="text-align:center;padding:20px">No scored games yet.</p>';
 
   const prevRankMap={};
@@ -1604,7 +1792,7 @@ function rFullStats(stats,season,l){
     const prev=season.sessions.filter(x=>x.started).slice(0,-1);
     const ps=calcStats(prev,l.players);
     const pb=calcBonusPts(prev,l.players);
-    [...ps].filter(s=>s.w+s.l+s.t>0).sort((a,b)=>(b.pf+(pb[b.id]?.bonus||0))-(a.pf+(pb[a.id]?.bonus||0))||(b.pf-b.pa)-(a.pf-a.pa)).forEach((s,i)=>prevRankMap[s.id]=i+1);
+    [...ps].filter(s=>s.w+s.l+s.t>0&&!isTemp(s.id)).sort((a,b)=>(b.pf+(pb[b.id]?.bonus||0))-(a.pf+(pb[a.id]?.bonus||0))||(b.pf-b.pa)-(a.pf-a.pa)).forEach((s,i)=>prevRankMap[s.id]=i+1);
   }
 
   let h='';
@@ -1849,7 +2037,7 @@ function render(){
       const srcT=swapMode.ti===0?srcCt?.team1:srcCt?.team2;const srcP=srcT?.[swapMode.pi];
       h+='<div style="position:fixed;top:0;left:0;right:0;z-index:400;background:rgba(255,204,0,0.15);border-bottom:2px solid rgba(255,204,0,0.4);padding:8px 16px;display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(8px)">';
       h+='<div><div style="font-size:8px;font-weight:900;color:#ffcc00;text-transform:uppercase;letter-spacing:.08em">Swapping player</div>';
-      h+='<div style="font-size:14px;font-weight:700;color:#f4f4f0;margin-top:1px">'+(srcP?.name||'?')+' → tap any player to swap</div></div>';
+      h+='<div style="font-size:14px;font-weight:700;color:#f4f4f0;margin-top:1px">'+(srcP?.name||'?')+' \u2192 tap any player to swap</div></div>';
       h+='<button onclick="cancelSwap()" style="background:rgba(255,92,71,0.15);border:1px solid rgba(255,92,71,0.3);color:#ff5c47;font-size:9px;font-weight:700;padding:6px 12px;border-radius:6px;cursor:pointer">Cancel</button>';
       h+='</div>';}}
 
@@ -1866,11 +2054,6 @@ function render(){
 
 async function init(){
   applyTextSize();
-  // Restore admin session if a verified PIN is in localStorage.
-  const savedPin=_loadPin();
-  if(savedPin){
-    try{const ok=await apiVerifyPin(savedPin);if(ok){adminPin=savedPin;isAdmin=true;}else{_clearPin();}}catch{}
-  }
   // Show loading with status so we can diagnose
   document.getElementById('app').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0a0f;gap:16px;padding:24px"><div style="font-family:Inter,sans-serif;font-size:1.1rem;font-weight:700;color:#c8ff00" id="initStatus">Connecting...</div><div style="font-size:.75rem;color:#7a7a8a;text-align:center;max-width:280px" id="initDetail">Reaching the server</div></div>';
   const setStatus=(msg,detail)=>{const s=document.getElementById('initStatus');const d=document.getElementById('initDetail');if(s)s.textContent=msg;if(d)d.textContent=detail||''};
@@ -1888,6 +2071,6 @@ async function init(){
     render();
   }catch(e){
     console.error('Init failed:',e);
-    document.getElementById('app').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0a0f;gap:16px;padding:24px"><div style="font-size:2rem">⚠️</div><div style="font-family:Inter,sans-serif;font-size:1rem;font-weight:700;color:#ff5c47;text-align:center">Could not connect</div><div style="font-size:.8rem;color:#7a7a8a;text-align:center;max-width:300px;line-height:1.6">'+e.message+'</div><button onclick="init()" style="margin-top:8px;padding:10px 24px;background:#c8ff00;color:#0a0a0f;border:none;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer">Retry</button></div>';
+    document.getElementById('app').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0a0f;gap:16px;padding:24px"><div style="font-size:2rem">\u26a0\ufe0f</div><div style="font-family:Inter,sans-serif;font-size:1rem;font-weight:700;color:#ff5c47;text-align:center">Could not connect</div><div style="font-size:.8rem;color:#7a7a8a;text-align:center;max-width:300px;line-height:1.6">'+e.message+'</div><button onclick="init()" style="margin-top:8px;padding:10px 24px;background:#c8ff00;color:#0a0a0f;border:none;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer">Retry</button></div>';
   }}
 document.addEventListener('DOMContentLoaded',init);
