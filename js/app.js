@@ -320,7 +320,7 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
     if(hb&&isWinner)cls+=' '+winSide;
     if(hb&&!isWinner)cls+=' lost-side';
     if(adminMode&&!hb)cls+=' admin-score';
-    const onclk=(adminMode&&!hb)?` onclick="openNumpad(${vr},${ci},'${side==='A'?'t1':'t2}')" style="cursor:pointer"`:'';
+    const _field=side==='A'?'t1':'t2';const onclk=(adminMode&&!hb)?` onclick="openNumpad(${vr},${ci},'${_field}')" style="cursor:pointer"`:'';
     let s='<div class="'+cls+'"'+onclk+'>';
     s+='<div class="cc-team-tag">Team '+side+'</div>';
     team.filter(Boolean).forEach(p=>{
