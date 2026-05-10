@@ -88,15 +88,19 @@ function openSubModal(ri,ci,ti,pi){
   if(!isAdmin)return;
   const ss=gSS();const round=ss?.rounds?.[ri];if(!round)return;
   const team=ti===0?round.courts[ci].team1:round.courts[ci].team2;
-  const p=team&&team[pi];if(!p)return;
-  subModalState={ri,ci,ti,pi,pid:p.id,name:p.name};
+  const p=team&&team[pi];
+  // Allow opening for an empty slot too — modal becomes "Fill slot" instead
+  // of "Sub out". Lets admins fill back in after a "Just sub out" earlier.
+  subModalState={ri,ci,ti,pi,pid:p?p.id:null,name:p?p.name:''};
   render();
 }
 function closeSubModal(){subModalState=null;render();}
 async function _subAt(replacement){
   const s=subModalState;if(!s)return;
   const l=gL();const ss=gSS();if(!l||!ss)return;
-  const target=l.players.find(x=>x.id===s.pid);if(target)target.subbedOut=true;
+  // Only mark subbedOut if there was actually a player in this slot. Empty
+  // slots being filled don't sub anyone out.
+  if(s.pid){const target=l.players.find(x=>x.id===s.pid);if(target)target.subbedOut=true;}
   let newP=null;
   if(replacement.kind==='bench'){
     newP=l.players.find(x=>x.id===replacement.pid);
@@ -787,9 +791,20 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
       const borderL=isRight?';border-left:1px solid rgba(255,92,71,0.08)':'';
       let p='<div style="background:'+panelBg+';padding:10px 12px;text-align:center'+borderL+'">';
       p+='<div style="font-size:7px;font-weight:900;color:'+labelCol+';text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">'+labelText+'</div>';
-      const nameStr=team.filter(Boolean).map(pl=>pl.name).join(' + ');
+      // Show "—" for empty slots in the public name string so the position
+      // is visible (e.g. "Rich + —"). Avoids losing the slot count.
+      const nameStr=team.map(pl=>pl?pl.name:'—').join(' + ');
       if(adminMode){
-        team.filter(Boolean).forEach((pl,pi)=>{
+        team.forEach((pl,pi)=>{
+          // Empty slot — render a dashed "Fill slot" placeholder chip so the
+          // admin can put someone in later via the same Sub modal.
+          if(!pl){
+            p+='<div style="background:rgba(255,204,0,0.04);border:1.5px dashed rgba(255,204,0,0.35);border-radius:10px;padding:8px 10px;margin-bottom:6px">';
+            p+='<div style="font-size:11px;font-weight:600;color:rgba(255,204,0,0.7);text-align:center;margin-bottom:6px;letter-spacing:.04em">Empty slot</div>';
+            p+='<button onclick="event.stopPropagation();openSubModal('+vr+','+ci+','+ti+','+pi+')" style="width:100%;background:rgba(255,204,0,0.12);border:1px solid rgba(255,204,0,0.35);color:#ffcc00;font-size:10px;font-weight:700;padding:5px 0;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">Choose Player</button>';
+            p+='</div>';
+            return;
+          }
           const isSrc=swapMode&&swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===ti&&swapMode.pi===pi;
           const isTarget=swapMode&&!(swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===ti&&swapMode.pi===pi);
           const bg=isSrc?'rgba(255,204,0,0.08)':isTarget?'rgba(0,229,255,0.08)':(isWinner?'rgba(255,255,255,0.05)':'rgba(255,255,255,0.04)');
@@ -833,7 +848,15 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
       const onclk=adminMode?` onclick="openNumpad(${vr},${ci},'${fld}')" style="cursor:pointer;text-align:center;background:${acc.bg};padding:10px 12px${isRight?';border-left:1px solid rgba(255,255,255,0.04)':''}"`:`style="text-align:center;background:${acc.bg};padding:10px 12px${isRight?';border-left:1px solid rgba(255,255,255,0.04)':''}"`;
       let p='<div '+onclk+'>';
       p+='<div style="font-size:7px;font-weight:900;color:'+acc.col+';opacity:.65;text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">Team '+side+'</div>';
-      if(adminMode){team.filter(Boolean).forEach((pl,pi)=>{
+      if(adminMode){team.forEach((pl,pi)=>{
+          // Empty slot — Choose Player placeholder
+          if(!pl){
+            p+='<div style="background:rgba(255,204,0,0.04);border:1.5px dashed rgba(255,204,0,0.35);border-radius:10px;padding:8px 10px;margin-bottom:6px">';
+            p+='<div style="font-size:11px;font-weight:600;color:rgba(255,204,0,0.7);text-align:center;margin-bottom:6px;letter-spacing:.04em">Empty slot</div>';
+            p+='<button onclick="event.stopPropagation();openSubModal('+vr+','+ci+','+ti+','+pi+')" style="width:100%;background:rgba(255,204,0,0.12);border:1px solid rgba(255,204,0,0.35);color:#ffcc00;font-size:10px;font-weight:700;padding:5px 0;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">Choose Player</button>';
+            p+='</div>';
+            return;
+          }
           const isSrc=swapMode&&swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===ti&&swapMode.pi===pi;
           const isTarget=swapMode&&!(swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===ti&&swapMode.pi===pi);
           const bg2=isSrc?'rgba(255,204,0,0.08)':isTarget?'rgba(0,229,255,0.08)':'rgba(255,255,255,0.04)';
@@ -852,7 +875,7 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
             p+='</div>';
           }
           p+='</div>'})}
-      else{const nameStr=team.filter(Boolean).map(pl=>pl.name).join(' + ')||'TBD';p+='<div style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.6);margin-bottom:6px;line-height:1.35">'+nameStr+'</div>';}
+      else{const nameStr=team.map(pl=>pl?pl.name:'—').join(' + ')||'TBD';p+='<div style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.6);margin-bottom:6px;line-height:1.35">'+nameStr+'</div>';}
       p+='<div style="font-size:40px;font-weight:900;line-height:1;color:'+acc.col+';opacity:.1;letter-spacing:-.03em">--</div>';
       if(adminMode)p+='<div style="font-size:7px;color:rgba(255,255,255,0.18);margin-top:6px">Tap to score</div>';
       p+='</div>';return p};
@@ -2214,12 +2237,22 @@ function render(){
   if(subModalState&&isAdmin){
     const lp=gL();const ssp=gSS();
     if(lp&&ssp){
-      const partIdSet=new Set(ssp.participants||[]);
-      const benchPlayers=lp.players.filter(p=>p&&p.active!==false&&!p.subbedOut&&!p.temp&&p.id!==subModalState.pid&&!partIdSet.has(p.id));
+      // Bench = every active league player who isn't currently on a court
+      // in this round. Includes prior subbedOut players (they're eligible
+      // to come back) and league members not in this ladder's participants
+      // (the user's "2 of 18 not playing" case). Excludes temp one-round
+      // subs and the player being subbed out.
+      const onCourt=new Set();
+      const round=ssp.rounds&&ssp.rounds[ssp.currentRound];
+      if(round){round.courts.forEach(c=>{[...(c.team1||[]),...(c.team2||[])].forEach(x=>{if(x)onCourt.add(x.id);});});}
+      const benchPlayers=lp.players.filter(p=>p&&p.active!==false&&!p.temp&&p.id!==subModalState.pid&&!onCourt.has(p.id));
       let sm='<div style="position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:500;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:16px;backdrop-filter:blur(6px);overflow-y:auto" onclick="closeSubModal()">';
       sm+='<div style="background:#111118;border-radius:18px;width:100%;max-width:380px;border:1px solid rgba(255,255,255,0.1);overflow:hidden" onclick="event.stopPropagation()">';
       sm+='<div style="background:#0e0e1a;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center">';
-      sm+='<div><div style="font-size:9px;font-weight:900;color:#ff5c47;letter-spacing:.1em">SUB OUT</div><div style="font-size:14px;font-weight:700;color:#f4f4f0;margin-top:2px">'+subModalState.name+'</div></div>';
+      const _modeLabel=subModalState.pid?'SUB OUT':'CHOOSE PLAYER';
+      const _modeName=subModalState.pid?subModalState.name:'For empty slot';
+      const _modeColor=subModalState.pid?'#ff5c47':'#ffcc00';
+      sm+='<div><div style="font-size:9px;font-weight:900;color:'+_modeColor+';letter-spacing:.1em">'+_modeLabel+'</div><div style="font-size:14px;font-weight:700;color:#f4f4f0;margin-top:2px">'+_modeName+'</div></div>';
       sm+='<button onclick="closeSubModal()" style="background:rgba(255,255,255,0.07);border:none;color:#7a7a8a;font-size:16px;width:30px;height:30px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center">\u2715</button>';
       sm+='</div>';
       if(benchPlayers.length){
