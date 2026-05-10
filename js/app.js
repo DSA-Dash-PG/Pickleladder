@@ -280,12 +280,17 @@ function calcBonusPts(sessions,players){
     // missing (Clement +5 for 3rd, etc.). The empty-rounds case is harmless:
     // the inner court loop produces no points, so no one gets bonus anyway.
     if(!sess||!Array.isArray(sess.rounds)||!sess.rounds.length)return;
-    const pts={};players.forEach(p=>{pts[p.id]=0});
+    // Track BOTH points scored and points against per player so we can break
+    // intra-ladder ties on diff (matches the leaderboard sort: pts then PS-PA).
+    // Without this, two players tied on intra-ladder pts get bonus assigned
+    // by Object.entries iteration order — the Clement-vs-Rich case where
+    // Rich got the +5 even though Clement had +31 diff vs Rich's +8.
+    const pts={},pa={};players.forEach(p=>{pts[p.id]=0;pa[p.id]=0;});
     sess.rounds.forEach(round=>{round.courts.forEach(c=>{
       if(!c.score||c.score.t1===null||c.score.t2===null||!c.score.winner)return;
       const{t1,t2}=c.score;
-      [[c.team1,t1],[c.team2,t2]].forEach(([team,sc])=>{team.filter(Boolean).forEach(p=>{if(pts[p.id]!==undefined)pts[p.id]+=sc})})})});
-    const ranked=Object.entries(pts).filter(([id,p])=>p>0).sort((a,b)=>b[1]-a[1]);
+      [[c.team1,t1,t2],[c.team2,t2,t1]].forEach(([team,sc,al])=>{team.filter(Boolean).forEach(p=>{if(pts[p.id]!==undefined){pts[p.id]+=sc;pa[p.id]+=al;}})})})});
+    const ranked=Object.entries(pts).filter(([id,p])=>p>0).sort((a,b)=>b[1]-a[1]||((b[1]-pa[b[0]])-(a[1]-pa[a[0]])));
     if(!ranked.length)return; // no scored games in this session — nothing to award
     const bonusMap={0:15,1:10,2:5};
     ranked.forEach(([id],i)=>{
@@ -817,12 +822,17 @@ function rStats(stats,season,l,ss){
   const sorted=isSeasonView?[...stats].sort((a,b)=>totalPts(b)-totalPts(a)||((b.pf-b.pa)-(a.pf-a.pa))):stats;
 
   // prev week ranking delta
+  // NOTE: filter prevStats to only players who actually played a game in
+  // those prev sessions. Without the filter, every player in l.players gets
+  // a row in calcStats output (with all-zero stats), they all tie at total=0
+  // and get assigned arbitrary ranks like 14/15/16. Then a first-ladder
+  // attendee (like Clement, LP=1) shows ▼3 instead of "new".
   const prevRankMap={};
   if(isSeasonView&&season.sessions.filter(x=>x.started).length>=2){
     const prevSessions=season.sessions.filter(x=>x.started).slice(0,-1);
     const prevStats=calcStats(prevSessions,l.players);
     const prevBonus=calcBonusPts(prevSessions,l.players);
-    const prevSorted=[...prevStats].sort((a,b)=>(b.pf+(prevBonus[b.id]?.bonus||0))-(a.pf+(prevBonus[a.id]?.bonus||0)));
+    const prevSorted=[...prevStats].filter(s=>s.w+s.l+s.t>0).sort((a,b)=>(b.pf+(prevBonus[b.id]?.bonus||0))-(a.pf+(prevBonus[a.id]?.bonus||0))||(b.pf-b.pa)-(a.pf-a.pa));
     prevSorted.forEach((s,i)=>prevRankMap[s.id]=i+1);}
 
   const topCtName=(s)=>{
@@ -877,7 +887,7 @@ function rStats(stats,season,l,ss){
       sorted.slice(1,5).forEach((s,i)=>{
         const rank=i+2;const wins=bonusData[s.id]?.wins||0;const total=totalPts(s);
         const barW=Math.round(total/topTotal*100);
-        const prevRank=prevRankMap[s.id];const delta=prevRank&&prevRank!==rank?(prevRank>rank?'<span style="color:#4ade80;font-size:9px;font-weight:800">\u25b2'+(prevRank-rank)+'</span>':'<span style="color:#ff5c47;font-size:9px;font-weight:800">\u25bc'+(rank-prevRank)+'</span>'):(prevRank?'<span style="color:rgba(255,255,255,0.2);font-size:9px">\u2014</span>':'');
+        const prevRank=prevRankMap[s.id];const hasPrevSeen=Object.keys(prevRankMap).length>0;const delta=prevRank&&prevRank!==rank?(prevRank>rank?'<span style="color:#4ade80;font-size:9px;font-weight:800">\u25b2'+(prevRank-rank)+'</span>':'<span style="color:#ff5c47;font-size:9px;font-weight:800">\u25bc'+(rank-prevRank)+'</span>'):(prevRank?'<span style="color:rgba(255,255,255,0.2);font-size:9px">\u2014</span>':(hasPrevSeen?'<span style="color:#4ade80;font-size:9px;font-weight:700">new</span>':''));
         h+='<div'+pClick(s.id)+' style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:0.5px solid #111'+(i%2===1?';background:#0a0a0a':'')+pCur()+'">';
         h+='<div style="font-size:11px;color:rgba(255,255,255,0.2);width:14px;text-align:center;flex-shrink:0">'+rank+'</div>';
         h+='<div style="flex:1"><div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.8)">'+s.name+(wins>0?' '+crownStr(wins):'')+'</div>';
@@ -1121,7 +1131,7 @@ function rStandings(stats,season,l){
     const prev=season.sessions.filter(x=>x.started).slice(0,-1);
     const ps=calcStats(prev,l.players);
     const pb=calcBonusPts(prev,l.players);
-    [...ps].sort((a,b)=>(b.pf+(pb[b.id]?.bonus||0))-(a.pf+(pb[a.id]?.bonus||0))).forEach((s,i)=>prevRankMap[s.id]=i+1);}
+    [...ps].filter(s=>s.w+s.l+s.t>0).sort((a,b)=>(b.pf+(pb[b.id]?.bonus||0))-(a.pf+(pb[a.id]?.bonus||0))||(b.pf-b.pa)-(a.pf-a.pa)).forEach((s,i)=>prevRankMap[s.id]=i+1);}
 
   const topCtName=(s)=>{const wonCs=(s.roundRes||[]).filter(r=>r.won).map(r=>r.court);if(!wonCs.length)return'--';const best=Math.max(...wonCs);const refSS=season?.sessions?.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
 
@@ -1440,7 +1450,7 @@ function rStandings(stats,season,l){
     const prev=season.sessions.filter(x=>x.started).slice(0,-1);
     const ps=calcStats(prev,l.players);
     const pb=calcBonusPts(prev,l.players);
-    [...ps].sort((a,b)=>(b.pf+(pb[b.id]?.bonus||0))-(a.pf+(pb[a.id]?.bonus||0))).forEach((s,i)=>prevRankMap[s.id]=i+1);}
+    [...ps].filter(s=>s.w+s.l+s.t>0).sort((a,b)=>(b.pf+(pb[b.id]?.bonus||0))-(a.pf+(pb[a.id]?.bonus||0))||(b.pf-b.pa)-(a.pf-a.pa)).forEach((s,i)=>prevRankMap[s.id]=i+1);}
 
   const topCtName=(s)=>{const wonCs=(s.roundRes||[]).filter(r=>r.won).map(r=>r.court);if(!wonCs.length)return'--';const best=Math.max(...wonCs);const refSS=season?.sessions?.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
 
