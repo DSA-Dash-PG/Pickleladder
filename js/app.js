@@ -817,9 +817,14 @@ function rStats(stats,season,l,ss){
   // Without this, every runner-up in session view shows "no wins yet" because
   // bonusData was an empty object — the user's exact complaint.
   const parentSeason=season||(ss&&l?l.seasons?.find(s=>s.sessions?.some(x=>x.id===ss.id))||null:null);
+  // bonusData (season-wide) drives crown counts. bonusDataLocal scopes the
+  // Total / Bonus columns to JUST this ladder when we're in session view —
+  // so Rich's +25 from previous ladders doesn't inflate his "Total" inside
+  // a single-ladder view. In season view the two are the same.
   const bonusData=parentSeason?calcBonusPts(parentSeason.sessions,l.players):{};
-  const totalPts=(s)=>s.pf+(bonusData[s.id]?.bonus||0);
-  const sorted=isSeasonView?[...stats].sort((a,b)=>totalPts(b)-totalPts(a)||((b.pf-b.pa)-(a.pf-a.pa))):stats;
+  const bonusDataLocal=ss?calcBonusPts([ss],l.players):bonusData;
+  const totalPts=(s)=>s.pf+(bonusDataLocal[s.id]?.bonus||0);
+  const sorted=isSeasonView?[...stats].sort((a,b)=>totalPts(b)-totalPts(a)||((b.pf-b.pa)-(a.pf-a.pa))):[...stats].sort((a,b)=>totalPts(b)-totalPts(a)||((b.pf-b.pa)-(a.pf-a.pa)));
 
   // prev week ranking delta
   // NOTE: filter prevStats to only players who actually played a game in
@@ -883,7 +888,7 @@ function rStats(stats,season,l,ss){
     sortedActive.forEach((s,i)=>{
       const rank=i+1;
       const wins=bonusData[s.id]?.wins||0;
-      const bonus=bonusData[s.id]?.bonus||0;
+      const bonus=bonusDataLocal[s.id]?.bonus||0;
       const total=totalPts(s);
       const d=s.pf-s.pa;
       const isPod=rank<=3;
@@ -911,7 +916,7 @@ function rStats(stats,season,l,ss){
     sorted.filter(s=>s.w+s.l+s.t>0).forEach((s,i)=>{
       const d=s.pf-s.pa;const sk=s.streak;const skStr=sk>0?'W'+sk:sk<0?'L'+Math.abs(sk):'--';
       const avg=s.roundPts.length?(Math.round(s.pf/s.roundPts.length*10)/10).toFixed(1):0;
-      const tc=topCtName(s);const wins=bonusData[s.id]?.wins||0;const bonus=bonusData[s.id]?.bonus||0;const total=s.pf+bonus;
+      const tc=topCtName(s);const wins=bonusData[s.id]?.wins||0;const bonus=bonusDataLocal[s.id]?.bonus||0;const total=s.pf+bonus;
       h+='<tr style="'+(i===0?'background:#0d1400;':i%2===1?'background:#0a0a0a;':'')+'">';
       h+='<td class="'+(i<3?'rt':'')+'" style="text-align:right">'+(["1st","2nd","3rd"][i]||(i+1))+'</td>';
       h+='<td style="font-weight:600;white-space:nowrap;text-align:left">'+s.name+(wins>0?' '+crownStr(wins):'')+'</td>';
