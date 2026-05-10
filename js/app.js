@@ -1264,7 +1264,7 @@ function rStats(stats,season,l,ss){
       h+='<div style="flex:1;text-align:center;padding:8px 4px"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">Scope</div><div style="font-size:10px;font-weight:900;color:#c8ff00;line-height:1.3">All<br>ladders</div></div></div>';
     }
     // Hint about row-tap profile popup
-    h+='<div style="font-size:10px;color:rgba(255,255,255,0.45);text-align:center;line-height:1.5;padding:0 4px 8px">Tap a row for player profile <span style="color:rgba(255,255,255,0.3)">\u00b7</span> W <span style="color:rgba(255,255,255,0.3)">\u00b7</span> L <span style="color:rgba(255,255,255,0.3)">\u00b7</span> Avg <span style="color:rgba(255,255,255,0.3)">\u00b7</span> Win % <span style="color:rgba(255,255,255,0.3)">\u00b7</span> PS <span style="color:rgba(255,255,255,0.3)">\u00b7</span> PA <span style="color:rgba(255,255,255,0.3)">\u00b7</span> Diff <span style="color:rgba(255,255,255,0.3)">\u00b7</span> Streak</div>';
+    h+='<div style="font-size:10px;color:rgba(255,255,255,0.45);text-align:center;line-height:1.5;padding:0 4px 8px">Tap a row for expanded Player Profile Stats.</div>';
 
     // Uniform table. Bonus column appears ONLY once the ladder is finished —
     // user requested: bonus stays hidden mid-ladder so admins/players don't
@@ -1773,18 +1773,22 @@ function rFullStats(stats,season,l){
   h+='<div style="flex:1;text-align:center;padding:8px 4px"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">Scope</div><div style="font-size:10px;font-weight:900;color:#c8ff00;line-height:1.3">All<br>ladders</div></div></div>';
 
   // Hint about the row-tap profile popup so users know what they get
-  h+='<div style="font-size:10px;color:rgba(255,255,255,0.45);text-align:center;line-height:1.5;padding:0 4px 8px">Tap a row for player profile <span style="color:rgba(255,255,255,0.3)">\u00b7</span> W <span style="color:rgba(255,255,255,0.3)">\u00b7</span> L <span style="color:rgba(255,255,255,0.3)">\u00b7</span> Avg <span style="color:rgba(255,255,255,0.3)">\u00b7</span> Win % <span style="color:rgba(255,255,255,0.3)">\u00b7</span> PS <span style="color:rgba(255,255,255,0.3)">\u00b7</span> PA <span style="color:rgba(255,255,255,0.3)">\u00b7</span> Diff <span style="color:rgba(255,255,255,0.3)">\u00b7</span> Streak</div>';
+  h+='<div style="font-size:10px;color:rgba(255,255,255,0.45);text-align:center;line-height:1.5;padding:0 4px 8px">Tap a row for expanded Player Profile Stats.</div>';
 
   // Uniform table — top 3 differ only by rank label color, total color, and row tint
   const podLabel=['1st','2nd','3rd'];
   const podCol=['#ffcc00','#c0c0c0','#cd7f32'];
   const podBg=['#1a1200','#111','#12100a'];
-  const cols='30px 26px 1fr 26px 26px 38px 40px 44px';
+  // Add a Dink Rating column on the right. New grid: rank, delta, player, W, L, Diff, Bonus, Total, DR
+  const cols='28px 24px 1fr 24px 24px 36px 38px 42px 38px';
+  // Composite skill rating per player — same calc used in the Full Stats table.
+  const drRatings=calcDinkRating(stats,season.sessions,l.players);
   h+='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:10px;overflow:hidden">';
   h+='<div style="display:grid;grid-template-columns:'+cols+';gap:5px;padding:7px 12px;background:#0a0a0a;border-bottom:1px solid #1a1a1a;font-size:8px;font-weight:700;color:rgba(255,255,255,0.35);letter-spacing:.1em;text-transform:uppercase">';
-  ['#','\u0394','Player','W','L','Diff','Bonus','Total'].forEach((c,j)=>{
+  ['#','\u0394','Player','W','L','Diff','Bonus','Total','DR'].forEach((c,j)=>{
     const align=j===2?'left':j===1?'center':'right';
-    h+='<div style="text-align:'+align+'">'+c+'</div>';
+    const extra=c==='DR'?';color:#a78bfa;border-left:1px solid rgba(167,139,250,0.25);padding-left:4px':'';
+    h+='<div style="text-align:'+align+extra+'">'+c+'</div>';
   });
   h+='</div>';
 
@@ -1807,6 +1811,8 @@ function rFullStats(stats,season,l){
     h+='<div style="text-align:right;font-size:11px;font-weight:'+(d>=0?'700':'400')+';color:'+(d>0?'#c8ff00':d<0?'#ff5c47':'rgba(255,255,255,0.4)')+'">'+(d>0?'+':'')+d+'</div>';
     h+='<div style="text-align:right;font-size:11px;font-weight:800;color:'+(bonus>0?'#c8ff00':'rgba(255,255,255,0.2)')+'">'+(bonus>0?'+'+bonus:'\u2014')+'</div>';
     h+='<div style="text-align:right;font-size:'+(isPod?'14':'13')+'px;font-weight:900;color:'+totalColor+'">'+total+'</div>';
+    const dr=drRatings[s.id];const drStr=dr!=null?dr:'\u2014';
+    h+='<div style="text-align:right;font-size:11px;font-weight:900;color:#a78bfa;border-left:1px solid rgba(167,139,250,0.18);padding-left:4px;font-family:\'Sora\',sans-serif">'+drStr+'</div>';
     h+='</div>';
   });
   h+='</div>';
