@@ -138,14 +138,19 @@ async function subAddTempAt(){
 }
 async function subClearAt(){await _subAt({kind:'clear'});}
 
-function openPlayerStats(pid){if(isAdmin)return;playerStatsModalId=pid;render()}
+// Player profile popup is now available to everyone (admin + public). Admins
+// can still tap names in standings/leaderboard tables to inspect stats; the
+// risk that earlier worried us — accidental taps interrupting score entry —
+// is mitigated because admin court chips now use explicit Move/Sub BUTTONS
+// (not name-tap), so the standings name-tap is in a different surface.
+function openPlayerStats(pid){playerStatsModalId=pid;render()}
 function closePlayerStats(){playerStatsModalId=null;render()}
 // Helper: returns an `onclick=...` attribute string for a player name row —
 // but ONLY for non-admins. Admins get an empty string so the row is inert.
 // Callers should ALSO append ';cursor:pointer' to their existing style attr
 // (gated by !isAdmin) so the affordance is visible.
-function pClick(pid){return isAdmin?'':' onclick="openPlayerStats(\''+pid+'\')"';}
-function pCur(){return isAdmin?'':';cursor:pointer';}
+function pClick(pid){return ' onclick="event.stopPropagation();openPlayerStats(\''+pid+'\')"';}
+function pCur(){return ';cursor:pointer';}
 // Render a position-change badge for the leaderboard. hasPrev says whether ANY
 // prior ladder exists in the season — without that flag, "no rank found" looks
 // the same as "no prior ladder existed", and we'd flag the first ladder's
@@ -607,6 +612,50 @@ async function editSessionName(){const l=gL();const ss=gSS();if(!l||!ss)return;c
 async function editSessionDate(){const l=gL();const ss=gSS();if(!l||!ss)return;const d=prompt('Date (YYYY-MM-DD):',ss.date);if(d?.trim()){ss.date=d.trim();await save(l)}}
 async function editSessionTime(){const l=gL();const ss=gSS();if(!l||!ss)return;const t=prompt('Start time (HH:MM):',ss.config.startTime||'');if(t!==null){ss.config.startTime=t.trim();await save(l)}}
 async function editSessionPlace(){const l=gL();const ss=gSS();if(!l||!ss)return;const p=prompt('Location:',ss.config.place||'');if(p!==null){ss.config.place=p.trim();await save(l)}}
+// Edit handlers for ladder config that should remain editable AFTER the
+// ladder has started or finished. Court count is intentionally NOT editable
+// once started (changing it would invalidate the round assignments).
+async function editSessionCourtNames(){
+  const l=gL();const ss=gSS();if(!l||!ss)return;
+  const cur=ss.config.courtNames||defaultCourtNames(ss.config.courts);
+  const input=prompt('Court names (comma-separated, '+ss.config.courts+' total):',cur.join(', '));
+  if(input===null)return;
+  const names=input.split(',').map(s=>s.trim()).filter(Boolean);
+  if(names.length!==ss.config.courts){alert('Need exactly '+ss.config.courts+' names. You provided '+names.length+'.');return;}
+  ss.config.courtNames=names;
+  await save(l);
+}
+async function editSessionRounds(){
+  const l=gL();const ss=gSS();if(!l||!ss)return;
+  const input=prompt('Total rounds (1-20):',String(ss.config.rounds));
+  if(input===null)return;
+  const n=parseInt(input);
+  if(!n||n<1||n>20){alert('Enter a number from 1 to 20.');return;}
+  const played=Array.isArray(ss.rounds)?ss.rounds.length:0;
+  if(n<played){
+    if(!confirm('You’ve already played '+played+' round'+(played!==1?'s':'')+'. Lowering total rounds to '+n+' won’t delete those, but the ladder will end after round '+n+' next time. Continue?'))return;
+  }
+  ss.config.rounds=n;
+  await save(l);
+}
+async function editSessionRoundTime(){
+  const l=gL();const ss=gSS();if(!l||!ss)return;
+  const input=prompt('Round time in minutes (1-30):',String(ss.config.roundMin));
+  if(input===null)return;
+  const n=parseInt(input);
+  if(!n||n<1||n>30){alert('Enter a number from 1 to 30.');return;}
+  ss.config.roundMin=n;
+  await save(l);
+}
+async function editSessionScoring(){
+  const l=gL();const ss=gSS();if(!l||!ss)return;
+  const cur=ss.config.scoreMode==='points'?'Points':'Win / Loss';
+  const next=ss.config.scoreMode==='points'?'winloss':'points';
+  const nextLabel=next==='points'?'Points':'Win / Loss';
+  if(!confirm('Change scoring from '+cur+' to '+nextLabel+'? Already-entered scores stay as they are.'))return;
+  ss.config.scoreMode=next;
+  await save(l);
+}
 async function archiveSeason(sid){const l=gL();if(!l)return;const s=l.seasons.find(x=>x.id===sid);if(!s||!confirm('Archive "'+s.name+'"?'))return;s.archived=true;if(l.activeSeason===sid){const a=l.seasons.find(x=>!x.archived);l.activeSeason=a?.id||null}await save(l)}
 async function unarchiveSeason(sid){const l=gL();if(!l)return;const s=l.seasons.find(x=>x.id===sid);if(!s)return;s.archived=false;l.activeSeason=sid;await save(l)}
 async function deleteSeason(sid){const l=gL();if(!l)return;const s=l.seasons.find(x=>x.id===sid);if(!s||!confirm('Delete "'+s.name+'" permanently?'))return;l.seasons=l.seasons.filter(x=>x.id!==sid);if(l.activeSeason===sid)l.activeSeason=l.seasons[0]?.id||null;await save(l)}
@@ -1109,15 +1158,19 @@ function rStats(stats,season,l,ss){
     // Hint about row-tap profile popup
     h+='<div style="font-size:10px;color:rgba(255,255,255,0.45);text-align:center;line-height:1.5;padding:0 4px 8px">Tap a row for player profile <span style="color:rgba(255,255,255,0.3)">\u00b7</span> W <span style="color:rgba(255,255,255,0.3)">\u00b7</span> L <span style="color:rgba(255,255,255,0.3)">\u00b7</span> Avg <span style="color:rgba(255,255,255,0.3)">\u00b7</span> Win % <span style="color:rgba(255,255,255,0.3)">\u00b7</span> PS <span style="color:rgba(255,255,255,0.3)">\u00b7</span> PA <span style="color:rgba(255,255,255,0.3)">\u00b7</span> Diff <span style="color:rgba(255,255,255,0.3)">\u00b7</span> Streak</div>';
 
-    // Uniform table — top 3 differ only by rank label color, total color, and row tint
+    // Uniform table. Bonus column appears ONLY once the ladder is finished —
+    // user requested: bonus stays hidden mid-ladder so admins/players don't
+    // see provisional podium pts before the ladder is locked.
+    const showBonus=!!(ss&&ss.finished);
     const podLabel=['1st','2nd','3rd'];
     const podCol=['#ffcc00','#c0c0c0','#cd7f32'];
     const podBg=['#1a1200','#111','#12100a'];
-    const cols='30px 26px 1fr 26px 26px 38px 40px 44px';
+    const cols=showBonus?'30px 26px 1fr 26px 26px 38px 40px 44px':'30px 26px 1fr 28px 28px 44px 50px';
+    const headerCells=showBonus?['#','\u0394','Player','W','L','Diff','Bonus','Total']:['#','\u0394','Player','W','L','Diff','Total'];
     const sortedActive=sorted.filter(s=>s.w+s.l+s.t>0);
     h+='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:10px;overflow:hidden">';
     h+='<div style="display:grid;grid-template-columns:'+cols+';gap:5px;padding:7px 12px;background:#0a0a0a;border-bottom:1px solid #1a1a1a;font-size:8px;font-weight:700;color:rgba(255,255,255,0.35);letter-spacing:.1em;text-transform:uppercase">';
-    ['#','\u0394','Player','W','L','Diff','Bonus','Total'].forEach((c,j)=>{
+    headerCells.forEach((c,j)=>{
       const align=j===2?'left':j===1?'center':'right';
       h+='<div style="text-align:'+align+'">'+c+'</div>';
     });
@@ -1127,7 +1180,7 @@ function rStats(stats,season,l,ss){
       const rank=i+1;
       const wins=bonusData[s.id]?.wins||0;
       const bonus=bonusDataLocal[s.id]?.bonus||0;
-      const total=totalPts(s);
+      const total=showBonus?(s.pf+bonus):s.pf;
       const d=s.pf-s.pa;
       const isPod=rank<=3;
       const rankColor=isPod?podCol[rank-1]:'rgba(255,255,255,0.4)';
@@ -1140,7 +1193,9 @@ function rStats(stats,season,l,ss){
       h+='<div style="text-align:right;font-size:12px;font-weight:700;color:#c8ff00">'+s.w+'</div>';
       h+='<div style="text-align:right;font-size:12px;color:rgba(255,255,255,0.45)">'+s.l+'</div>';
       h+='<div style="text-align:right;font-size:11px;font-weight:'+(d>=0?'700':'400')+';color:'+(d>0?'#c8ff00':d<0?'#ff5c47':'rgba(255,255,255,0.4)')+'">'+(d>0?'+':'')+d+'</div>';
-      h+='<div style="text-align:right;font-size:11px;font-weight:800;color:'+(bonus>0?'#c8ff00':'rgba(255,255,255,0.2)')+'">'+(bonus>0?'+'+bonus:'\u2014')+'</div>';
+      if(showBonus){
+        h+='<div style="text-align:right;font-size:11px;font-weight:800;color:'+(bonus>0?'#c8ff00':'rgba(255,255,255,0.2)')+'">'+(bonus>0?'+'+bonus:'\u2014')+'</div>';
+      }
       h+='<div style="text-align:right;font-size:'+(isPod?'14':'13')+'px;font-weight:900;color:'+totalColor+'">'+total+'</div>';
       h+='</div>';
     });
@@ -1148,28 +1203,28 @@ function rStats(stats,season,l,ss){
   }
 
   // ══ FULL STATS ══
+  // No LP (always 1 in session view), no Bonus, no Total. Pure ladder stats.
+  // Rows are tappable to open the player profile popup.
   if(statsInnerTab==='fullstats'){
     if(!has){h+='<p class="subtext" style="text-align:center;padding:20px">No scored games yet.</p>';return h;}
-    h+='<div style="overflow-x:auto;margin:0 -14px;padding:0 14px"><table class="st"><thead><tr>'+['#','Player','LP','W','L','Pts','Bonus','Total','PS','PA','+/-','Avg','Top Ct','Strk'].map(x=>'<th style="text-align:right">'+x+'</th>').join('')+'</tr></thead><tbody>';
+    h+='<div style="overflow-x:auto;margin:0 -14px;padding:0 14px"><table class="st"><thead><tr>'+['#','Player','W','L','Pts','PS','PA','+/-','Avg','Top Ct','Strk'].map(x=>'<th style="text-align:'+(x==='Player'?'left':'right')+'">'+x+'</th>').join('')+'</tr></thead><tbody>';
     sorted.filter(s=>s.w+s.l+s.t>0).forEach((s,i)=>{
       const d=s.pf-s.pa;const sk=s.streak;const skStr=sk>0?'W'+sk:sk<0?'L'+Math.abs(sk):'--';
       const avg=s.roundPts.length?(Math.round(s.pf/s.roundPts.length*10)/10).toFixed(1):0;
-      const tc=topCtName(s);const wins=bonusData[s.id]?.wins||0;const bonus=bonusDataLocal[s.id]?.bonus||0;const total=s.pf+bonus;
-      h+='<tr style="'+(i===0?'background:#0d1400;':i%2===1?'background:#0a0a0a;':'')+'">';
+      const tc=topCtName(s);const wins=bonusData[s.id]?.wins||0;
+      h+='<tr'+pClick(s.id)+' style="'+(i===0?'background:#0d1400;':i%2===1?'background:#0a0a0a;':'')+pCur()+'">';
       h+='<td class="'+(i<3?'rt':'')+'" style="text-align:right">'+(["1st","2nd","3rd"][i]||(i+1))+'</td>';
       h+='<td style="font-weight:600;white-space:nowrap;text-align:left">'+s.name+(wins>0?' '+crownStr(wins):'')+'</td>';
-      h+='<td style="color:var(--lime);font-weight:700;text-align:right">'+s.attended+'</td>';
       h+='<td class="at" style="text-align:right">'+s.w+'</td>';
       h+='<td class="rdt" style="text-align:right">'+s.l+'</td>';
-      h+='<td style="text-align:right">'+s.pf+'</td>';
-      h+='<td style="text-align:right;font-weight:800;color:var(--lime)">'+(bonus>0?'+'+bonus:'--')+'</td>';
-      h+='<td style="text-align:right;font-weight:900;color:var(--lime)">'+total+'</td>';
+      h+='<td style="text-align:right;font-weight:800;color:var(--lime)">'+s.pf+'</td>';
       h+='<td style="text-align:right;color:var(--muted)">'+s.pf+'</td>';
       h+='<td style="text-align:right;color:var(--muted)">'+s.pa+'</td>';
       h+='<td style="text-align:right;font-weight:700;color:'+(d>=0?'var(--lime)':'var(--loss)')+'">'+(d>0?'+':'')+d+'</td>';
       h+='<td style="text-align:right;color:var(--text-sec)">'+avg+'</td>';
       h+='<td style="text-align:right;color:var(--cyan);font-size:.72rem;font-weight:700">'+tc+'</td>';
-      h+='<td style="text-align:right;color:'+(sk>0?'var(--lime)':sk<0?'var(--loss)':'var(--muted)')+';font-weight:600">'+skStr+'</td></tr>'});
+      h+='<td style="text-align:right;color:'+(sk>0?'var(--lime)':sk<0?'var(--loss)':'var(--muted)')+';font-weight:600">'+skStr+'</td></tr>';
+    });
     h+='</tbody></table></div>';}
 
   // (Search inner tab removed — players now look up stats by tapping a row.)
@@ -1348,7 +1403,10 @@ function rAdmin(l,s){let h='';
   return h}
 
 function rSessionAdmin(l,ss){let h='<div class="admin-bar-bottom">Ladder admin</div>';
-  h+='<div class="admin-section"><div class="admin-section-t">Ladder settings</div>'+[['Name',ss.name||'Untitled','<button class="edit-btn" onclick="editSessionName()">Edit</button>'],['Date',fmtDate(ss.date),'<button class="edit-btn" onclick="editSessionDate()">Edit</button>'],['Start',ss.config.startTime?fmt12(ss.config.startTime):'—','<button class="edit-btn" onclick="editSessionTime()">Edit</button>'],['Location',ss.config.place||'—','<button class="edit-btn" onclick="editSessionPlace()">Edit</button>'],['Courts',ss.config.courtNames?.join(', ')||ss.config.courts,''],['Rounds',ss.config.rounds,''],['Round time',ss.config.roundMin+' min',''],['Scoring',ss.config.scoreMode==='points'?'Points':'Win/Loss',''],['Participants',gParts(ss,l).length+' players','']].map(([k,v,eb])=>'<div class="cfg-row"><span class="subtext">'+k+'</span><span style="font-weight:600">'+v+' '+(eb||'')+'</span></div>').join('')+'</div>';
+  // Editable ladder settings — court NAMES, rounds, round time, and scoring
+  // mode are editable at any point (active or finished). Court COUNT stays
+  // creation-only since changing it would invalidate round assignments.
+  h+='<div class="admin-section"><div class="admin-section-t">Ladder settings</div>'+[['Name',ss.name||'Untitled','<button class="edit-btn" onclick="editSessionName()">Edit</button>'],['Date',fmtDate(ss.date),'<button class="edit-btn" onclick="editSessionDate()">Edit</button>'],['Start',ss.config.startTime?fmt12(ss.config.startTime):'—','<button class="edit-btn" onclick="editSessionTime()">Edit</button>'],['Location',ss.config.place||'—','<button class="edit-btn" onclick="editSessionPlace()">Edit</button>'],['Courts',ss.config.courtNames?.join(', ')||defaultCourtNames(ss.config.courts).join(', '),'<button class="edit-btn" onclick="editSessionCourtNames()">Edit</button>'],['Rounds',ss.config.rounds,'<button class="edit-btn" onclick="editSessionRounds()">Edit</button>'],['Round time',ss.config.roundMin+' min','<button class="edit-btn" onclick="editSessionRoundTime()">Edit</button>'],['Scoring',ss.config.scoreMode==='points'?'Points':'Win / Loss','<button class="edit-btn" onclick="editSessionScoring()">Edit</button>'],['Participants',gParts(ss,l).length+' players','']].map(([k,v,eb])=>'<div class="cfg-row"><span class="subtext">'+k+'</span><span style="font-weight:600">'+v+' '+(eb||'')+'</span></div>').join('')+'</div>';
   h+='<div class="admin-section"><div class="admin-section-t">Danger zone</div><div style="display:flex;gap:6px"><button class="bg-btn" style="flex:1" onclick="archiveSession(\''+ss.id+'\');go(\'dashboard\',\'overview\')">Archive</button><button class="bd" style="flex:1" onclick="deleteSession(\''+ss.id+'\');go(\'dashboard\',\'overview\')">Delete</button></div></div>';return h}
 
 function rNoLadder(){return'<div style="text-align:center;padding:60px 20px" class="fu"><div style="font-size:2.5rem;margin-bottom:12px">🥒</div><h2 class="heading" style="font-size:1.4rem;color:var(--lime);margin-bottom:8px">Pickle Friends</h2><p class="subtext" style="margin-bottom:24px;line-height:1.6;max-width:320px;margin:0 auto 24px">Pickleball ladder play — automatic lineups, live scoring, and season stats.</p>'+(isAdmin?'<button class="bp" onclick="go(\'newLadder\')" style="padding:14px 28px">Create league</button>':'<p class="subtext">No active leagues yet.</p>')+'</div>'}
@@ -1690,7 +1748,10 @@ function rAdmin(l,s){let h='';
   return h}
 
 function rSessionAdmin(l,ss){let h='<div class="admin-bar-bottom">Ladder admin</div>';
-  h+='<div class="admin-section"><div class="admin-section-t">Ladder settings</div>'+[['Name',ss.name||'Untitled','<button class="edit-btn" onclick="editSessionName()">Edit</button>'],['Date',fmtDate(ss.date),'<button class="edit-btn" onclick="editSessionDate()">Edit</button>'],['Start',ss.config.startTime?fmt12(ss.config.startTime):'—','<button class="edit-btn" onclick="editSessionTime()">Edit</button>'],['Location',ss.config.place||'—','<button class="edit-btn" onclick="editSessionPlace()">Edit</button>'],['Courts',ss.config.courtNames?.join(', ')||ss.config.courts,''],['Rounds',ss.config.rounds,''],['Round time',ss.config.roundMin+' min',''],['Scoring',ss.config.scoreMode==='points'?'Points':'Win/Loss',''],['Participants',gParts(ss,l).length+' players','']].map(([k,v,eb])=>'<div class="cfg-row"><span class="subtext">'+k+'</span><span style="font-weight:600">'+v+' '+(eb||'')+'</span></div>').join('')+'</div>';
+  // Editable ladder settings — court NAMES, rounds, round time, and scoring
+  // mode are editable at any point (active or finished). Court COUNT stays
+  // creation-only since changing it would invalidate round assignments.
+  h+='<div class="admin-section"><div class="admin-section-t">Ladder settings</div>'+[['Name',ss.name||'Untitled','<button class="edit-btn" onclick="editSessionName()">Edit</button>'],['Date',fmtDate(ss.date),'<button class="edit-btn" onclick="editSessionDate()">Edit</button>'],['Start',ss.config.startTime?fmt12(ss.config.startTime):'—','<button class="edit-btn" onclick="editSessionTime()">Edit</button>'],['Location',ss.config.place||'—','<button class="edit-btn" onclick="editSessionPlace()">Edit</button>'],['Courts',ss.config.courtNames?.join(', ')||defaultCourtNames(ss.config.courts).join(', '),'<button class="edit-btn" onclick="editSessionCourtNames()">Edit</button>'],['Rounds',ss.config.rounds,'<button class="edit-btn" onclick="editSessionRounds()">Edit</button>'],['Round time',ss.config.roundMin+' min','<button class="edit-btn" onclick="editSessionRoundTime()">Edit</button>'],['Scoring',ss.config.scoreMode==='points'?'Points':'Win / Loss','<button class="edit-btn" onclick="editSessionScoring()">Edit</button>'],['Participants',gParts(ss,l).length+' players','']].map(([k,v,eb])=>'<div class="cfg-row"><span class="subtext">'+k+'</span><span style="font-weight:600">'+v+' '+(eb||'')+'</span></div>').join('')+'</div>';
   h+='<div class="admin-section"><div class="admin-section-t">Danger zone</div><div style="display:flex;gap:6px"><button class="bg-btn" style="flex:1" onclick="archiveSession(\''+ss.id+'\');go(\'dashboard\',\'overview\')">Archive</button><button class="bd" style="flex:1" onclick="deleteSession(\''+ss.id+'\');go(\'dashboard\',\'overview\')">Delete</button></div></div>';return h}
 
 function rNoLadder(){return'<div style="text-align:center;padding:60px 20px" class="fu"><div style="font-size:2.5rem;margin-bottom:12px">🥒</div><h2 class="heading" style="font-size:1.4rem;color:var(--lime);margin-bottom:8px">Pickle Friends</h2><p class="subtext" style="margin-bottom:24px;line-height:1.6;max-width:320px;margin:0 auto 24px">Pickleball ladder play — automatic lineups, live scoring, and season stats.</p>'+(isAdmin?'<button class="bp" onclick="go(\'newLadder\')" style="padding:14px 28px">Create league</button>':'<p class="subtext">No active leagues yet.</p>')+'</div>'}
@@ -2125,7 +2186,7 @@ function render(){
   // Shows the same stat-card markup as the Search tab so users get one
   // consistent view of a player's season performance no matter where they
   // tapped from. Skipped entirely for admins — see openPlayerStats().
-  if(playerStatsModalId&&!isAdmin){
+  if(playerStatsModalId){
     const lp=gL();const sp=gS();
     if(lp&&sp){
       const allStatsP=calcStats(sp.sessions,lp.players);
