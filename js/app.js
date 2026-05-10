@@ -154,6 +154,12 @@ function updateSearch(val){
 const tkPal=['#c8ff00','#00e5ff','#ffcc00','#ff5c47','#a78bfa','#34d399','#f472b6','#60a5fa','#fb923c','#4ade80','#e879f9','#38bdf8'];
 const tkDash=[[],[5,5],[2,3],[8,4],[4,2,1,2],[1,4],[6,3],[3,6],[10,3],[2,6],[6,2],[4,4]];
 
+// Persistent admin login: PIN saved to localStorage on success, restored
+// in init() so admins stay logged in across refresh / tab close. Solves
+// the 'I'm logged out and didn't notice, why won't scores enter' issue.
+function _savePin(pin){try{localStorage.setItem('pl-admin-pin',pin||'');}catch{}}
+function _loadPin(){try{return localStorage.getItem('pl-admin-pin')||'';}catch{return'';}}
+function _clearPin(){try{localStorage.removeItem('pl-admin-pin');}catch{}}
 async function apiList(){try{return(await(await fetch('/api?action=list')).json()).ladders||[]}catch{return[]}}
 async function apiSave(l){try{const r=await fetch('/api?action=save',{method:'POST',headers:{'Content-Type':'application/json','X-Admin-Pin':adminPin},body:JSON.stringify({ladder:l})});if(!r.ok){const d=await r.json();throw new Error(d.error)}return await r.json()}catch(e){console.error(e);alert('Save failed: '+e.message);return null}}
 async function apiDel(id){try{return await(await fetch(`/api?action=delete&id=${id}`,{method:'DELETE',headers:{'X-Admin-Pin':adminPin}})).json()}catch{return null}}
@@ -331,8 +337,8 @@ function closePin(){pinEntry='';document.getElementById('pinModal').style.displa
 function pinPress(d){if(pinEntry.length>=4)return;pinEntry+=d;rPD();if(pinEntry.length===4)setTimeout(checkPin,150)}
 function pinDel(){pinEntry=pinEntry.slice(0,-1);rPD();document.getElementById('pinErr').textContent=''}
 function rPD(){for(let i=0;i<4;i++){const d=document.getElementById('pd'+i);if(d){d.style.background=i<pinEntry.length?'#c8ff00':'transparent';d.style.borderColor=i<pinEntry.length?'#c8ff00':'rgba(255,255,255,0.13)'}}}
-async function checkPin(){const v=await apiVerifyPin(pinEntry);if(v){adminPin=pinEntry;isAdmin=true;closePin();render()}else{document.getElementById('pinErr').textContent='Incorrect PIN';pinEntry='';rPD();setTimeout(()=>{const e=document.getElementById('pinErr');if(e)e.textContent=''},2000)}}
-function lockAdmin(){isAdmin=false;adminPin='';render()}
+async function checkPin(){const v=await apiVerifyPin(pinEntry);if(v){adminPin=pinEntry;isAdmin=true;_savePin(pinEntry);closePin();render()}else{document.getElementById('pinErr').textContent='Incorrect PIN';pinEntry='';rPD();setTimeout(()=>{const e=document.getElementById('pinErr');if(e)e.textContent=''},2000)}}
+function lockAdmin(){isAdmin=false;adminPin='';_clearPin();render()}
 
 // Player management
 function openEditPlayer(pid){const l=gL();if(!l)return;const p=l.players.find(x=>x.id===pid);if(!p)return;editingPid=pid;document.getElementById('edName').value=p.name;document.getElementById('edGender').value=p.gender;document.getElementById('editModal').classList.add('open')}
@@ -1883,6 +1889,11 @@ function render(){
 
 async function init(){
   applyTextSize();
+  // Restore admin session if a verified PIN is in localStorage.
+  const savedPin=_loadPin();
+  if(savedPin){
+    try{const ok=await apiVerifyPin(savedPin);if(ok){adminPin=savedPin;isAdmin=true;}else{_clearPin();}}catch{}
+  }
   // Show loading with status so we can diagnose
   document.getElementById('app').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0a0f;gap:16px;padding:24px"><div style="font-family:Inter,sans-serif;font-size:1.1rem;font-weight:700;color:#c8ff00" id="initStatus">Connecting...</div><div style="font-size:.75rem;color:#7a7a8a;text-align:center;max-width:280px" id="initDetail">Reaching the server</div></div>';
   const setStatus=(msg,detail)=>{const s=document.getElementById('initStatus');const d=document.getElementById('initDetail');if(s)s.textContent=msg;if(d)d.textContent=detail||''};
