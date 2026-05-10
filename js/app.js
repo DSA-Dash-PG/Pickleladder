@@ -44,11 +44,24 @@ async function npConfirm(){
   await _applyScore(npState.ri,npState.ci,npState.field,v);
   const other=npState.field==='t1'?'t2':'t1';
   const l=gL();const ss=gSS();
-  if(l&&ss){const sc=ss.rounds[npState.ri].courts[npState.ci].score;
+  if(l&&ss){
+    const sc=ss.rounds[npState.ri].courts[npState.ci].score;
     const otherVal=other==='t1'?sc?.t1:sc?.t2;
-    if(otherVal===null||otherVal===undefined){npState={...npState,field:other,value:''};render()}
-    else{npState=null;render()}}
-  else{npState=null;render()}}
+    const myVal=npState.field==='t1'?sc?.t1:sc?.t2;
+    if(otherVal===null||otherVal===undefined){
+      // Other team not entered yet — flip to it
+      npState={...npState,field:other,value:''};render();
+    } else if(myVal!=null&&otherVal!=null&&myVal===otherVal){
+      // Both entered but tied — keep modal open, switch to other field so
+      // admin can drop a point. Tied lockout UI takes over from here.
+      npState={...npState,field:other,value:String(otherVal)};render();
+    } else {
+      npState=null;render();
+    }
+  } else {
+    npState=null;render();
+  }
+}
 function npCancel(){npState=null;render()}
 function npSwitchField(field,existingVal){if(!npState)return;npState.field=field;npState.value=(existingVal!==null&&existingVal!==undefined&&existingVal!=='null')?String(existingVal):'';render()}
 
@@ -69,6 +82,62 @@ function setStatsInnerTab(t){statsInnerTab=t;statsSearchQ='';render()}
 // ladder (entering scores, swapping players, advancing rounds) and an
 // accidental tap on a name shouldn't pop a modal over their workflow.
 let playerStatsModalId=null;
+// In-round Sub modal: opens from the [Sub] button on an admin court chip.
+let subModalState=null; // {ri,ci,ti,pi,pid,name}
+function openSubModal(ri,ci,ti,pi){
+  if(!isAdmin)return;
+  const ss=gSS();const round=ss?.rounds?.[ri];if(!round)return;
+  const team=ti===0?round.courts[ci].team1:round.courts[ci].team2;
+  const p=team&&team[pi];if(!p)return;
+  subModalState={ri,ci,ti,pi,pid:p.id,name:p.name};
+  render();
+}
+function closeSubModal(){subModalState=null;render();}
+async function _subAt(replacement){
+  const s=subModalState;if(!s)return;
+  const l=gL();const ss=gSS();if(!l||!ss)return;
+  const target=l.players.find(x=>x.id===s.pid);if(target)target.subbedOut=true;
+  let newP=null;
+  if(replacement.kind==='bench'){
+    newP=l.players.find(x=>x.id===replacement.pid);
+    if(newP){
+      if(!ss.participants)ss.participants=[];
+      if(!ss.participants.includes(newP.id))ss.participants.push(newP.id);
+    }
+  } else if(replacement.kind==='perm'){
+    if(!replacement.name)return;
+    newP={id:uid(),name:replacement.name,gender:replacement.gender,active:true,subbedOut:false};
+    l.players.push(newP);
+    if(!ss.participants)ss.participants=[];
+    ss.participants.push(newP.id);
+  } else if(replacement.kind==='temp'){
+    if(!replacement.name)return;
+    newP={id:uid(),name:replacement.name,gender:replacement.gender,active:true,subbedOut:false,temp:true};
+    l.players.push(newP);
+    if(!ss.participants)ss.participants=[];
+    ss.participants.push(newP.id);
+  }
+  const round=ss.rounds[s.ri];const ct=round.courts[s.ci];
+  const team=s.ti===0?ct.team1:ct.team2;
+  team[s.pi]=newP?{...newP}:null;
+  subModalState=null;
+  await save(l);
+}
+async function subBenchAt(pid){await _subAt({kind:'bench',pid});}
+async function subAddPermAt(){
+  const n=document.getElementById('subModalPermName')?.value?.trim();
+  const g=document.getElementById('subModalPermGender')?.value||'M';
+  if(!n)return;
+  await _subAt({kind:'perm',name:n,gender:g});
+}
+async function subAddTempAt(){
+  const n=document.getElementById('subModalTempName')?.value?.trim();
+  const g=document.getElementById('subModalTempGender')?.value||'M';
+  if(!n)return;
+  await _subAt({kind:'temp',name:n,gender:g});
+}
+async function subClearAt(){await _subAt({kind:'clear'});}
+
 function openPlayerStats(pid){if(isAdmin)return;playerStatsModalId=pid;render()}
 function closePlayerStats(){playerStatsModalId=null;render()}
 // Helper: returns an `onclick=...` attribute string for a player name row —
@@ -642,56 +711,68 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
   h+='</div>';
 
   // ── Split panels ──
+  // Team A always stays on the LEFT, team B on the RIGHT — regardless of who
+  // won. The winner gets visual emphasis (green bg, glowing score, "Winner"
+  // label) in place; the loser stays on its side with dimmed styling.
   if(hb&&w){
     h+='<div style="display:grid;grid-template-columns:1fr 1fr">';
-    // Winner panel
-    h+='<div style="background:'+(isKitchen?'#1a1000':'#0d1f00')+';padding:10px 12px;text-align:center">';
-    h+='<div style="font-size:7px;font-weight:900;color:'+winScoreCol+';text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">Winner</div>';
-    // Names as "P1 + P2" on one line, clickable for swap in admin
-    const wNameStr=wTeam.filter(Boolean).map(p=>p.name).join(' + ');
-    const lNameStr=lTeam.filter(Boolean).map(p=>p.name).join(' + ');
-    if(adminMode){
-      const wTi=w==='A'?0:1;
-      wTeam.filter(Boolean).forEach((p,pi)=>{
-        const isSrc=swapMode&&swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===wTi&&swapMode.pi===pi;
-        const isTarget=swapMode&&!(swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===wTi&&swapMode.pi===pi);
-        const bg=isSrc?'rgba(255,204,0,0.08)':isTarget?'rgba(0,229,255,0.08)':'rgba(255,255,255,0.05)';
-        const border=isSrc?'1.5px dashed rgba(255,204,0,0.4)':isTarget?'1.5px solid rgba(0,229,255,0.35)':'1.5px solid rgba(255,255,255,0.08)';
-        const col=isSrc?'#ffcc00':isTarget?'#00e5ff':'#f4f4f0';
-        h+='<div style="background:'+bg+';border:'+border+';border-radius:10px;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;cursor:pointer;'+(isSrc?'opacity:.5;text-decoration:line-through':'')+'"+" onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+wTi+','+pi+')">';
-        h+='<span style="font-size:16px;font-weight:700;color:'+col+'">'+p.name+'</span>';
-        h+=(isSrc?'<span style="font-size:10px;color:#ffcc00;font-weight:700">Moving</span>':isTarget?'<span style="font-size:10px;color:#00e5ff;font-weight:700">Swap →</span>':'<span style="font-size:10px;color:rgba(255,255,255,0.3)">Tap to move</span>');
-        h+='</div>'});
-    } else {h+='<div style="font-size:15px;font-weight:700;color:#f4f4f0;margin-bottom:6px;line-height:1.35">'+wNameStr+'</div>';}
-    // Score is tappable in admin mode so a miskey can be corrected without
-    // having to clear the round. Calls openNumpad with the winner team's
-    // field key so the existing value loads ready to edit.
-    const wFld=w==='A'?'t1':'t2';
-    const wScClk=adminMode?' onclick="event.stopPropagation();openNumpad('+vr+','+ci+',\''+wFld+'\')" style="cursor:pointer;font-size:44px;font-weight:900;color:'+winScoreCol+';line-height:1;letter-spacing:-.03em;text-shadow:0 0 18px '+winGlow+',0 0 36px '+winGlowSoft+'"':' style="font-size:44px;font-weight:900;color:'+winScoreCol+';line-height:1;letter-spacing:-.03em;text-shadow:0 0 18px '+winGlow+',0 0 36px '+winGlowSoft+'"';
-    h+='<div'+wScClk+'>'+wScore+'</div>';
-    h+='<div style="display:inline-flex;align-items:center;gap:3px;margin-top:6px;font-size:8px;font-weight:900;background:'+winScoreCol+';color:#000;padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.06em">'+wMove+'</div>';
+    // Render one team panel — `side` is 'A' or 'B'
+    const renderTeamPanel=(side,isRight)=>{
+      const team=side==='A'?ct.team1:ct.team2;
+      const teamScore=side==='A'?sc?.t1:sc?.t2;
+      const fld=side==='A'?'t1':'t2';
+      const ti=side==='A'?0:1;
+      const isWinner=w===side;
+      // Visual treatment
+      const panelBg=isWinner?(isKitchen?'#1a1000':'#0d1f00'):'#1a0000';
+      const labelText=isWinner?'Winner':'Loser';
+      const labelCol=isWinner?winScoreCol:'rgba(255,92,71,0.7)';
+      const scoreStyle=isWinner
+        ?'font-size:44px;font-weight:900;color:'+winScoreCol+';line-height:1;letter-spacing:-.03em;text-shadow:0 0 18px '+winGlow+',0 0 36px '+winGlowSoft
+        :'font-size:44px;font-weight:900;color:rgba(255,92,71,0.3);line-height:1;letter-spacing:-.03em';
+      const moveStyle=isWinner
+        ?'background:'+winScoreCol+';color:#000'
+        :'background:rgba(255,92,71,0.15);color:rgba(255,92,71,0.7);border:1px solid rgba(255,92,71,0.25)';
+      const moveText=isWinner?wMove:lMove;
+      const nameDimColor=isWinner?'#f4f4f0':'rgba(255,255,255,0.35)';
+      const borderL=isRight?';border-left:1px solid rgba(255,92,71,0.08)':'';
+      let p='<div style="background:'+panelBg+';padding:10px 12px;text-align:center'+borderL+'">';
+      p+='<div style="font-size:7px;font-weight:900;color:'+labelCol+';text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">'+labelText+'</div>';
+      const nameStr=team.filter(Boolean).map(pl=>pl.name).join(' + ');
+      if(adminMode){
+        team.filter(Boolean).forEach((pl,pi)=>{
+          const isSrc=swapMode&&swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===ti&&swapMode.pi===pi;
+          const isTarget=swapMode&&!(swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===ti&&swapMode.pi===pi);
+          const bg=isSrc?'rgba(255,204,0,0.08)':isTarget?'rgba(0,229,255,0.08)':(isWinner?'rgba(255,255,255,0.05)':'rgba(255,255,255,0.04)');
+          const border=isSrc?'1.5px dashed rgba(255,204,0,0.4)':isTarget?'1.5px solid rgba(0,229,255,0.35)':(isWinner?'1.5px solid rgba(255,255,255,0.08)':'1.5px solid rgba(255,255,255,0.06)');
+          const col=isSrc?'#ffcc00':isTarget?'#00e5ff':(isWinner?'#f4f4f0':'rgba(255,255,255,0.55)');
+          p+='<div style="background:'+bg+';border:'+border+';border-radius:10px;padding:8px 10px;margin-bottom:6px'+(isSrc?';opacity:.7':'')+'">';
+          p+='<div style="font-size:14px;font-weight:700;color:'+col+';text-align:center;margin-bottom:6px;line-height:1.2'+(isSrc?';text-decoration:line-through':'')+'">'+pl.name+'</div>';
+          if(isSrc){
+            p+='<div style="text-align:center;font-size:9px;color:#ffcc00;font-weight:700;letter-spacing:.05em;text-transform:uppercase">Moving — pick another</div>';
+          } else if(isTarget){
+            p+='<button onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+ti+','+pi+')" style="width:100%;background:rgba(0,229,255,0.15);border:1px solid rgba(0,229,255,0.4);color:#00e5ff;font-size:10px;font-weight:700;padding:5px 0;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">Swap here</button>';
+          } else {
+            p+='<div style="display:flex;gap:4px">';
+            p+='<button onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+ti+','+pi+')" style="flex:1;background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.3);color:#00e5ff;font-size:10px;font-weight:700;padding:5px 0;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">Move</button>';
+            p+='<button onclick="event.stopPropagation();openSubModal('+vr+','+ci+','+ti+','+pi+')" style="flex:1;background:rgba(255,92,71,0.1);border:1px solid rgba(255,92,71,0.3);color:#ff5c47;font-size:10px;font-weight:700;padding:5px 0;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">Sub</button>';
+            p+='</div>';
+          }
+          p+='</div>';
+        });
+      } else {
+        p+='<div style="font-size:15px;font-weight:700;color:'+nameDimColor+';margin-bottom:6px;line-height:1.35">'+nameStr+'</div>';
+      }
+      // Tappable score for admin to fix miskeys
+      const scClk=adminMode?' onclick="event.stopPropagation();openNumpad('+vr+','+ci+',\''+fld+'\')" style="cursor:pointer;'+scoreStyle+'"':' style="'+scoreStyle+'"';
+      p+='<div'+scClk+'>'+teamScore+'</div>';
+      p+='<div style="display:inline-flex;align-items:center;gap:3px;margin-top:6px;font-size:8px;font-weight:900;'+moveStyle+';padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.06em">'+moveText+'</div>';
+      p+='</div>';
+      return p;
+    };
+    h+=renderTeamPanel('A',false);
+    h+=renderTeamPanel('B',true);
     h+='</div>';
-    // Loser panel
-    h+='<div style="background:#1a0000;padding:10px 12px;text-align:center;border-left:1px solid rgba(255,92,71,0.08)">';
-    h+='<div style="font-size:7px;font-weight:900;color:rgba(255,92,71,0.7);text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">Loser</div>';
-    if(adminMode){
-      const lTi=w==='A'?1:0;
-      lTeam.filter(Boolean).forEach((p,pi)=>{
-        const isSrc=swapMode&&swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===lTi&&swapMode.pi===pi;
-        const isTarget=swapMode&&!(swapMode.ri===vr&&swapMode.ci===ci&&swapMode.ti===lTi&&swapMode.pi===pi);
-        const bg=isSrc?'rgba(255,204,0,0.08)':isTarget?'rgba(0,229,255,0.08)':'rgba(255,255,255,0.04)';
-        const border=isSrc?'1.5px dashed rgba(255,204,0,0.4)':isTarget?'1.5px solid rgba(0,229,255,0.35)':'1.5px solid rgba(255,255,255,0.06)';
-        const col=isSrc?'#ffcc00':isTarget?'#00e5ff':'rgba(255,255,255,0.55)';
-        h+='<div style="background:'+bg+';border:'+border+';border-radius:10px;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;cursor:pointer;'+(isSrc?'opacity:.5;text-decoration:line-through':'')+'"+" onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+lTi+','+pi+')">';
-        h+='<span style="font-size:16px;font-weight:700;color:'+col+'">'+p.name+'</span>';
-        h+=(isSrc?'<span style="font-size:10px;color:#ffcc00;font-weight:700">Moving</span>':isTarget?'<span style="font-size:10px;color:#00e5ff;font-weight:700">Swap →</span>':'<span style="font-size:10px;color:rgba(255,255,255,0.25)">Tap to move</span>');
-        h+='</div>'});
-    } else {h+='<div style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:6px;line-height:1.35">'+lNameStr+'</div>';}
-    const lFld=w==='A'?'t2':'t1';
-    const lScClk=adminMode?' onclick="event.stopPropagation();openNumpad('+vr+','+ci+',\''+lFld+'\')" style="cursor:pointer;font-size:44px;font-weight:900;color:rgba(255,92,71,0.3);line-height:1;letter-spacing:-.03em"':' style="font-size:44px;font-weight:900;color:rgba(255,92,71,0.3);line-height:1;letter-spacing:-.03em"';
-    h+='<div'+lScClk+'>'+lScore+'</div>';
-    h+='<div style="display:inline-flex;align-items:center;gap:3px;margin-top:6px;font-size:8px;font-weight:900;background:rgba(255,92,71,0.15);color:rgba(255,92,71,0.7);border:1px solid rgba(255,92,71,0.25);padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.06em">'+lMove+'</div>';
-    h+='</div></div>';
     // Footer
     h+='<div style="padding:5px 12px;font-size:7px;font-weight:700;color:rgba(255,255,255,0.28);background:'+acc.bg+';border-top:1px solid rgba(255,255,255,0.04);letter-spacing:.03em">';
     h+=wNamesShort+' '+wMove.replace(/&#8593;/g,'↑').replace(/&#8595;/g,'↓').replace(/&#x21D5;/g,'↕').replace(/&amp;/g,'&').toLowerCase()+' &#183; '+lNamesShort+' '+lMove.replace(/&#8593;/g,'↑').replace(/&#8595;/g,'↓').replace(/&#x21D5;/g,'↕').replace(/&amp;/g,'&').toLowerCase();
@@ -709,9 +790,18 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
           const bg2=isSrc?'rgba(255,204,0,0.08)':isTarget?'rgba(0,229,255,0.08)':'rgba(255,255,255,0.04)';
           const bd2=isSrc?'1.5px dashed rgba(255,204,0,0.4)':isTarget?'1.5px solid rgba(0,229,255,0.35)':'1.5px solid rgba(255,255,255,0.07)';
           const cl2=isSrc?'#ffcc00':isTarget?'#00e5ff':'rgba(255,255,255,0.7)';
-          p+='<div style="background:'+bg2+';border:'+bd2+';border-radius:10px;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;cursor:pointer;'+(isSrc?'opacity:.5;text-decoration:line-through':'')+'"+" onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+ti+','+pi+')">';
-          p+='<span style="font-size:16px;font-weight:700;color:'+cl2+'">'+pl.name+'</span>';
-          p+=(isSrc?'<span style="font-size:10px;color:#ffcc00;font-weight:700">Moving</span>':isTarget?'<span style="font-size:10px;color:#00e5ff;font-weight:700">Swap →</span>':'<span style="font-size:10px;color:rgba(255,255,255,0.25)">Tap to move</span>');
+          p+='<div style="background:'+bg2+';border:'+bd2+';border-radius:10px;padding:8px 10px;margin-bottom:6px'+(isSrc?';opacity:.7':'')+'">';
+          p+='<div style="font-size:14px;font-weight:700;color:'+cl2+';text-align:center;margin-bottom:6px;line-height:1.2'+(isSrc?';text-decoration:line-through':'')+'">'+pl.name+'</div>';
+          if(isSrc){
+            p+='<div style="text-align:center;font-size:9px;color:#ffcc00;font-weight:700;letter-spacing:.05em;text-transform:uppercase">Moving — pick another</div>';
+          } else if(isTarget){
+            p+='<button onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+ti+','+pi+')" style="width:100%;background:rgba(0,229,255,0.15);border:1px solid rgba(0,229,255,0.4);color:#00e5ff;font-size:10px;font-weight:700;padding:5px 0;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">Swap here</button>';
+          } else {
+            p+='<div style="display:flex;gap:4px">';
+            p+='<button onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+ti+','+pi+')" style="flex:1;background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.3);color:#00e5ff;font-size:10px;font-weight:700;padding:5px 0;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">Move</button>';
+            p+='<button onclick="event.stopPropagation();openSubModal('+vr+','+ci+','+ti+','+pi+')" style="flex:1;background:rgba(255,92,71,0.1);border:1px solid rgba(255,92,71,0.3);color:#ff5c47;font-size:10px;font-weight:700;padding:5px 0;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">Sub</button>';
+            p+='</div>';
+          }
           p+='</div>'})}
       else{const nameStr=team.filter(Boolean).map(pl=>pl.name).join(' + ')||'TBD';p+='<div style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.6);margin-bottom:6px;line-height:1.35">'+nameStr+'</div>';}
       p+='<div style="font-size:40px;font-weight:900;line-height:1;color:'+acc.col+';opacity:.1;letter-spacing:-.03em">--</div>';
@@ -1955,14 +2045,35 @@ function render(){
       const acc2={[ss2.config.courts]:'#ffcc00',[ss2.config.courts-1]:'#00e5ff',[ss2.config.courts-2]:'#3b82f6'};
       const col2=acc2[ct2?.court]||'#a78bfa';
       const bothDone=t1val!==null&&t2val!==null;
+      // Ties are not allowed in this format. Once both scores match, lock the
+      // modal so the admin can't dismiss without picking a winner. ⌫ still
+      // works so they can fix it.
+      const isTied=bothDone&&t1val===t2val;
       const cur=npState.value===''?'--':npState.value;
-      let ov='<div style="position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:500;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:16px;backdrop-filter:blur(6px)" onclick="npCancel()">';
-      ov+='<div style="background:#111118;border-radius:20px;width:100%;max-width:380px;border:1px solid rgba(255,255,255,0.1);overflow:hidden" onclick="event.stopPropagation()">';
+      // Backdrop click closes the modal — but only if not tied.
+      const backdropClose=isTied?'':' onclick="npCancel()"';
+      const modalBorder=isTied?'border:1px solid rgba(255,92,71,0.55);box-shadow:0 0 0 4px rgba(255,92,71,0.15)':'border:1px solid rgba(255,255,255,0.1)';
+      const headerBg=isTied?'#1a0606':'#0e0e1a';
+      const headerBd=isTied?'border-bottom:1px solid rgba(255,92,71,0.3)':'border-bottom:1px solid rgba(255,255,255,0.07)';
+      const headerLabel=isTied?'COURT '+nm2+' · TIED':'Court '+nm2;
+      const headerLabelCol=isTied?'#ff5c47':col2;
+      const headerSub=isTied?'Pick a winner':'Enter scores';
+      const headerSubCol=isTied?'#ff5c47':'#f4f4f0';
+      let ov='<div style="position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:500;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:16px;backdrop-filter:blur(6px)"'+backdropClose+'>';
+      ov+='<div style="background:#111118;border-radius:20px;width:100%;max-width:380px;'+modalBorder+';overflow:hidden" onclick="event.stopPropagation()">';
       // header
-      ov+='<div style="background:#0e0e1a;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center">';
-      ov+='<div><div style="font-size:9px;font-weight:900;color:'+col2+';text-transform:uppercase;letter-spacing:.1em">Court '+nm2+'</div><div style="font-size:13px;font-weight:700;color:#f4f4f0;margin-top:2px">Enter scores</div></div>';
-      ov+='<button onclick="npCancel()" style="background:rgba(255,255,255,0.07);border:none;color:#7a7a8a;font-size:18px;width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center">&#x2715;</button>';
+      ov+='<div style="background:'+headerBg+';padding:12px 16px;'+headerBd+';display:flex;justify-content:space-between;align-items:center">';
+      ov+='<div><div style="font-size:9px;font-weight:900;color:'+headerLabelCol+';text-transform:uppercase;letter-spacing:.1em">'+headerLabel+'</div><div style="font-size:13px;font-weight:700;color:'+headerSubCol+';margin-top:2px">'+headerSub+'</div></div>';
+      if(isTied){
+        ov+='<div title="Locked until tie is resolved" style="background:rgba(255,92,71,0.1);border:1px solid rgba(255,92,71,0.3);color:#ff5c47;font-size:14px;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:not-allowed;opacity:.6">\u{1F512}</div>';
+      } else {
+        ov+='<button onclick="npCancel()" style="background:rgba(255,255,255,0.07);border:none;color:#7a7a8a;font-size:18px;width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center">&#x2715;</button>';
+      }
       ov+='</div>';
+      // Tie warning panel
+      if(isTied){
+        ov+='<div style="margin:10px 14px 0;background:rgba(255,92,71,0.12);border:1px solid rgba(255,92,71,0.35);border-radius:8px;padding:9px 11px;font-size:11px;font-weight:600;color:#ff5c47;line-height:1.5"><b style="font-weight:800">Scores can’t tie.</b> Tap ⌫ to remove the last point and pick a winner before exiting.</div>';
+      }
       // score display — both teams side by side
       ov+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;margin:12px 14px 0;border-radius:12px;overflow:hidden">';
       // Team 1
@@ -1987,17 +2098,26 @@ function render(){
       ov+='<div style="font-size:44px;font-weight:900;color:'+(t2active?col2:t2col)+';line-height:1;letter-spacing:-.03em">'+(t2active?cur:t2score)+'</div>';
       ov+='<div style="font-size:8px;margin-top:5px;color:'+(t2val!==null&&!t2active?col2:'#444')+';">'+(t2val!==null&&!t2active?'✓ Entered':t2active?'← Entering now':'--')+'</div>';
       ov+='</div></div>';
-      // Confirm bar (only when both teams have scores) — stays ABOVE the numpad
-      // so the ⌫ delete button is always reachable on touch devices (mobile fix).
+      // Confirm bar — present whenever both teams have scores. Live and green
+      // when scores differ, dashed/disabled placeholder when tied.
       if(bothDone){
-        ov+='<div style="padding:14px 14px 6px"><button onclick="npState=null;render()" style="width:100%;background:#c8ff00;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:900;color:#000;cursor:pointer">✓ Confirm '+t1val+' – '+t2val+'</button></div>';
+        if(isTied){
+          ov+='<div style="padding:14px 14px 6px"><div style="width:100%;background:rgba(255,92,71,0.05);border:1px dashed rgba(255,92,71,0.3);border-radius:12px;padding:13px;font-size:12px;font-weight:700;color:rgba(255,92,71,0.7);text-align:center;cursor:not-allowed">Confirm disabled · scores tied</div></div>';
+        } else {
+          ov+='<div style="padding:14px 14px 6px"><button onclick="npState=null;render()" style="width:100%;background:#c8ff00;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:900;color:#000;cursor:pointer">✓ Confirm '+t1val+' – '+t2val+'</button></div>';
+        }
       }
-      // numpad grid — ALWAYS rendered so users can correct a score on mobile
+      // numpad grid — number keys + ⌫ always work (so admin can fix a tie).
+      // SET is disabled when tied to prevent committing a tied score.
       ov+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(255,255,255,0.06);margin:'+(bothDone?'8px':'0')+' 14px 14px;border-radius:12px;overflow:hidden">';
       [1,2,3,4,5,6,7,8,9].forEach(d=>{ov+='<button onclick="npPress(\''+d+'\')" style="background:#0e0e1a;padding:16px 0;text-align:center;font-size:20px;font-weight:700;color:#f4f4f0;cursor:pointer;border:none;width:100%">'+d+'</button>'});
-      ov+='<button onclick="npDel()" style="background:#0e0e1a;padding:16px 0;text-align:center;font-size:16px;color:#ff5c47;cursor:pointer;border:none">⌫</button>';
+      ov+='<button onclick="npDel()" style="background:'+(isTied?'#1a0606':'#0e0e1a')+';padding:16px 0;text-align:center;font-size:16px;color:#ff5c47;cursor:pointer;'+(isTied?'border:1px solid rgba(255,92,71,0.4);font-weight:800':'border:none')+'">⌫</button>';
       ov+='<button onclick="npPress(\'0\')" style="background:#0e0e1a;padding:16px 0;text-align:center;font-size:20px;font-weight:700;color:#f4f4f0;cursor:pointer;border:none">0</button>';
-      ov+='<button onclick="npConfirm()" style="background:#c8ff00;padding:16px 0;text-align:center;font-size:12px;font-weight:900;color:#000;cursor:pointer;border:none">SET &rarr;</button>';
+      if(isTied){
+        ov+='<button disabled style="background:rgba(255,92,71,0.15);border:1px dashed rgba(255,92,71,0.3);padding:16px 0;text-align:center;font-size:11px;color:rgba(255,92,71,0.7);font-weight:800;cursor:not-allowed">SET &#x2715;</button>';
+      } else {
+        ov+='<button onclick="npConfirm()" style="background:#c8ff00;padding:16px 0;text-align:center;font-size:12px;font-weight:900;color:#000;cursor:pointer;border:none">SET &rarr;</button>';
+      }
       ov+='</div>';
       ov+='</div></div>';
       h+=ov;}}
@@ -2030,6 +2150,54 @@ function render(){
     }
   }
 
+  // ── In-round Sub modal (admin only) ──
+  if(subModalState&&isAdmin){
+    const lp=gL();const ssp=gSS();
+    if(lp&&ssp){
+      const partIdSet=new Set(ssp.participants||[]);
+      const benchPlayers=lp.players.filter(p=>p&&p.active!==false&&!p.subbedOut&&!p.temp&&p.id!==subModalState.pid&&!partIdSet.has(p.id));
+      let sm='<div style="position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:500;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:16px;backdrop-filter:blur(6px);overflow-y:auto" onclick="closeSubModal()">';
+      sm+='<div style="background:#111118;border-radius:18px;width:100%;max-width:380px;border:1px solid rgba(255,255,255,0.1);overflow:hidden" onclick="event.stopPropagation()">';
+      sm+='<div style="background:#0e0e1a;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center">';
+      sm+='<div><div style="font-size:9px;font-weight:900;color:#ff5c47;letter-spacing:.1em">SUB OUT</div><div style="font-size:14px;font-weight:700;color:#f4f4f0;margin-top:2px">'+subModalState.name+'</div></div>';
+      sm+='<button onclick="closeSubModal()" style="background:rgba(255,255,255,0.07);border:none;color:#7a7a8a;font-size:16px;width:30px;height:30px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center">\u2715</button>';
+      sm+='</div>';
+      if(benchPlayers.length){
+        sm+='<div style="padding:12px 14px 6px"><div style="font-size:9px;font-weight:900;color:rgba(200,255,0,0.7);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">Pull from bench</div>';
+        sm+='<div style="background:#0a0a0a;border:0.5px solid #1e1e1e;border-radius:8px;overflow:hidden">';
+        benchPlayers.forEach((p,i)=>{
+          sm+='<div style="display:flex;align-items:center;gap:8px;padding:9px 11px'+(i<benchPlayers.length-1?';border-bottom:0.5px solid #1a1a1a':'')+';cursor:pointer" onclick="subBenchAt(\''+p.id+'\')">';
+          sm+='<div style="flex:1;font-size:13px;font-weight:600;color:#f4f4f0">'+p.name+'</div>';
+          sm+='<span style="font-size:9px;background:'+(p.gender==='F'?'rgba(255,45,120,0.12);color:#ff69a0':'rgba(59,130,246,0.1);color:#5b9fff')+';padding:2px 7px;border-radius:10px;font-weight:600">'+p.gender+'</span>';
+          sm+='<span style="font-size:11px;color:#c8ff00;font-weight:700">\u2192</span>';
+          sm+='</div>';
+        });
+        sm+='</div></div>';
+      } else {
+        sm+='<div style="padding:10px 14px 6px;font-size:10px;color:rgba(255,255,255,0.4);text-align:center;font-style:italic">No bench players \u2014 every league member is in this ladder.</div>';
+      }
+      sm+='<div style="padding:8px 14px 6px"><div style="font-size:9px;font-weight:900;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">Add new permanent</div>';
+      sm+='<div style="font-size:9px;color:rgba(255,255,255,0.35);margin-bottom:6px">Joins league. Stats roll up to season leaderboard.</div>';
+      sm+='<div style="display:grid;grid-template-columns:1fr 56px 70px;gap:6px">';
+      sm+='<input id="subModalPermName" placeholder="Name" style="background:#0a0a0a;border:0.5px solid #1e1e1e;color:#f4f4f0;font-size:13px;padding:8px 10px;border-radius:6px;font-family:inherit;outline:none">';
+      sm+='<select id="subModalPermGender" style="background:#0a0a0a;border:0.5px solid #1e1e1e;color:#f4f4f0;font-size:13px;padding:8px 6px;border-radius:6px;font-family:inherit;outline:none"><option value="M">M</option><option value="F">F</option></select>';
+      sm+='<button onclick="subAddPermAt()" style="background:#c8ff00;border:none;color:#000;font-size:11px;font-weight:800;border-radius:6px;cursor:pointer">Add</button>';
+      sm+='</div></div>';
+      sm+='<div style="padding:8px 14px 6px"><div style="font-size:9px;font-weight:900;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">One-round / temp sub</div>';
+      sm+='<div style="font-size:9px;color:rgba(255,255,255,0.35);margin-bottom:6px">Counts in this ladder\u2019s stats. NOT on the season leaderboard.</div>';
+      sm+='<div style="display:grid;grid-template-columns:1fr 56px 70px;gap:6px">';
+      sm+='<input id="subModalTempName" placeholder="Name (or \"Sub\")" style="background:#0a0a0a;border:0.5px solid #1e1e1e;color:#f4f4f0;font-size:13px;padding:8px 10px;border-radius:6px;font-family:inherit;outline:none">';
+      sm+='<select id="subModalTempGender" style="background:#0a0a0a;border:0.5px solid #1e1e1e;color:#f4f4f0;font-size:13px;padding:8px 6px;border-radius:6px;font-family:inherit;outline:none"><option value="M">M</option><option value="F">F</option></select>';
+      sm+='<button onclick="subAddTempAt()" style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:#f4f4f0;font-size:11px;font-weight:700;border-radius:6px;cursor:pointer">Temp</button>';
+      sm+='</div></div>';
+      sm+='<div style="padding:10px 14px 14px;border-top:0.5px solid rgba(255,255,255,0.05);margin-top:6px">';
+      sm+='<button onclick="subClearAt()" style="width:100%;background:rgba(255,92,71,0.1);border:1px solid rgba(255,92,71,0.25);color:#ff5c47;font-size:11px;font-weight:700;padding:9px 0;border-radius:6px;cursor:pointer">Just sub out \u00b7 leave slot empty</button>';
+      sm+='</div>';
+      sm+='</div></div>';
+      h+=sm;
+    }
+  }
+
   // ── Swap mode banner (fixed top) ──
   if(swapMode&&isAdmin){
     const ss3=gSS();
@@ -2048,13 +2216,21 @@ function render(){
   if(tab==='stats')setTimeout(tkRenderChart,10);
   if(npState&&isAdmin){
     document.removeEventListener('keydown',window._npKeyHandler);
-    window._npKeyHandler=(e)=>{if(!npState)return;if(e.key>='0'&&e.key<='9'){npPress(e.key)}else if(e.key==='Backspace'){e.preventDefault();npDel()}else if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();npConfirm()}else if(e.key==='Escape'){npCancel()}};
+    window._npKeyHandler=(e)=>{
+      if(!npState)return;
+      const _ss=gSS();const _ct=_ss?.rounds?.[npState.ri]?.courts?.[npState.ci];
+      const _t1=_ct?.score?.t1,_t2=_ct?.score?.t2;
+      const _tied=_t1!=null&&_t2!=null&&_t1===_t2;
+      if(e.key>='0'&&e.key<='9'){npPress(e.key);}
+      else if(e.key==='Backspace'){e.preventDefault();npDel();}
+      else if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();if(!_tied)npConfirm();}
+      else if(e.key==='Escape'){if(!_tied)npCancel();}
+    };
     document.addEventListener('keydown',window._npKeyHandler);
   } else {document.removeEventListener('keydown',window._npKeyHandler);window._npKeyHandler=null;}}
 
 async function init(){
   applyTextSize();
-  // Show loading with status so we can diagnose
   document.getElementById('app').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0a0f;gap:16px;padding:24px"><div style="font-family:Inter,sans-serif;font-size:1.1rem;font-weight:700;color:#c8ff00" id="initStatus">Connecting...</div><div style="font-size:.75rem;color:#7a7a8a;text-align:center;max-width:280px" id="initDetail">Reaching the server</div></div>';
   const setStatus=(msg,detail)=>{const s=document.getElementById('initStatus');const d=document.getElementById('initDetail');if(s)s.textContent=msg;if(d)d.textContent=detail||''};
   try{
