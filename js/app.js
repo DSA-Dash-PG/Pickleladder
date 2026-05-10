@@ -852,62 +852,56 @@ function rStats(stats,season,l,ss){
     h+='<button style="flex:1;padding:7px 6px;font-size:9px;font-weight:800;color:'+(on?'#000':'rgba(255,255,255,0.3)')+';text-align:center;text-transform:uppercase;letter-spacing:.07em;border-radius:4px;border:none;cursor:pointer;background:'+(on?'#c8ff00':'transparent')+"\" onclick=\"setStatsInnerTab('"+t+"')\">"+labels[t]+'</button>';});
   h+='</div>';
 
-  // ══ STANDINGS ══
+  // ══ STANDINGS — uniform table (matches dashboard Leaderboard) ══
   if(statsInnerTab==='standings'){
     if(!has){h+='<p class="subtext" style="text-align:center;padding:20px">No scored games yet.</p>';return h;}
-    // bonus strip
+    // Bonus strip (only meaningful in season-wide view, but keep for context in session view too)
     if(isSeasonView){
-      h+='<div style="display:flex;background:#0d1400;border:0.5px solid rgba(200,255,0,0.15);border-radius:8px;overflow:hidden;margin-bottom:10px">';
-      [{pos:'1st',b:15},{pos:'2nd',b:10},{pos:'3rd',b:5}].forEach((x,i)=>{
-        h+='<div style="flex:1;text-align:center;padding:8px 4px'+(i<2?';border-right:1px solid rgba(200,255,0,0.1)':'')+'"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">'+x.pos+'</div><div style="font-size:16px;font-weight:900;color:#c8ff00;line-height:1">+'+x.b+'</div><div style="font-size:8px;color:rgba(200,255,0,0.4);margin-top:1px">bonus</div></div>';});
-      h+='<div style="flex:1;text-align:center;padding:8px 4px"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">Scope</div><div style="font-size:10px;font-weight:900;color:#c8ff00;line-height:1.3">All<br>ladders</div></div></div>';}
-    // #1 hero
-    const top=sorted[0];
-    if(top){
-      const topBonus=bonusData[top.id];const topWins=topBonus?.wins||0;const topTotal=totalPts(top);
-      h+='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:12px;overflow:hidden;margin-bottom:8px">';
-      // In session view this is THIS ladder's #1, not the cumulative season leader.
-      const headerLabel=isSeasonView?'Season leader':'Ladder leader';
-      const ladderCount=parentSeason?.sessions?.filter(x=>x.started).length||0;
-      const pillText=isSeasonView?(ladderCount+' ladders'):'This ladder';
-      h+='<div style="background:#0a0a0a;padding:6px 14px;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;justify-content:space-between"><div style="font-size:8px;font-weight:900;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.15em">'+headerLabel+'</div><div style="font-size:8px;background:rgba(200,255,0,0.12);color:#c8ff00;border:1px solid rgba(200,255,0,0.25);padding:2px 8px;border-radius:3px;font-weight:700">'+pillText+'</div></div>';
-      h+='<div'+pClick(top.id)+' style="padding:12px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #1a1a1a;background:#0d1400'+pCur()+'">';
-      h+='<div style="width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#c8ff00,#4ade80);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#000;flex-shrink:0">'+top.name.slice(0,2).toUpperCase()+'</div>';
-      h+='<div style="flex:1"><div style="font-size:20px;font-weight:900;color:#f4f4f0;letter-spacing:-.02em;line-height:1">'+top.name+(topWins>0?' '+crownStr(topWins):'')+'</div>';
-      if(topWins>0)h+='<div style="font-size:9px;color:rgba(200,255,0,0.5);margin-top:3px">'+topWins+' ladder win'+(topWins!==1?'s':'')+(isSeasonView&&(topBonus?.bonus||0)>0?' \u00b7 +'+(topBonus.bonus)+' bonus':'')+'</div>';
-      h+='</div><div style="text-align:right"><div style="font-size:26px;font-weight:900;color:#c8ff00;line-height:1">'+topTotal+'</div><div style="font-size:8px;color:rgba(200,255,0,0.5);text-transform:uppercase;letter-spacing:.1em;margin-top:1px">season pts</div></div></div>';
-      if(isSeasonView&&(topBonus?.bonus||0)>0){
-        h+='<div style="display:flex;gap:8px;padding:5px 14px;background:rgba(200,255,0,0.04);border-bottom:1px solid #1a1a1a;font-size:9px;font-weight:700">';
-        h+='<span style="color:rgba(200,255,0,0.55)">Game pts <span style="color:rgba(255,255,255,0.3)">'+top.pf+'</span></span>';
-        h+='<span style="color:rgba(255,255,255,0.15)">+</span>';
-        h+='<span style="color:rgba(200,255,0,0.55)">Bonus <span style="color:rgba(255,255,255,0.3)">+'+(topBonus.bonus)+'</span></span>';
-        h+='<span style="color:rgba(255,255,255,0.15)">=</span>';
-        h+='<span style="color:#c8ff00">'+topTotal+'</span></div>';}
-      // runners-up 2-5
-      sorted.slice(1,5).forEach((s,i)=>{
-        const rank=i+2;const wins=bonusData[s.id]?.wins||0;const total=totalPts(s);
-        const barW=Math.round(total/topTotal*100);
-        const prevRank=prevRankMap[s.id];const hasPrevSeen=Object.keys(prevRankMap).length>0;const delta=prevRank&&prevRank!==rank?(prevRank>rank?'<span style="color:#4ade80;font-size:9px;font-weight:800">\u25b2'+(prevRank-rank)+'</span>':'<span style="color:#ff5c47;font-size:9px;font-weight:800">\u25bc'+(rank-prevRank)+'</span>'):(prevRank?'<span style="color:rgba(255,255,255,0.2);font-size:9px">\u2014</span>':(hasPrevSeen?'<span style="color:#4ade80;font-size:9px;font-weight:700">new</span>':''));
-        h+='<div'+pClick(s.id)+' style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:0.5px solid #111'+(i%2===1?';background:#0a0a0a':'')+pCur()+'">';
-        h+='<div style="font-size:11px;color:rgba(255,255,255,0.2);width:14px;text-align:center;flex-shrink:0">'+rank+'</div>';
-        h+='<div style="flex:1"><div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.8)">'+s.name+(wins>0?' '+crownStr(wins):'')+'</div>';
-        if(wins>0)h+='<div style="font-size:9px;color:rgba(255,255,255,0.25)">'+wins+' win'+(wins!==1?'s':'')+'</div>';
-        else h+='<div style="font-size:9px;color:rgba(255,255,255,0.2)">no wins yet</div>';
-        h+='</div>'+delta+'<div style="width:44px;height:3px;background:rgba(255,255,255,0.07);border-radius:2px;overflow:hidden"><div style="height:100%;background:rgba(200,255,0,0.45);border-radius:2px;width:'+barW+'%"></div></div>';
-        h+='<div style="font-size:12px;font-weight:900;color:rgba(200,255,0,0.7);min-width:28px;text-align:right">'+total+'</div></div>'});
-      h+='</div>';}
-    // remaining players 6+
-    const activeStats=sorted.filter(s=>s.w+s.l>0);
-    if(activeStats.length>5){
-      h+='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:8px;overflow:hidden">';
-      h+='<div style="padding:7px 14px;background:#0a0a0a;border-bottom:1px solid #1a1a1a;font-size:9px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.12em">All players \u00b7 '+activeStats.length+' ranked</div>';
-      activeStats.slice(5).forEach((s,i)=>{
-        const wins=bonusData[s.id]?.wins||0;const total=totalPts(s);
-        h+='<div'+pClick(s.id)+' style="display:flex;align-items:center;gap:8px;padding:7px 14px;border-bottom:0.5px solid #111'+(i%2===1?';background:#0a0a0a':'')+pCur()+'">';
-        h+='<div style="font-size:10px;color:rgba(255,255,255,0.2);width:20px;text-align:right;flex-shrink:0">'+(i+6)+'</div>';
-        h+='<div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.7);flex:1">'+s.name+(wins>0?' '+crownStr(wins):'')+'</div>';
-        h+='<div style="font-size:12px;font-weight:800;color:rgba(200,255,0,0.6)">'+total+'</div></div>'});
-      h+='</div>';}
+      h+='<div style="display:flex;background:#0d1400;border:0.5px solid rgba(200,255,0,0.15);border-radius:8px;overflow:hidden;margin-bottom:8px">';
+      [{p:'1st',b:15},{p:'2nd',b:10},{p:'3rd',b:5}].forEach((x,i)=>{
+        h+='<div style="flex:1;text-align:center;padding:8px 4px;border-right:1px solid rgba(200,255,0,0.1)"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">'+x.p+'</div><div style="font-size:16px;font-weight:900;color:#c8ff00;line-height:1">+'+x.b+'</div><div style="font-size:8px;color:rgba(200,255,0,0.4);margin-top:1px">bonus</div></div>';
+      });
+      h+='<div style="flex:1;text-align:center;padding:8px 4px"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">Scope</div><div style="font-size:10px;font-weight:900;color:#c8ff00;line-height:1.3">All<br>ladders</div></div></div>';
+    }
+    // Hint about row-tap profile popup
+    h+='<div style="font-size:10px;color:rgba(255,255,255,0.45);text-align:center;line-height:1.5;padding:0 4px 8px">Tap a row for player profile <span style="color:rgba(255,255,255,0.3)">\u00b7</span> W <span style="color:rgba(255,255,255,0.3)">\u00b7</span> L <span style="color:rgba(255,255,255,0.3)">\u00b7</span> Avg <span style="color:rgba(255,255,255,0.3)">\u00b7</span> Win % <span style="color:rgba(255,255,255,0.3)">\u00b7</span> PS <span style="color:rgba(255,255,255,0.3)">\u00b7</span> PA <span style="color:rgba(255,255,255,0.3)">\u00b7</span> Diff <span style="color:rgba(255,255,255,0.3)">\u00b7</span> Streak</div>';
+
+    // Uniform table — top 3 differ only by rank label color, total color, and row tint
+    const podLabel=['1st','2nd','3rd'];
+    const podCol=['#ffcc00','#c0c0c0','#cd7f32'];
+    const podBg=['#1a1200','#111','#12100a'];
+    const cols='30px 26px 1fr 26px 26px 38px 40px 44px';
+    const sortedActive=sorted.filter(s=>s.w+s.l+s.t>0);
+    h+='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:10px;overflow:hidden">';
+    h+='<div style="display:grid;grid-template-columns:'+cols+';gap:5px;padding:7px 12px;background:#0a0a0a;border-bottom:1px solid #1a1a1a;font-size:8px;font-weight:700;color:rgba(255,255,255,0.35);letter-spacing:.1em;text-transform:uppercase">';
+    ['#','\u0394','Player','W','L','Diff','Bonus','Total'].forEach((c,j)=>{
+      const align=j===2?'left':j===1?'center':'right';
+      h+='<div style="text-align:'+align+'">'+c+'</div>';
+    });
+    h+='</div>';
+
+    sortedActive.forEach((s,i)=>{
+      const rank=i+1;
+      const wins=bonusData[s.id]?.wins||0;
+      const bonus=bonusData[s.id]?.bonus||0;
+      const total=totalPts(s);
+      const d=s.pf-s.pa;
+      const isPod=rank<=3;
+      const rankColor=isPod?podCol[rank-1]:'rgba(255,255,255,0.4)';
+      const totalColor=isPod?podCol[rank-1]:'#c8ff00';
+      const stripeBg=isPod?podBg[rank-1]:(i%2===1?'#0a0a0a':'transparent');
+      h+='<div'+pClick(s.id)+' style="display:grid;grid-template-columns:'+cols+';gap:5px;padding:9px 12px;border-bottom:0.5px solid #111;background:'+stripeBg+';align-items:center;font-variant-numeric:tabular-nums'+pCur()+'">';
+      h+='<div style="text-align:right;font-size:11px;font-weight:'+(isPod?'700':'400')+';color:'+rankColor+'">'+(isPod?podLabel[rank-1]:rank)+'</div>';
+      h+='<div style="text-align:center;font-size:9px">'+renderDelta(prevRankMap[s.id],rank,Object.keys(prevRankMap).length>0)+'</div>';
+      h+='<div style="font-size:'+(isPod?'13':'12')+'px;font-weight:700;color:'+(isPod?'#f4f4f0':'rgba(255,255,255,0.85)')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+(wins>0?' '+crownStr(wins):'')+'</div>';
+      h+='<div style="text-align:right;font-size:12px;font-weight:700;color:#c8ff00">'+s.w+'</div>';
+      h+='<div style="text-align:right;font-size:12px;color:rgba(255,255,255,0.45)">'+s.l+'</div>';
+      h+='<div style="text-align:right;font-size:11px;font-weight:'+(d>=0?'700':'400')+';color:'+(d>0?'#c8ff00':d<0?'#ff5c47':'rgba(255,255,255,0.4)')+'">'+(d>0?'+':'')+d+'</div>';
+      h+='<div style="text-align:right;font-size:11px;font-weight:800;color:'+(bonus>0?'#c8ff00':'rgba(255,255,255,0.2)')+'">'+(bonus>0?'+'+bonus:'\u2014')+'</div>';
+      h+='<div style="text-align:right;font-size:'+(isPod?'14':'13')+'px;font-weight:900;color:'+totalColor+'">'+total+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
   }
 
   // ══ FULL STATS ══
