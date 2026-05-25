@@ -1441,7 +1441,7 @@ function rRules(ss){
   [
     {col:'#c8ff00',title:'Most cumulative points wins',body:'Points scored in every round add up. Every game matters equally.'},
     {col:'#c8ff00',title:'Tiebreaker: point differential',body:'If tied on total points, the player with the better +/- takes the higher rank.'},
-    {col:'#ff5c47',title:'No ties allowed',body:'If the score is tied when time expires, the last point does not count. Whoever was ahead before it wins.'},
+    {col:'#ff5c47',title:'No ties allowed',body:'If the score is tied when time expires, you play out the point. Whoever wins that point gets the win.'},
     {col:'#ffcc00',title:'Bonus points for ladder finishes',body:'1st place +15 pts, 2nd place +10 pts, 3rd place +5 pts. Stacks across all ladders.'},
   ].forEach(r=>{
     h+='<div style="display:flex;align-items:flex-start;gap:10px;background:rgba(255,255,255,0.03);border:0.5px solid rgba(255,255,255,0.07);border-radius:10px;padding:12px 14px">';
