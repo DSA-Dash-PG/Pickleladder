@@ -2217,14 +2217,14 @@ function render(){
       sm+='<button onclick="subAddPermAt()" style="background:#c8ff00;border:none;color:#000;font-size:11px;font-weight:800;border-radius:6px;cursor:pointer">Add</button>';
       sm+='</div></div>';
       sm+='<div style="padding:8px 14px 6px"><div style="font-size:9px;font-weight:900;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">One-round / temp sub</div>';
-      sm+='<div style="font-size:9px;color:rgba(255,255,255,0.35);margin-bottom:6px">Counts in this ladder\u2019s stats. NOT on the season leaderboard.</div>';
+      sm+='<div style="font-size:9px;color:rgba(255,255,255,0.35);margin-bottom:6px">Counts in this ladder’s stats. NOT on the season leaderboard.</div>';
       sm+='<div style="display:grid;grid-template-columns:1fr 56px 70px;gap:6px">';
-      sm+='<input id="subModalTempName" placeholder="Name (or \"Sub\")" style="background:#0a0a0a;border:0.5px solid #1e1e1e;color:#f4f4f0;font-size:13px;padding:8px 10px;border-radius:6px;font-family:inherit;outline:none">';
+      sm+='<input id="subModalTempName" placeholder="Name (or &quot;Sub&quot;)" style="background:#0a0a0a;border:0.5px solid #1e1e1e;color:#f4f4f0;font-size:13px;padding:8px 10px;border-radius:6px;font-family:inherit;outline:none">';
       sm+='<select id="subModalTempGender" style="background:#0a0a0a;border:0.5px solid #1e1e1e;color:#f4f4f0;font-size:13px;padding:8px 6px;border-radius:6px;font-family:inherit;outline:none"><option value="M">M</option><option value="F">F</option></select>';
       sm+='<button onclick="subAddTempAt()" style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:#f4f4f0;font-size:11px;font-weight:700;border-radius:6px;cursor:pointer">Temp</button>';
       sm+='</div></div>';
       sm+='<div style="padding:10px 14px 14px;border-top:0.5px solid rgba(255,255,255,0.05);margin-top:6px">';
-      sm+='<button onclick="subClearAt()" style="width:100%;background:rgba(255,92,71,0.1);border:1px solid rgba(255,92,71,0.25);color:#ff5c47;font-size:11px;font-weight:700;padding:9px 0;border-radius:6px;cursor:pointer">Just sub out \u00b7 leave slot empty</button>';
+      sm+='<button onclick="subClearAt()" style="width:100%;background:rgba(255,92,71,0.1);border:1px solid rgba(255,92,71,0.25);color:#ff5c47;font-size:11px;font-weight:700;padding:9px 0;border-radius:6px;cursor:pointer">Just sub out · leave slot empty</button>';
       sm+='</div>';
       sm+='</div></div>';
       h+=sm;
@@ -2238,7 +2238,7 @@ function render(){
       const srcT=swapMode.ti===0?srcCt?.team1:srcCt?.team2;const srcP=srcT?.[swapMode.pi];
       h+='<div style="position:fixed;top:0;left:0;right:0;z-index:400;background:rgba(255,204,0,0.15);border-bottom:2px solid rgba(255,204,0,0.4);padding:8px 16px;display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(8px)">';
       h+='<div><div style="font-size:8px;font-weight:900;color:#ffcc00;text-transform:uppercase;letter-spacing:.08em">Swapping player</div>';
-      h+='<div style="font-size:14px;font-weight:700;color:#f4f4f0;margin-top:1px">'+(srcP?.name||'?')+' \u2192 tap any player to swap</div></div>';
+      h+='<div style="font-size:14px;font-weight:700;color:#f4f4f0;margin-top:1px">'+(srcP?.name||'?')+' → tap any player to swap</div></div>';
       h+='<button onclick="cancelSwap()" style="background:rgba(255,92,71,0.15);border:1px solid rgba(255,92,71,0.3);color:#ff5c47;font-size:9px;font-weight:700;padding:6px 12px;border-radius:6px;cursor:pointer">Cancel</button>';
       h+='</div>';}}
 
@@ -2280,7 +2280,7 @@ async function init(){
     render();
   }catch(e){
     console.error('Init failed:',e);
-    document.getElementById('app').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0a0f;gap:16px;padding:24px"><div style="font-size:2rem">\u26a0\ufe0f</div><div style="font-family:Inter,sans-serif;font-size:1rem;font-weight:700;color:#ff5c47;text-align:center">Could not connect</div><div style="font-size:.8rem;color:#7a7a8a;text-align:center;max-width:300px;line-height:1.6">'+e.message+'</div><button onclick="init()" style="margin-top:8px;padding:10px 24px;background:#c8ff00;color:#0a0a0f;border:none;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer">Retry</button></div>';
+    document.getElementById('app').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0a0f;gap:16px;padding:24px"><div style="font-size:2rem">⚠️</div><div style="font-family:Inter,sans-serif;font-size:1rem;font-weight:700;color:#ff5c47;text-align:center">Could not connect</div><div style="font-size:.8rem;color:#7a7a8a;text-align:center;max-width:300px;line-height:1.6">'+e.message+'</div><button onclick="init()" style="margin-top:8px;padding:10px 24px;background:#c8ff00;color:#0a0a0f;border:none;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer">Retry</button></div>';
   }}
 document.addEventListener('DOMContentLoaded',init);
 
