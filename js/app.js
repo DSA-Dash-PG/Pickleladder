@@ -1475,12 +1475,12 @@ function rPlayers(l){
   const bonusData=(s&&!isAdmin)?calcBonusPts(s.sessions,l.players):{};
   const seasonStats=(s&&!isAdmin)?calcStats(s.sessions,l.players):[];
   const totalPts=(pid)=>{const st=seasonStats.find(x=>x.id===pid);return(st?.pf||0)+(bonusData[pid]?.bonus||0)};
-  const sortedActive=isAdmin?active:[...active].sort((a,b)=>totalPts(b.id)-totalPts(a.id));
+  const sortedActive=[...active].sort((a,b)=>isAdmin?a.name.localeCompare(b.name):totalPts(b.id)-totalPts(a.id));
   if(isAdmin)h+='<div class="card fu"><h3 class="card-t">Add player to league</h3><div style="display:grid;grid-template-columns:1fr 76px;gap:10px;margin-bottom:10px"><input id="fPN" class="inp" placeholder="Player name" onkeydown="if(event.key===\'Enter\')addPlayer()"><select id="fPG" class="inp"><option value="M">M</option><option value="F">F</option></select></div><button class="bp full" onclick="addPlayer()">Add</button></div>';
   h+='<div class="card fu"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><h3 class="card-t" style="margin:0">Active players</h3><span class="pill ok">'+active.length+'</span></div>';
   if(!active.length)h+='<p class="subtext" style="text-align:center;padding:20px">No active players.</p>';
   else if(isAdmin){
-    h+=active.map(p=>'<div class="pr"><div class="pn">'+(l.players.indexOf(p)+1)+'</div><span style="flex:1;font-weight:600;font-size:.88rem">'+p.name+'</span><span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span><button class="edit-btn" onclick="openEditPlayer(\''+p.id+'\')">Edit</button><button class="edit-btn" style="color:var(--loss)" onclick="deactivatePlayer(\''+p.id+'\')">Deactivate</button></div>').join('');
+    h+=sortedActive.map(p=>'<div class="pr"><span style="flex:1;font-weight:600;font-size:.88rem">'+p.name+'</span><span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span><button class="edit-btn" onclick="openEditPlayer(\''+p.id+'\')">Edit</button><button class="edit-btn" style="color:var(--loss)" onclick="deactivatePlayer(\''+p.id+'\')">Deactivate</button></div>').join('');
   } else {
     h+=sortedActive.map((p,i)=>{
       const wins=bonusData[p.id]?.wins||0;
@@ -1499,7 +1499,7 @@ function rPlayers(l){
   h+='</div>';
   if(inactive.length&&isAdmin){
     h+='<div class="card fu"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><h3 class="card-t" style="margin:0">Inactive players</h3><span class="pill">'+inactive.length+'</span></div>';
-    h+=inactive.map(p=>'<div class="pr" style="opacity:.5"><div class="pn" style="background:var(--surf4);color:var(--muted)">'+(l.players.indexOf(p)+1)+'</div><span style="flex:1;font-weight:600;font-size:.88rem">'+p.name+'</span><span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span><button class="edit-btn" onclick="openEditPlayer(\''+p.id+'\')">Edit</button><button class="edit-btn" style="color:var(--lime)" onclick="reactivatePlayer(\''+p.id+'\')">Activate</button></div>').join('');
+    h+=[...inactive].sort((a,b)=>a.name.localeCompare(b.name)).map(p=>'<div class="pr" style="opacity:.5"><span style="flex:1;font-weight:600;font-size:.88rem">'+p.name+'</span><span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span><button class="edit-btn" onclick="openEditPlayer(\''+p.id+'\')">Edit</button><button class="edit-btn" style="color:var(--lime)" onclick="reactivatePlayer(\''+p.id+'\')">Activate</button></div>').join('');
     h+='</div>'}
   return h}
 function rSessionRoster(l,ss){let h='';const parts=ss.participants||[];const activePlayers=l.players.filter(p=>p.active!==false);const nSelected=parts.length;
@@ -1510,8 +1510,11 @@ function rSessionRoster(l,ss){let h='';const parts=ss.participants||[];const act
   // Public viewers see only the participants of THIS ladder (not the whole league roster).
   // Admins see every active league player so they can pick who's in.
   const rosterPlayers=isAdmin?activePlayers:activePlayers.filter(p=>parts.includes(p.id));
-  if(!isAdmin&&!rosterPlayers.length)h+='<div style="text-align:center;padding:24px;color:var(--muted);font-size:.85rem">No players in this ladder yet.</div>';
-  h+=rosterPlayers.map(p=>{const isIn=parts.includes(p.id);const pn=l.players.indexOf(p)+1;const canToggle=isAdmin&&!ss.started;return'<div class="pr pick-row'+(isIn?' pick-in':'')+'"'+(canToggle?' onclick="toggleParticipant(\''+p.id+'\')" style="cursor:pointer"':'')+'><div class="pick-check">'+(isIn?'✓':'')+'</div><div class="pn'+(isIn?'':'" style="background:var(--surf4);color:var(--muted)')+'">'+pn+'</div><span style="flex:1;font-weight:600;font-size:.88rem">'+p.name+'</span><span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span>'+(isAdmin?'<button class="edit-btn" onclick="event.stopPropagation();openEditPlayer(\''+p.id+'\')">Edit</button>':'')+(isAdmin&&ss.started?'<button class="edit-btn" style="color:var(--warn)" onclick="event.stopPropagation();replacePlayer(\''+p.id+'\')">Swap</button>':'')+'</div>'}).join('');
+  const sortedRoster=[...rosterPlayers].sort((a,b)=>a.name.localeCompare(b.name));
+  const _rs=gS();
+  const drRatings=(!isAdmin&&_rs)?calcDinkRating(calcStats(_rs.sessions,l.players),_rs.sessions,l.players):{};
+  if(!isAdmin&&!sortedRoster.length)h+='<div style="text-align:center;padding:24px;color:var(--muted);font-size:.85rem">No players in this ladder yet.</div>';
+  h+=sortedRoster.map(p=>{const isIn=parts.includes(p.id);const canToggle=isAdmin&&!ss.started;const dr=drRatings[p.id];const drStr=dr!=null?dr.toFixed(1):'—';return'<div class="pr pick-row'+(isIn?' pick-in':'')+'"'+(canToggle?' onclick="toggleParticipant(\''+p.id+'\')" style="cursor:pointer"':'')+'><div class="pick-check">'+(isIn?'✓':'')+'</div>'+(!isAdmin?'<span style="flex:1;font-weight:600;font-size:.88rem;cursor:pointer" onclick="event.stopPropagation();openPlayerStats(\''+p.id+'\')">'+p.name+'</span>':'<span style="flex:1;font-weight:600;font-size:.88rem">'+p.name+'</span>')+'<span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span>'+(!isAdmin?'<div style="text-align:right;min-width:42px"><div style="font-size:13px;font-weight:700;color:var(--muted)">'+drStr+'</div><div style="font-size:9px;color:var(--muted);opacity:.6">DR</div></div>':'')+(isAdmin?'<button class="edit-btn" onclick="event.stopPropagation();openEditPlayer(\''+p.id+'\')">Edit</button>':'')+(isAdmin&&ss.started?'<button class="edit-btn" style="color:var(--warn)" onclick="event.stopPropagation();replacePlayer(\''+p.id+'\')">Swap</button>':'')+'</div>'}).join('');
   h+='</div>';
   if(isAdmin&&nSelected<4)h+='<div style="text-align:center;padding:10px"><p style="color:var(--warn);font-size:.82rem">Need at least 4 participants to start.</p></div>';
   if(isAdmin&&ss.started&&!ss.finished){
