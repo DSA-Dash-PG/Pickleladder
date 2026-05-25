@@ -813,7 +813,7 @@ async function deleteSession(ssid){const l=gL();const s=gS();if(!l||!s)return;co
 
 function go(v,t){view=v;if(t)tab=t;viewingRound=-1;swapMode=null;npState=null;if(v==='newSession')formCourtCount=4;render();if(v==='newSession')setTimeout(updateCourtInputs,10)}
 function selectLadder(id){activeLadderId=id;activeSessionId=null;view='dashboard';tab='overview';viewingRound=-1;render()}
-function openSession(id){activeSessionId=id;view='session';viewingRound=-1;swapMode=null;npState=null;const ss=gSS();const finished=ss?.finished;tab='play';if(finished&&!isAdmin)pvTab='now';mapOpen=ss?shouldMapOpen(ss)||ss.started:false;render()}
+function openSession(id){activeSessionId=id;view='session';viewingRound=-1;swapMode=null;npState=null;const ss=gSS();const finished=ss?.finished;tab=isAdmin?'play':'info';if(finished&&!isAdmin)pvTab='now';mapOpen=ss?shouldMapOpen(ss)||ss.started:false;render()}
 function setPvTab(t){pvTab=t;render()}
 
 function tkSetMode(m){tkMode=m;tkPicked.clear();render();setTimeout(tkRenderChart,10)}
@@ -1502,6 +1502,81 @@ function rPlayers(l){
     h+=[...inactive].sort((a,b)=>a.name.localeCompare(b.name)).map(p=>'<div class="pr" style="opacity:.5"><span style="flex:1;font-weight:600;font-size:.88rem">'+p.name+'</span><span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span><button class="edit-btn" onclick="openEditPlayer(\''+p.id+'\')">Edit</button><button class="edit-btn" style="color:var(--lime)" onclick="reactivatePlayer(\''+p.id+'\')">Activate</button></div>').join('');
     h+='</div>'}
   return h}
+function timeUntil(ss){
+  if(!ss.date||!ss.config?.startTime)return null;
+  try{
+    const[hh,mm]=ss.config.startTime.split(':').map(Number);
+    const start=new Date(ss.date+'T'+String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0')+':00');
+    const diff=start-new Date();
+    if(diff<=0)return null;
+    const totalMins=Math.floor(diff/60000);
+    if(totalMins<60)return totalMins+' min';
+    const hrs=Math.floor(totalMins/60);const mins=totalMins%60;
+    return mins>0?hrs+'h '+mins+'m':hrs+' hour'+(hrs!==1?'s':'');
+  }catch{return null}}
+
+function rLadderInfo(l,ss){
+  let h='';
+  const nC=ss.config.courts||4;
+  const names=ss.config.courtNames?.length?ss.config.courtNames:defaultCourtNames(nC);
+  const nPlayers=ss.participants?.length||l.players.filter(p=>p.active!==false).length;
+  // Status badge
+  let badge='';
+  if(ss.finished){
+    badge='<span class="pill" style="background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.5);border:0.5px solid rgba(255,255,255,0.12)">Complete</span>';
+  } else if(ss.started){
+    badge='<span class="pill live"><span class="dot"></span>Live · Rd '+(ss.currentRound+1)+'</span>';
+  } else {
+    const cd=timeUntil(ss);
+    badge=cd
+      ?'<span class="pill" style="background:rgba(0,229,255,0.1);color:#00e5ff;border:0.5px solid rgba(0,229,255,0.25)">Starts in '+cd+'</span>'
+      :'<span class="pill" style="background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.5);border:0.5px solid rgba(255,255,255,0.12)">Upcoming</span>';
+  }
+  // Header card
+  h+='<div class="card fu">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">';
+  h+='<div style="font-size:10px;font-weight:700;color:rgba(200,255,0,0.6);letter-spacing:.15em;text-transform:uppercase">'+(ss.name||'Ladder')+'</div>';
+  h+=badge+'</div>';
+  h+='<div style="font-size:20px;font-weight:900;color:#f4f4f0;line-height:1.15;margin-bottom:4px">'+fmtDate(ss.date)+(ss.config.startTime?' · '+fmt12(ss.config.startTime):'')+'</div>';
+  h+='<div style="font-size:13px;color:rgba(255,255,255,0.4)">'+l.name+(ss.config.place?' · '+ss.config.place:'')+'</div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px">';
+  [{v:nPlayers,l:'Players'},{v:nC,l:'Courts'},{v:ss.config.rounds,l:'Rounds'}].forEach(c=>{
+    h+='<div style="background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.07);border-radius:10px;padding:12px 8px;text-align:center">';
+    h+='<div style="font-size:22px;font-weight:900;color:#f4f4f0;line-height:1">'+c.v+'</div>';
+    h+='<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:4px;text-transform:uppercase;letter-spacing:.06em">'+c.l+'</div></div>';
+  });
+  h+='</div></div>';
+  // Court flow card
+  const courtAccents=[
+    {bg:'rgba(255,204,0,0.07)',bd:'rgba(255,204,0,0.25)',nameCol:'#ffcc00',badgeBg:'rgba(255,204,0,0.15)',badgeCol:'#ffcc00'},
+    {bg:'rgba(0,229,255,0.04)',bd:'rgba(255,255,255,0.07)',nameCol:'rgba(255,255,255,0.85)',badgeBg:'rgba(0,229,255,0.1)',badgeCol:'#00e5ff'},
+    {bg:'rgba(255,255,255,0.03)',bd:'rgba(255,255,255,0.07)',nameCol:'rgba(255,255,255,0.85)',badgeBg:'rgba(59,130,246,0.1)',badgeCol:'#60a5fa'},
+    {bg:'rgba(255,255,255,0.03)',bd:'rgba(255,255,255,0.07)',nameCol:'rgba(255,255,255,0.85)',badgeBg:'rgba(167,139,250,0.1)',badgeCol:'#a78bfa'},
+  ];
+  h+='<div class="card fu"><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.3);letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px">Court flow</div>';
+  for(let i=0;i<nC;i++){
+    const name=names[i];
+    const isKing=i===0;const isBottom=i===nC-1;
+    const ac=courtAccents[Math.min(i,courtAccents.length-1)];
+    const winTag=isKing?'W → stay':'W → up ↑';
+    const loseTag=isBottom?'L → stay':'L → down ↓';
+    const loseTagBg=isBottom?'rgba(167,139,250,0.15)':'rgba(255,92,71,0.1)';
+    const loseTagCol=isBottom?'#a78bfa':'#ff5c47';
+    h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;margin-bottom:6px;background:'+ac.bg+';border:0.5px solid '+ac.bd+'">';
+    h+='<div style="width:36px;height:36px;border-radius:8px;background:'+ac.badgeBg+';display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:'+ac.badgeCol+';flex-shrink:0">'+name+'</div>';
+    h+='<div style="flex:1"><div style="font-size:14px;font-weight:700;color:'+ac.nameCol+'">'+name+(isKing?' — King Court':isBottom?' — Bottom':'')+'</div>';
+    h+='<div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px">'+(isKing?'Win the top, hold the throne':isBottom?'Work your way up':'Middle court')+'</div></div>';
+    h+='<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">';
+    h+='<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:rgba(200,255,0,0.1);color:#c8ff00">'+winTag+'</span>';
+    h+='<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:'+loseTagBg+';color:'+loseTagCol+'">'+loseTag+'</span>';
+    h+='</div></div>';
+    if(i<nC-1)h+='<div style="display:flex;justify-content:center;margin:-2px 0;color:rgba(255,255,255,0.15);font-size:12px">↕</div>';
+  }
+  h+='<div style="background:rgba(255,255,255,0.03);border:0.5px solid rgba(255,255,255,0.07);border-radius:10px;padding:11px 13px;margin-top:12px">';
+  h+='<div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.65"><span style="color:rgba(200,255,0,0.7);font-weight:700">Partners split every round</span> — you never play with the same partner twice in a row. Points scored in every round add up all season.</div>';
+  h+='</div></div>';
+  return h;}
+
 function rSessionRoster(l,ss){let h='';const parts=ss.participants||[];const activePlayers=l.players.filter(p=>p.active!==false);const nSelected=parts.length;
   if(isAdmin)h+='<div class="card fu"><h3 class="card-t">Add new player</h3><div style="font-size:.72rem;color:var(--muted);margin-bottom:8px">Adds to league roster and selects for this ladder</div><div style="display:grid;grid-template-columns:1fr 76px;gap:10px;margin-bottom:10px"><input id="fPN" class="inp" placeholder="Player name" onkeydown="if(event.key===\'Enter\')addAndSelect()"><select id="fPG" class="inp"><option value="M">M</option><option value="F">F</option></select></div><button class="bp full" onclick="addAndSelect()">Add &amp; select</button></div>';
   h+='<div class="card fu"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 class="card-t" style="margin:0">'+(isAdmin?'Ladder participants':'Players in this ladder')+'</h3><span class="pill '+(nSelected>=4?'ok':'')+'" style="'+(nSelected<4&&isAdmin?'background:var(--warn-bg);color:var(--warn);border-color:var(--warn-bd)':'')+'">'+nSelected+(isAdmin?' selected':' player'+(nSelected!==1?'s':''))+'</span></div>';
@@ -1514,7 +1589,7 @@ function rSessionRoster(l,ss){let h='';const parts=ss.participants||[];const act
   const _rs=gS();
   const drRatings=(!isAdmin&&_rs)?calcDinkRating(calcStats(_rs.sessions,l.players),_rs.sessions,l.players):{};
   if(!isAdmin&&!sortedRoster.length)h+='<div style="text-align:center;padding:24px;color:var(--muted);font-size:.85rem">No players in this ladder yet.</div>';
-  h+=sortedRoster.map(p=>{const isIn=parts.includes(p.id);const canToggle=isAdmin&&!ss.started;const dr=drRatings[p.id];const drStr=dr!=null?dr.toFixed(1):'—';return'<div class="pr pick-row'+(isIn?' pick-in':'')+'"'+(canToggle?' onclick="toggleParticipant(\''+p.id+'\')" style="cursor:pointer"':'')+'><div class="pick-check">'+(isIn?'✓':'')+'</div>'+(!isAdmin?'<span style="flex:1;font-weight:600;font-size:.88rem;cursor:pointer" onclick="event.stopPropagation();openPlayerStats(\''+p.id+'\')">'+p.name+'</span>':'<span style="flex:1;font-weight:600;font-size:.88rem">'+p.name+'</span>')+'<span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span>'+(!isAdmin?'<div style="text-align:right;min-width:42px"><div style="font-size:13px;font-weight:700;color:var(--muted)">'+drStr+'</div><div style="font-size:9px;color:var(--muted);opacity:.6">DR</div></div>':'')+(isAdmin?'<button class="edit-btn" onclick="event.stopPropagation();openEditPlayer(\''+p.id+'\')">Edit</button>':'')+(isAdmin&&ss.started?'<button class="edit-btn" style="color:var(--warn)" onclick="event.stopPropagation();replacePlayer(\''+p.id+'\')">Swap</button>':'')+'</div>'}).join('');
+  h+=sortedRoster.map(p=>{const isIn=parts.includes(p.id);const canToggle=isAdmin&&!ss.started;const dr=drRatings[p.id];const drStr=dr!=null?dr.toFixed(1):'—';return'<div class="pr pick-row'+(isIn?' pick-in':'')+'"'+(canToggle?' onclick="toggleParticipant(\''+p.id+'\')" style="cursor:pointer"':'')+'>'+(isAdmin?'<div class="pick-check">'+(isIn?'✓':'')+'</div>':'')+(!isAdmin?'<span style="flex:1;font-weight:600;font-size:.88rem;cursor:pointer" onclick="event.stopPropagation();openPlayerStats(\''+p.id+'\')">'+p.name+'</span>':'<span style="flex:1;font-weight:600;font-size:.88rem">'+p.name+'</span>')+'<span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span>'+(!isAdmin?'<div style="text-align:right;min-width:42px"><div style="font-size:13px;font-weight:700;color:var(--muted)">'+drStr+'</div><div style="font-size:9px;color:var(--muted);opacity:.6">DR</div></div>':'')+(isAdmin?'<button class="edit-btn" onclick="event.stopPropagation();openEditPlayer(\''+p.id+'\')">Edit</button>':'')+(isAdmin&&ss.started?'<button class="edit-btn" style="color:var(--warn)" onclick="event.stopPropagation();replacePlayer(\''+p.id+'\')">Swap</button>':'')+'</div>'}).join('');
   h+='</div>';
   if(isAdmin&&nSelected<4)h+='<div style="text-align:center;padding:10px"><p style="color:var(--warn);font-size:.82rem">Need at least 4 participants to start.</p></div>';
   if(isAdmin&&ss.started&&!ss.finished){
@@ -1907,8 +1982,9 @@ function render(){
     } else {
       const pTab=tab==='courtboard'||tab==='ladder'?'courtboard':tab;
       h+='<div class="tabs">';
+      h+='<button class="tab'+(pTab==='info'?' active':'')+'" onclick="tab=\'info\';render()">Info</button>';
       h+='<button class="tab'+(pTab==='courtboard'?' active':'')+'" onclick="tab=\'courtboard\';render()">Ladder</button>';
-      h+='<button class="tab'+(pTab==='roster'?' active':'')+'" onclick="tab=\'roster\';render()">Roster</button>';
+      h+='<button class="tab'+(pTab==='roster'?' active':'')+'" onclick="tab=\'roster\';render()">Pickleballers</button>';
       h+='<button class="tab'+(pTab==='stats'?' active':'')+'" onclick="tab=\'stats\';render()">Stats</button>';
       h+='<button class="tab" style="margin-left:auto;font-size:.68rem" onclick="go(\'dashboard\',\'ladders\')">← Back</button></div>';
     }
@@ -1965,10 +2041,11 @@ function render(){
       else if(tab==='stats')h+=rStats(sStats,null,l,ss);
       else if(tab==='admin')h+=rSessionAdmin(l,ss)}
     else{
-      if(tab==='courtboard'||tab==='ladder')h+=rPlayerView(l,ss);
+      if(tab==='info')h+=rLadderInfo(l,ss);
+      else if(tab==='courtboard'||tab==='ladder')h+=rPlayerView(l,ss);
       else if(tab==='roster')h+=rSessionRoster(l,ss);
       else if(tab==='stats')h+=rStats(sStats,null,l,ss);
-      else{tab='courtboard';h+=rPlayerView(l,ss)}}}
+      else{tab='info';h+=rLadderInfo(l,ss)}}}}
 
   // Admin footer
   h+='<div class="admin-footer">';
@@ -2206,3 +2283,26 @@ async function init(){
     document.getElementById('app').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0a0f;gap:16px;padding:24px"><div style="font-size:2rem">\u26a0\ufe0f</div><div style="font-family:Inter,sans-serif;font-size:1rem;font-weight:700;color:#ff5c47;text-align:center">Could not connect</div><div style="font-size:.8rem;color:#7a7a8a;text-align:center;max-width:300px;line-height:1.6">'+e.message+'</div><button onclick="init()" style="margin-top:8px;padding:10px 24px;background:#c8ff00;color:#0a0a0f;border:none;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer">Retry</button></div>';
   }}
 document.addEventListener('DOMContentLoaded',init);
+
+// ── Poll-on-focus: re-fetch the active ladder whenever the tab/window regains
+// visibility. Prevents last-write-wins data loss when multiple devices share
+// the same admin PIN and enter scores concurrently.
+let _lastRefresh=0;
+async function refreshLadder(){
+  if(!activeLadderId)return;
+  const now=Date.now();
+  if(now-_lastRefresh<5000)return; // at most once every 5 s
+  _lastRefresh=now;
+  try{
+    const res=await fetch('/api?action=get&id='+activeLadderId);
+    if(!res.ok)return;
+    const data=await res.json();
+    if(data.ladder){
+      const idx=ladders.findIndex(x=>x.id===activeLadderId);
+      if(idx>=0)ladders[idx]=data.ladder;else ladders.push(data.ladder);
+      render();
+    }
+  }catch{}
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshLadder();});
+window.addEventListener('focus',refreshLadder);
