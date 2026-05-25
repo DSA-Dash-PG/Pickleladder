@@ -1905,6 +1905,7 @@ function render(){
       const pTab=tab==='courtboard'||tab==='ladder'?'courtboard':tab;
       h+='<div class="tabs">';
       h+='<button class="tab'+(pTab==='courtboard'?' active':'')+'" onclick="tab=\'courtboard\';render()">Ladder</button>';
+      h+='<button class="tab'+(pTab==='roster'?' active':'')+'" onclick="tab=\'roster\';render()">Roster</button>';
       h+='<button class="tab'+(pTab==='stats'?' active':'')+'" onclick="tab=\'stats\';render()">Stats</button>';
       h+='<button class="tab" style="margin-left:auto;font-size:.68rem" onclick="go(\'dashboard\',\'ladders\')">← Back</button></div>';
     }
@@ -1962,6 +1963,7 @@ function render(){
       else if(tab==='admin')h+=rSessionAdmin(l,ss)}
     else{
       if(tab==='courtboard'||tab==='ladder')h+=rPlayerView(l,ss);
+      else if(tab==='roster')h+=rSessionRoster(l,ss);
       else if(tab==='stats')h+=rStats(sStats,null,l,ss);
       else{tab='courtboard';h+=rPlayerView(l,ss)}}}
 
