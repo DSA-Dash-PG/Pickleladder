@@ -2045,7 +2045,7 @@ function render(){
       else if(tab==='courtboard'||tab==='ladder')h+=rPlayerView(l,ss);
       else if(tab==='roster')h+=rSessionRoster(l,ss);
       else if(tab==='stats')h+=rStats(sStats,null,l,ss);
-      else{tab='info';h+=rLadderInfo(l,ss)}}}}
+      else{tab='info';h+=rLadderInfo(l,ss)}}}
 
   // Admin footer
   h+='<div class="admin-footer">';
