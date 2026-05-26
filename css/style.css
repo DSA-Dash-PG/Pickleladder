@@ -580,10 +580,8 @@ body{font-family:'Inter',system-ui,sans-serif;background:#08080f;color:var(--tex
 [data-theme="hc-light"] .tabs{background:#ffffff;border-bottom:1px solid rgba(0,0,0,0.1)}
 [data-theme="hc-light"] .tab{color:rgba(0,0,0,0.4)}
 [data-theme="hc-light"] .tab.active{color:#5a8c00;border-bottom-color:#5a8c00}
-[data-theme="hc-light"] .cc-surface{background:#1a4a2a}
-[data-theme="hc-light"] .cc-hdr{background:rgba(255,255,255,0.15)}
-[data-theme="hc-light"] .cc-player{color:#fff}
-[data-theme="hc-light"] .cc-score-num.s-empty{color:rgba(255,255,255,0.25)}
+/* Play tab light-theme overrides */
+[data-theme="hc-light"] .sticky-timer-inner{background:rgba(255,255,255,0.96);border-bottom:1px solid rgba(0,0,0,0.1)}
 [data-theme="hc-light"] .np-sheet{border-color:var(--cyan-bd)}
 [data-theme="hc-light"] ::selection{background:#5a8c00;color:#fff}
 
