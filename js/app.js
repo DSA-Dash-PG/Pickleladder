@@ -2284,17 +2284,19 @@ async function init(){
   }}
 document.addEventListener('DOMContentLoaded',init);
 
-// ── Poll-on-focus: re-fetch the active ladder whenever the tab/window regains
-// visibility. Prevents last-write-wins data loss when multiple devices share
-// the same admin PIN and enter scores concurrently.
+// ── Live sync: re-fetch the active ladder from the server.
+// Skips if a score is currently being entered (npState active) to avoid
+// disrupting mid-entry input.
 let _lastRefresh=0;
 async function refreshLadder(){
   if(!activeLadderId)return;
+  if(npState)return;       // don't interrupt active score entry
+  if(scoreTimer)return;    // don't overwrite a score that hasn't saved yet
   const now=Date.now();
-  if(now-_lastRefresh<5000)return; // at most once every 5 s
+  if(now-_lastRefresh<2000)return; // debounce: at most once every 2 s
   _lastRefresh=now;
   try{
-    const res=await fetch('/api?action=get&id='+activeLadderId);
+    const res=await fetch('/api?action=get&id='+activeLadderId+'&_='+Date.now());
     if(!res.ok)return;
     const data=await res.json();
     if(data.ladder){
@@ -2304,5 +2306,29 @@ async function refreshLadder(){
     }
   }catch{}
 }
+
+// Poll every 5 s while a live session is active so multiple staff members
+// entering scores on separate devices/tabs see each other's entries
+// without needing to switch tabs or manually refresh.
+setInterval(()=>{
+  if(view==='session'&&activeSessionId){
+    const ss=gSS();
+    if(ss&&ss.started&&!ss.finished)refreshLadder();
+  }
+},5000);
+
+// Also sync immediately when the tab regains focus (e.g. staff member
+// switches back from another app).
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible')refreshLadder();
+});ch tabs.
+setInterval(()=>{
+  if(view==='session'&&activeSessionId){
+    const ss=gSS();
+    if(ss&&ss.started&&!ss.finished)refreshLadder();
+  }
+},10000);
+
+// Also refresh on tab/window focus regain.
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshLadder();});
 window.addEventListener('focus',refreshLadder);

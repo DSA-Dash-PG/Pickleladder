@@ -8,6 +8,8 @@ const headers = {
   "Access-Control-Allow-Headers": "Content-Type, X-Admin-Pin",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Content-Type": "application/json",
+  "Cache-Control": "no-store, no-cache, must-revalidate",
+  "Pragma": "no-cache",
 };
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers });
 
