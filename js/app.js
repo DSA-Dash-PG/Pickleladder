@@ -26,7 +26,7 @@ function renderSizeBtns(){
   ['sm','md','lg','xl','xxl'].forEach(s=>{const b=document.getElementById('szBtn-'+s);if(b)b.classList.toggle('active',s===textSize)})}
 
 // ── Theme preference (persisted) ──
-let theme=localStorage.getItem('pf_theme')||'dark';
+let theme=localStorage.getItem('pf_theme')||'hc-dark';
 function setTheme(t){theme=t;localStorage.setItem('pf_theme',t);applyTheme();render()}
 function applyTheme(){document.documentElement.setAttribute('data-theme',theme)}
 
@@ -191,17 +191,17 @@ function _buildSearchCardsHTML(q,sorted,bonusData,topCtName,mvpCount,courtNames)
     const avg=st.roundPts.length?(Math.round(st.pf/st.roundPts.length*10)/10).toFixed(1):0;
     const tc=topCtName?topCtName(st):'--';const wins=bonusData[st.id]?.wins||0;const bonus=bonusData[st.id]?.bonus||0;const total=st.pf+bonus;const winPct=(st.w+st.l)>0?Math.round(100*st.w/(st.w+st.l))+'%':'\u2014';
     const lr=bonusData[st.id]?.ladderResults||[];
-    h+='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:12px;overflow:hidden;margin-bottom:10px">';
-    h+='<div style="background:#0a0a0a;padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #1a1a1a">';
+    h+='<div style="background:var(--surf1);border:0.5px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:10px">';
+    h+='<div style="background:var(--surf2);padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)">';
     h+='<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#c8ff00,#4ade80);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#000;flex-shrink:0">'+st.name.slice(0,2).toUpperCase()+'</div>';
-    h+='<div style="flex:1"><div style="font-size:18px;font-weight:900;color:#f4f4f0;line-height:1">'+st.name+(wins>0?' '+crownStr(wins):'')+'</div><div style="display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap"><span style="font-size:10px;color:rgba(255,255,255,0.35)">'+st.gender+' \u00b7 Rank #'+rank+'</span>'+((mvpCount&&mvpCount[st.id])?'<span style="display:inline-flex;align-items:center;gap:3px;background:rgba(167,139,250,0.12);color:#a78bfa;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px"><span>\u{1F3C5}</span><span>'+mvpCount[st.id]+'\u00d7 Top</span></span>':'')+'</div></div>';
+    h+='<div style="flex:1"><div style="font-size:18px;font-weight:900;color:var(--text);line-height:1">'+st.name+(wins>0?' '+crownStr(wins):'')+'</div><div style="display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap"><span style="font-size:10px;color:var(--muted)">'+st.gender+' \u00b7 Rank #'+rank+'</span>'+((mvpCount&&mvpCount[st.id])?'<span style="display:inline-flex;align-items:center;gap:3px;background:rgba(167,139,250,0.12);color:#a78bfa;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px"><span>\u{1F3C5}</span><span>'+mvpCount[st.id]+'\u00d7 Top</span></span>':'')+'</div></div>';
     h+='<div style="text-align:right"><div style="font-size:28px;font-weight:900;color:#c8ff00;line-height:1">'+total+'</div><div style="font-size:8px;color:rgba(200,255,0,0.5);text-transform:uppercase;letter-spacing:.1em;margin-top:2px">season pts</div></div></div>';
-    h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #1a1a1a">';
+    h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border)">';
     [{v:st.w,l:'W',c:'var(--lime)'},{v:st.l,l:'L',c:'var(--loss)'},{v:avg,l:'Avg',c:'var(--text-sec)'},{v:winPct,l:'Win %',c:'var(--text-sec)'}].forEach((x,i)=>{
-      h+='<div style="padding:12px 8px;text-align:center'+(i<3?';border-right:0.5px solid #1a1a1a':'')+'"><div style="font-size:18px;font-weight:900;color:'+x.c+';line-height:1">'+x.v+'</div><div style="font-size:8px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-top:3px">'+x.l+'</div></div>';});
-    h+='</div><div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #1a1a1a">';
-    [{v:st.pf,l:'PS',c:'rgba(255,255,255,0.55)'},{v:st.pa,l:'PA',c:'rgba(255,255,255,0.55)'},{v:(d>0?'+':'')+d,l:'Diff',c:d>=0?'var(--lime)':'var(--loss)'},{v:skStr,l:'Streak',c:sk>0?'var(--lime)':sk<0?'var(--loss)':'var(--muted)'}].forEach((x,i)=>{
-      h+='<div style="padding:12px 8px;text-align:center'+(i<3?';border-right:0.5px solid #1a1a1a':'')+'"><div style="font-size:16px;font-weight:900;color:'+x.c+';line-height:1">'+x.v+'</div><div style="font-size:8px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-top:3px">'+x.l+'</div></div>';});
+      h+='<div style="padding:12px 8px;text-align:center'+(i<3?';border-right:0.5px solid var(--border)':'')+'"><div style="font-size:18px;font-weight:900;color:'+x.c+';line-height:1">'+x.v+'</div><div style="font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:3px">'+x.l+'</div></div>';});
+    h+='</div><div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border)">';
+    [{v:st.pf,l:'PS',c:'var(--text-sec)'},{v:st.pa,l:'PA',c:'var(--text-sec)'},{v:(d>0?'+':'')+d,l:'Diff',c:d>=0?'var(--lime)':'var(--loss)'},{v:skStr,l:'Streak',c:sk>0?'var(--lime)':sk<0?'var(--loss)':'var(--muted)'}].forEach((x,i)=>{
+      h+='<div style="padding:12px 8px;text-align:center'+(i<3?';border-right:0.5px solid var(--border)':'')+'"><div style="font-size:16px;font-weight:900;color:'+x.c+';line-height:1">'+x.v+'</div><div style="font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:3px">'+x.l+'</div></div>';});
     h+='</div>';
     // Last 10 rounds — bar chart of point margin per round, color-coded by W/L
     const rr=(st.roundRes||[]).slice(-10);
@@ -211,7 +211,7 @@ function _buildSearchCardsHTML(q,sorted,bonusData,topCtName,mvpCount,courtNames)
       const lCount=rr.length-wCount;
       const netDiff=rr.reduce((a,r)=>a+(r.diff||0),0);
       h+='<div style="padding:10px 14px;border-bottom:1px solid #1a1a1a">';
-      h+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.4);letter-spacing:.1em">LAST '+rr.length+' ROUNDS</div><div style="font-size:8px;color:rgba(255,255,255,0.3)">point margin</div></div>';
+      h+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px"><div style="font-size:8px;font-weight:700;color:var(--muted);letter-spacing:.1em">LAST '+rr.length+' ROUNDS</div><div style="font-size:8px;color:var(--muted)">point margin</div></div>';
       h+='<div style="display:flex;align-items:flex-end;gap:3px;height:48px;position:relative">';
       rr.forEach(r=>{
         const pct=Math.max(8,Math.round(Math.abs(r.diff||0)/maxAbs*100));
@@ -1311,11 +1311,11 @@ function rStats(stats,season,l,ss){
   // Search inner tab dropped — public lookups go via the row-tap profile popup.
   // If the user had statsInnerTab='search' from old state, fall back to standings.
   if(statsInnerTab==='search')statsInnerTab='standings';
-  h+='<div style="display:flex;background:#111;border-radius:6px;overflow:hidden;padding:2px;gap:2px;margin-bottom:10px">';
+  h+='<div style="display:flex;background:var(--surf2);border-radius:6px;overflow:hidden;padding:2px;gap:2px;margin-bottom:10px">';
   ['standings','fullstats'].forEach(t=>{
     const labels={standings:'Standings',fullstats:'Full Stats'};
     const on=statsInnerTab===t;
-    h+='<button style="flex:1;padding:7px 6px;font-size:9px;font-weight:800;color:'+(on?'#000':'rgba(255,255,255,0.3)')+';text-align:center;text-transform:uppercase;letter-spacing:.07em;border-radius:4px;border:none;cursor:pointer;background:'+(on?'#c8ff00':'transparent')+"\" onclick=\"setStatsInnerTab('"+t+"')\">"+labels[t]+'</button>';});
+    h+='<button style="flex:1;padding:7px 6px;font-size:9px;font-weight:800;color:'+(on?'#000':'var(--muted)')+';text-align:center;text-transform:uppercase;letter-spacing:.07em;border-radius:4px;border:none;cursor:pointer;background:'+(on?'#c8ff00':'transparent')+"\" onclick=\"setStatsInnerTab('"+t+"')\">"+labels[t]+'</button>';});
   h+='</div>';
 
   // ══ STANDINGS — uniform table (matches dashboard Leaderboard) ══
@@ -1323,14 +1323,14 @@ function rStats(stats,season,l,ss){
     if(!has){h+='<p class="subtext" style="text-align:center;padding:20px">No scored games yet.</p>';return h;}
     // Bonus strip (only meaningful in season-wide view, but keep for context in session view too)
     if(isSeasonView){
-      h+='<div style="display:flex;background:#0d1400;border:0.5px solid rgba(200,255,0,0.15);border-radius:8px;overflow:hidden;margin-bottom:8px">';
+      h+='<div style="display:flex;background:var(--lime-dim);border:0.5px solid var(--lime-bd);border-radius:8px;overflow:hidden;margin-bottom:8px">';
       [{p:'1st',b:15},{p:'2nd',b:10},{p:'3rd',b:5}].forEach((x,i)=>{
-        h+='<div style="flex:1;text-align:center;padding:8px 4px;border-right:1px solid rgba(200,255,0,0.1)"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">'+x.p+'</div><div style="font-size:16px;font-weight:900;color:#c8ff00;line-height:1">+'+x.b+'</div><div style="font-size:8px;color:rgba(200,255,0,0.4);margin-top:1px">bonus</div></div>';
+        h+='<div style="flex:1;text-align:center;padding:8px 4px;border-right:1px solid var(--lime-bd)"><div style="font-size:8px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">'+x.p+'</div><div style="font-size:16px;font-weight:900;color:var(--lime);line-height:1">+'+x.b+'</div><div style="font-size:8px;color:var(--lime);opacity:.6;margin-top:1px">bonus</div></div>';
       });
-      h+='<div style="flex:1;text-align:center;padding:8px 4px"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">Scope</div><div style="font-size:10px;font-weight:900;color:#c8ff00;line-height:1.3">All<br>ladders</div></div></div>';
+      h+='<div style="flex:1;text-align:center;padding:8px 4px"><div style="font-size:8px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">Scope</div><div style="font-size:10px;font-weight:900;color:var(--lime);line-height:1.3">All<br>ladders</div></div></div>';
     }
     // Hint about row-tap profile popup
-    h+='<div style="font-size:10px;color:rgba(255,255,255,0.45);text-align:center;line-height:1.5;padding:0 4px 8px">Tap a row for expanded Player Profile Stats.</div>';
+    h+='<div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.5;padding:0 4px 8px">Tap a row for expanded Player Profile Stats.</div>';
 
     // Uniform table. Bonus column appears ONLY once the ladder is finished —
     // user requested: bonus stays hidden mid-ladder so admins/players don't
@@ -1338,12 +1338,12 @@ function rStats(stats,season,l,ss){
     const showBonus=!!(ss&&ss.finished);
     const podLabel=['1st','2nd','3rd'];
     const podCol=['#ffcc00','#c0c0c0','#cd7f32'];
-    const podBg=['#1a1200','#111','#12100a'];
+    const podBg=['rgba(255,204,0,0.08)','rgba(180,180,180,0.06)','rgba(205,127,50,0.08)'];
     const cols=showBonus?'30px 26px 1fr 26px 26px 38px 40px 44px':'30px 26px 1fr 28px 28px 44px 50px';
     const headerCells=showBonus?['#','\u0394','Player','W','L','Diff','Bonus','Total']:['#','\u0394','Player','W','L','Diff','Total'];
     const sortedActive=sorted.filter(s=>s.w+s.l+s.t>0);
-    h+='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:10px;overflow:hidden">';
-    h+='<div style="display:grid;grid-template-columns:'+cols+';gap:5px;padding:7px 12px;background:#0a0a0a;border-bottom:1px solid #1a1a1a;font-size:8px;font-weight:700;color:rgba(255,255,255,0.35);letter-spacing:.1em;text-transform:uppercase">';
+    h+='<div style="background:var(--surf1);border:0.5px solid var(--border);border-radius:10px;overflow:hidden">';
+    h+='<div style="display:grid;grid-template-columns:'+cols+';gap:5px;padding:7px 12px;background:var(--surf2);border-bottom:1px solid var(--border);font-size:8px;font-weight:700;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">';
     headerCells.forEach((c,j)=>{
       const align=j===2?'left':j===1?'center':'right';
       h+='<div style="text-align:'+align+'">'+c+'</div>';
@@ -1357,20 +1357,20 @@ function rStats(stats,season,l,ss){
       const total=showBonus?(s.pf+bonus):s.pf;
       const d=s.pf-s.pa;
       const isPod=rank<=3;
-      const rankColor=isPod?podCol[rank-1]:'rgba(255,255,255,0.4)';
-      const totalColor=isPod?podCol[rank-1]:'#c8ff00';
-      const stripeBg=isPod?podBg[rank-1]:(i%2===1?'#0a0a0a':'transparent');
-      h+='<div'+pClick(s.id)+' style="display:grid;grid-template-columns:'+cols+';gap:5px;padding:9px 12px;border-bottom:0.5px solid #111;background:'+stripeBg+';align-items:center;font-variant-numeric:tabular-nums'+pCur()+'">';
-      h+='<div style="text-align:right;font-size:11px;font-weight:'+(isPod?'700':'400')+';color:'+rankColor+'">'+(isPod?podLabel[rank-1]:rank)+'</div>';
+      const rankColor=isPod?podCol[rank-1]:'var(--muted)';
+      const totalColor=isPod?podCol[rank-1]:'var(--lime)';
+      const stripeBg=isPod?podBg[rank-1]:(i%2===1?'var(--surf2)':'transparent');
+      h+='<div'+pClick(s.id)+' style="display:grid;grid-template-columns:'+cols+';gap:5px;padding:9px 12px;border-bottom:0.5px solid var(--border);background:'+stripeBg+';align-items:center;font-variant-numeric:tabular-nums'+pCur()+'">';
+      h+='<div style="text-align:right;font-size:var(--st-rank,11px);font-weight:'+(isPod?'700':'400')+';color:'+rankColor+'">'+(isPod?podLabel[rank-1]:rank)+'</div>';
       h+='<div style="text-align:center;font-size:9px">'+renderDelta(prevRankMap[s.id],rank,Object.keys(prevRankMap).length>0)+'</div>';
-      h+='<div style="font-size:'+(isPod?'13':'12')+'px;font-weight:700;color:'+(isPod?'#f4f4f0':'rgba(255,255,255,0.85)')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+(wins>0?' '+crownStr(wins):'')+'</div>';
-      h+='<div style="text-align:right;font-size:12px;font-weight:700;color:#c8ff00">'+s.w+'</div>';
-      h+='<div style="text-align:right;font-size:12px;color:rgba(255,255,255,0.45)">'+s.l+'</div>';
-      h+='<div style="text-align:right;font-size:11px;font-weight:'+(d>=0?'700':'400')+';color:'+(d>0?'#c8ff00':d<0?'#ff5c47':'rgba(255,255,255,0.4)')+'">'+(d>0?'+':'')+d+'</div>';
+      h+='<div style="font-size:var(--st-name,13px);font-weight:700;color:'+(isPod?'var(--text)':'var(--text-sec)')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+(wins>0?' '+crownStr(wins):'')+'</div>';
+      h+='<div style="text-align:right;font-size:var(--st-stat,12px);font-weight:700;color:var(--lime)">'+s.w+'</div>';
+      h+='<div style="text-align:right;font-size:var(--st-stat,12px);color:var(--muted)">'+s.l+'</div>';
+      h+='<div style="text-align:right;font-size:var(--st-rank,11px);font-weight:'+(d>=0?'700':'400')+';color:'+(d>0?'var(--lime)':d<0?'var(--loss)':'var(--muted)')+'">'+(d>0?'+':'')+d+'</div>';
       if(showBonus){
-        h+='<div style="text-align:right;font-size:11px;font-weight:800;color:'+(bonus>0?'#c8ff00':'rgba(255,255,255,0.2)')+'">'+(bonus>0?'+'+bonus:'\u2014')+'</div>';
+        h+='<div style="text-align:right;font-size:var(--st-rank,11px);font-weight:800;color:'+(bonus>0?'var(--lime)':'var(--muted-lt)')+'">'+(bonus>0?'+'+bonus:'\u2014')+'</div>';
       }
-      h+='<div style="text-align:right;font-size:'+(isPod?'14':'13')+'px;font-weight:900;color:'+totalColor+'">'+total+'</div>';
+      h+='<div style="text-align:right;font-size:var(--st-stat,13px);font-weight:900;color:'+totalColor+'">'+total+'</div>';
       h+='</div>';
     });
     h+='</div>';
@@ -1389,7 +1389,7 @@ function rStats(stats,season,l,ss){
       const avg=s.roundPts.length?(Math.round(s.pf/s.roundPts.length*10)/10).toFixed(1):0;
       const tc=topCtName(s);const wins=bonusData[s.id]?.wins||0;
       const dr=drRatings[s.id];const drStr=dr!=null?dr:'—';
-      h+='<tr'+pClick(s.id)+' style="'+(i===0?'background:#0d1400;':i%2===1?'background:#0a0a0a;':'')+pCur()+'">';
+      h+='<tr'+pClick(s.id)+' style="'+(i===0?'background:var(--lime-dim);':i%2===1?'background:var(--surf2);':'')+pCur()+'">';
       h+='<td class="'+(i<3?'rt':'')+'" style="text-align:right">'+(["1st","2nd","3rd"][i]||(i+1))+'</td>';
       h+='<td style="font-weight:600;white-space:nowrap;text-align:left">'+s.name+(wins>0?' '+crownStr(wins):'')+'</td>';
       h+='<td class="at" style="text-align:right">'+s.w+'</td>';
@@ -1416,8 +1416,8 @@ function rSearch(stats,season,l){
   const sorted=[...stats].filter(s=>s.w+s.l>0).sort((a,b)=>totalPts(b)-totalPts(a)||(b.pf-b.pa)-(a.pf-a.pa));
   const topCtName=(s)=>{const wonCs=(s.roundRes||[]).filter(r=>r.won).map(r=>r.court);if(!wonCs.length)return'--';const best=Math.max(...wonCs);const refSS=season?.sessions?.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
   let h='';
-  h+='<div style="display:flex;align-items:center;gap:8px;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:10px 12px;margin-bottom:10px">';
-  h+='<span style="font-size:14px;color:rgba(255,255,255,0.3)">&#128269;</span>';
+  h+='<div style="display:flex;align-items:center;gap:8px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px">';
+  h+='<span style="font-size:14px;color:var(--muted)">&#128269;</span>';
   h+='<input id="statsSearchInput" class="inp" style="background:transparent;border:none;padding:0;font-size:14px" placeholder="Search player name..." value="'+statsSearchQ+'" oninput="updateSearch(this.value)"></div>';
   h+='<div id="searchResults">'+_buildSearchCardsHTML(statsSearchQ.toLowerCase().trim(),sorted,bonusData,topCtName)+'</div>';
   return h;}
@@ -1428,13 +1428,13 @@ function rRules(ss){
   const kitchenName=names[0]||'A';
   const bottomName=names[names.length-1]||String.fromCharCode(65+nC-1);
   let h='';
-  h+='<div style="background:#0d1400;border:1px solid rgba(200,255,0,0.2);border-radius:14px;padding:18px;margin-bottom:10px;position:relative;overflow:hidden">';
+  h+='<div style="background:var(--lime-dim);border:1px solid var(--lime-bd);border-radius:14px;padding:18px;margin-bottom:10px;position:relative;overflow:hidden">';
   h+='<div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#c8ff00,#00e5ff)"></div>';
-  h+='<div style="font-size:9px;font-weight:900;color:rgba(200,255,0,0.6);text-transform:uppercase;letter-spacing:.2em;margin-bottom:8px">How it works</div>';
-  h+='<div style="font-size:20px;font-weight:900;color:#f4f4f0;letter-spacing:-.03em;line-height:1.1;margin-bottom:6px">The Society keeps receipts.</div>';
-  h+='<div style="font-size:13px;color:rgba(255,255,255,0.45);line-height:1.6">Ladder play. Every round counts. Win or lose, you move. Points follow you all season.</div>';
+  h+='<div style="font-size:var(--st-hdr,9px);font-weight:900;color:var(--lime);text-transform:uppercase;letter-spacing:.2em;margin-bottom:8px">How it works</div>';
+  h+='<div style="font-size:20px;font-weight:900;color:var(--text);letter-spacing:-.03em;line-height:1.1;margin-bottom:6px">The Society keeps receipts.</div>';
+  h+='<div style="font-size:var(--st-name,13px);color:var(--muted);line-height:1.6">Ladder play. Every round counts. Win or lose, you move. Points follow you all season.</div>';
   h+='</div>';
-  h+='<div style="font-size:9px;font-weight:900;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.15em;margin-bottom:8px">Court movement</div>';
+  h+='<div style="font-size:var(--st-hdr,9px);font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin-bottom:8px">Court movement</div>';
   h+='<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">';
   [
     {icon:'\u2191',col:'#c8ff00',bg:'rgba(200,255,0,0.07)',bd:'rgba(200,255,0,0.2)',title:'Win \u2192 Move up',body:'Winners advance one court each round.'},
@@ -1445,10 +1445,10 @@ function rRules(ss){
   ].forEach(m=>{
     h+='<div style="display:flex;align-items:flex-start;gap:12px;background:'+m.bg+';border:1px solid '+m.bd+';border-radius:10px;padding:12px 14px">';
     h+='<div style="font-size:18px;flex-shrink:0;width:28px;text-align:center;line-height:1.4">'+m.icon+'</div>';
-    h+='<div><div style="font-size:13px;font-weight:800;color:'+m.col+';margin-bottom:2px">'+m.title+'</div>';
-    h+='<div style="font-size:12px;color:rgba(255,255,255,0.45);line-height:1.5">'+m.body+'</div></div></div>';});
+    h+='<div><div style="font-size:var(--st-name,13px);font-weight:800;color:'+m.col+';margin-bottom:2px">'+m.title+'</div>';
+    h+='<div style="font-size:var(--st-stat,12px);color:var(--muted);line-height:1.5">'+m.body+'</div></div></div>';});
   h+='</div>';
-  h+='<div style="font-size:9px;font-weight:900;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.15em;margin-bottom:8px">Scoring</div>';
+  h+='<div style="font-size:var(--st-hdr,9px);font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin-bottom:8px">Scoring</div>';
   h+='<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">';
   [
     {col:'#c8ff00',title:'Most cumulative points wins',body:'Points scored in every round add up. Every game matters equally.'},
@@ -1456,25 +1456,25 @@ function rRules(ss){
     {col:'#ff5c47',title:'No ties allowed',body:'If the score is tied when time expires, you play out the point. Whoever wins that point gets the win.'},
     {col:'#ffcc00',title:'Bonus points for ladder finishes',body:'1st place +15 pts, 2nd place +10 pts, 3rd place +5 pts. Stacks across all ladders.'},
   ].forEach(r=>{
-    h+='<div style="display:flex;align-items:flex-start;gap:10px;background:rgba(255,255,255,0.03);border:0.5px solid rgba(255,255,255,0.07);border-radius:10px;padding:12px 14px">';
+    h+='<div style="display:flex;align-items:flex-start;gap:10px;background:var(--surf2);border:0.5px solid var(--border);border-radius:10px;padding:12px 14px">';
     h+='<div style="width:6px;height:6px;border-radius:50%;background:'+r.col+';flex-shrink:0;margin-top:5px"></div>';
-    h+='<div><div style="font-size:13px;font-weight:800;color:#f4f4f0;margin-bottom:2px">'+r.title+'</div>';
-    h+='<div style="font-size:12px;color:rgba(255,255,255,0.4);line-height:1.5">'+r.body+'</div></div></div>';});
+    h+='<div><div style="font-size:var(--st-name,13px);font-weight:800;color:var(--text);margin-bottom:2px">'+r.title+'</div>';
+    h+='<div style="font-size:var(--st-stat,12px);color:var(--muted);line-height:1.5">'+r.body+'</div></div></div>';});
   h+='</div>';
-  h+='<div style="font-size:9px;font-weight:900;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.15em;margin-bottom:8px">Each round</div>';
-  h+='<div style="background:rgba(255,255,255,0.03);border:0.5px solid rgba(255,255,255,0.07);border-radius:10px;overflow:hidden;margin-bottom:12px">';
+  h+='<div style="font-size:var(--st-hdr,9px);font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin-bottom:8px">Each round</div>';
+  h+='<div style="background:var(--surf2);border:0.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px">';
   ['Play the full round duration.','When the timer sounds, finish the rally in progress.','Receiving team makes line calls.','There must always be a winner \u2014 no ties.'].forEach((t,i,arr)=>{
-    h+='<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;'+(i<arr.length-1?'border-bottom:0.5px solid rgba(255,255,255,0.06)':'')+'">';
-    h+='<div style="font-size:10px;font-weight:900;color:rgba(200,255,0,0.4);flex-shrink:0;width:18px;text-align:center">'+(i+1)+'</div>';
-    h+='<div style="font-size:13px;color:rgba(255,255,255,0.6)">'+t+'</div></div>';});
+    h+='<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;'+(i<arr.length-1?'border-bottom:0.5px solid var(--border)':'')+'">';
+    h+='<div style="font-size:var(--st-hdr,10px);font-weight:900;color:var(--lime);opacity:.7;flex-shrink:0;width:18px;text-align:center">'+(i+1)+'</div>';
+    h+='<div style="font-size:var(--st-name,13px);color:var(--text-sec)">'+t+'</div></div>';});
   h+='</div>';
   if(ss){
-    h+='<div style="font-size:9px;font-weight:900;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.15em;margin-bottom:8px">This ladder</div>';
-    h+='<div style="background:rgba(255,255,255,0.03);border:0.5px solid rgba(255,255,255,0.07);border-radius:10px;overflow:hidden">';
+    h+='<div style="font-size:var(--st-hdr,9px);font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin-bottom:8px">This ladder</div>';
+    h+='<div style="background:var(--surf2);border:0.5px solid var(--border);border-radius:10px;overflow:hidden">';
     [['Courts',names.join(', ')],['Rounds',ss.config.rounds],['Round time',ss.config.roundMin+' min'],['Scoring',ss.config.scoreMode==='points'?'Points':'Win / Loss'],['Location',ss.config.place||'\u2014'],['Start',ss.config.startTime?fmt12(ss.config.startTime):'\u2014']].forEach(([k,v],i,arr)=>{
       h+='<div class="cfg-row" style="'+(i===arr.length-1?'border:none':'')+'">';
-      h+='<span style="font-size:12px;color:rgba(255,255,255,0.4)">'+k+'</span>';
-      h+='<span style="font-size:12px;font-weight:700;color:#f4f4f0">'+v+'</span></div>';});
+      h+='<span style="font-size:var(--st-stat,12px);color:var(--muted)">'+k+'</span>';
+      h+='<span style="font-size:var(--st-stat,12px);font-weight:700;color:var(--text)">'+v+'</span></div>';});
     h+='</div>';}
   return h;}
 
@@ -1549,13 +1549,13 @@ function rLadderInfo(l,ss){
   h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">';
   h+='<div style="font-size:10px;font-weight:700;color:rgba(200,255,0,0.6);letter-spacing:.15em;text-transform:uppercase">'+(ss.name||'Ladder')+'</div>';
   h+=badge+'</div>';
-  h+='<div style="font-size:20px;font-weight:900;color:#f4f4f0;line-height:1.15;margin-bottom:4px">'+fmtDate(ss.date)+(ss.config.startTime?' · '+fmt12(ss.config.startTime):'')+'</div>';
-  h+='<div style="font-size:13px;color:rgba(255,255,255,0.4)">'+l.name+(ss.config.place?' · '+ss.config.place:'')+'</div>';
+  h+='<div style="font-size:20px;font-weight:900;color:var(--text);line-height:1.15;margin-bottom:4px">'+fmtDate(ss.date)+(ss.config.startTime?' · '+fmt12(ss.config.startTime):'')+'</div>';
+  h+='<div style="font-size:13px;color:var(--muted)">'+l.name+(ss.config.place?' · '+ss.config.place:'')+'</div>';
   h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px">';
   [{v:nPlayers,l:'Players'},{v:nC,l:'Courts'},{v:ss.config.rounds,l:'Rounds'}].forEach(c=>{
-    h+='<div style="background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.07);border-radius:10px;padding:12px 8px;text-align:center">';
-    h+='<div style="font-size:22px;font-weight:900;color:#f4f4f0;line-height:1">'+c.v+'</div>';
-    h+='<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:4px;text-transform:uppercase;letter-spacing:.06em">'+c.l+'</div></div>';
+    h+='<div style="background:var(--surf2);border:0.5px solid var(--border);border-radius:10px;padding:12px 8px;text-align:center">';
+    h+='<div style="font-size:22px;font-weight:900;color:var(--text);line-height:1">'+c.v+'</div>';
+    h+='<div style="font-size:10px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.06em">'+c.l+'</div></div>';
   });
   h+='</div></div>';
   // Court flow card
@@ -1565,7 +1565,7 @@ function rLadderInfo(l,ss){
     {bg:'rgba(255,255,255,0.03)',bd:'rgba(255,255,255,0.07)',nameCol:'rgba(255,255,255,0.85)',badgeBg:'rgba(59,130,246,0.1)',badgeCol:'#60a5fa'},
     {bg:'rgba(255,255,255,0.03)',bd:'rgba(255,255,255,0.07)',nameCol:'rgba(255,255,255,0.85)',badgeBg:'rgba(167,139,250,0.1)',badgeCol:'#a78bfa'},
   ];
-  h+='<div class="card fu"><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.3);letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px">Court flow</div>';
+  h+='<div class="card fu"><div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px">Court flow</div>';
   for(let i=0;i<nC;i++){
     const name=names[i];
     const isKing=i===0;const isBottom=i===nC-1;
@@ -1577,15 +1577,15 @@ function rLadderInfo(l,ss){
     h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;margin-bottom:6px;background:'+ac.bg+';border:0.5px solid '+ac.bd+'">';
     h+='<div style="width:36px;height:36px;border-radius:8px;background:'+ac.badgeBg+';display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:'+ac.badgeCol+';flex-shrink:0">'+name+'</div>';
     h+='<div style="flex:1"><div style="font-size:14px;font-weight:700;color:'+ac.nameCol+'">'+name+(isKing?' — King Court':isBottom?' — Bottom':'')+'</div>';
-    h+='<div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px">'+(isKing?'Win the top, hold the throne':isBottom?'Work your way up':'Middle court')+'</div></div>';
+    h+='<div style="font-size:11px;color:var(--muted);margin-top:2px">'+(isKing?'Win the top, hold the throne':isBottom?'Work your way up':'Middle court')+'</div></div>';
     h+='<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">';
     h+='<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:rgba(200,255,0,0.1);color:#c8ff00">'+winTag+'</span>';
     h+='<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:'+loseTagBg+';color:'+loseTagCol+'">'+loseTag+'</span>';
     h+='</div></div>';
-    if(i<nC-1)h+='<div style="display:flex;justify-content:center;margin:-2px 0;color:rgba(255,255,255,0.15);font-size:12px">↕</div>';
+    if(i<nC-1)h+='<div style="display:flex;justify-content:center;margin:-2px 0;color:var(--muted-lt);font-size:12px">↕</div>';
   }
-  h+='<div style="background:rgba(255,255,255,0.03);border:0.5px solid rgba(255,255,255,0.07);border-radius:10px;padding:11px 13px;margin-top:12px">';
-  h+='<div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.65"><span style="color:rgba(200,255,0,0.7);font-weight:700">Partners split every round</span> — you never play with the same partner twice in a row. Points scored in every round add up all season.</div>';
+  h+='<div style="background:var(--surf2);border:0.5px solid var(--border);border-radius:10px;padding:11px 13px;margin-top:12px">';
+  h+='<div style="font-size:11px;color:var(--muted);line-height:1.65"><span style="color:var(--lime);font-weight:700">Partners split every round</span> — you never play with the same partner twice in a row. Points scored in every round add up all season.</div>';
   h+='</div></div>';
   return h;}
 
@@ -1701,10 +1701,10 @@ function rStandings(stats,season,l){
 
   let h='';
   // bonus strip
-  h+='<div style="display:flex;background:#0d1400;border:0.5px solid rgba(200,255,0,0.15);border-radius:8px;overflow:hidden;margin-bottom:12px">';
+  h+='<div style="display:flex;background:var(--lime-dim);border:0.5px solid var(--lime-bd);border-radius:8px;overflow:hidden;margin-bottom:12px">';
   [{pos:'1st',b:15},{pos:'2nd',b:10},{pos:'3rd',b:5}].forEach((x,i)=>{
-    h+='<div style="flex:1;text-align:center;padding:8px 4px'+(i<2?';border-right:1px solid rgba(200,255,0,0.1)':'')+'"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">'+x.pos+'</div><div style="font-size:16px;font-weight:900;color:#c8ff00;line-height:1">+'+x.b+'</div><div style="font-size:8px;color:rgba(200,255,0,0.4);margin-top:1px">bonus</div></div>';});
-  h+='<div style="flex:1;text-align:center;padding:8px 4px;border-left:1px solid rgba(200,255,0,0.1)"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">Scope</div><div style="font-size:10px;font-weight:900;color:#c8ff00;line-height:1.3">All<br>ladders</div></div></div>';
+    h+='<div style="flex:1;text-align:center;padding:8px 4px'+(i<2?';border-right:1px solid var(--lime-bd)':'')+'"><div style="font-size:8px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">'+x.pos+'</div><div style="font-size:16px;font-weight:900;color:var(--lime);line-height:1">+'+x.b+'</div><div style="font-size:8px;color:var(--lime);opacity:.6;margin-top:1px">bonus</div></div>';});
+  h+='<div style="flex:1;text-align:center;padding:8px 4px;border-left:1px solid var(--lime-bd)"><div style="font-size:8px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">Scope</div><div style="font-size:10px;font-weight:900;color:var(--lime);line-height:1.3">All<br>ladders</div></div></div>';
 
   if(!sorted.length){h+='<p class="subtext" style="text-align:center;padding:20px">No scored games yet.</p>';return h;}
 
@@ -1729,29 +1729,29 @@ function rStandings(stats,season,l){
     const delta=prevRank&&prevRank!==rank
       ?(prevRank>rank?'<span style="font-size:9px;font-weight:800;color:#4ade80">\u25b2'+(prevRank-rank)+'</span>'
                      :'<span style="font-size:9px;font-weight:800;color:#ff5c47">\u25bc'+(rank-prevRank)+'</span>')
-      :(prevRank?'<span style="font-size:9px;color:rgba(255,255,255,0.2)">\u2014</span>':'');
+      :(prevRank?'<span style="font-size:9px;color:var(--muted-lt)">\u2014</span>':'');
     const isTop3=rank<=3;
     const isTop10=rank<=10;
-    const bg=isTop3?medalBg[rank-1]:isTop10?'rgba(255,255,255,0.03)':'transparent';
-    const bd=isTop3?medalBd[rank-1]:isTop10?'rgba(255,255,255,0.07)':'rgba(255,255,255,0.04)';
-    const rankCol=isTop3?medalCol[rank-1]:rank<=10?'rgba(255,255,255,0.4)':'rgba(255,255,255,0.2)';
+    const bg=isTop3?medalBg[rank-1]:isTop10?'var(--surf2)':'transparent';
+    const bd=isTop3?medalBd[rank-1]:'var(--border)';
+    const rankCol=isTop3?medalCol[rank-1]:rank<=10?'var(--muted)':'var(--muted-lt)';
 
     h+='<div style="background:'+bg+';border:0.5px solid '+bd+';border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:8px">';
     // rank
-    h+='<div style="font-size:'+( isTop3?'13':'11')+'px;font-weight:900;color:'+rankCol+';width:28px;flex-shrink:0;text-align:center">'+(isTop3?medalLabel[rank-1]:rank)+'</div>';
+    h+='<div style="font-size:var(--st-name,13px);font-weight:900;color:'+rankCol+';width:28px;flex-shrink:0;text-align:center">'+(isTop3?medalLabel[rank-1]:rank)+'</div>';
     // avatar
-    const avBg=isTop3?medalBg[rank-1]:'rgba(255,255,255,0.06)';
+    const avBg=isTop3?medalBg[rank-1]:'var(--surf3)';
     h+='<div style="width:32px;height:32px;border-radius:50%;background:'+avBg+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:'+rankCol+';flex-shrink:0">'+s.name.slice(0,2).toUpperCase()+'</div>';
     // name + crowns + sub info
-    h+='<div style="flex:1;min-width:0"><div style="font-size:'+(isTop3?'14':'13')+'px;font-weight:'+(isTop3?'800':'700')+';color:'+(isTop3?'#f4f4f0':'rgba(255,255,255,0.8)')+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+s.name+(wins>0?' '+crownStr(wins):'')+'</div>';
-    h+='<div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:1px">'+s.w+'W '+s.l+'L'+(bonus>0?' · +'+bonus+' bonus':'')+'</div></div>';
+    h+='<div style="flex:1;min-width:0"><div style="font-size:var(--st-stat,13px);font-weight:'+(isTop3?'800':'700')+';color:'+(isTop3?'var(--text)':'var(--text-sec)')+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+s.name+(wins>0?' '+crownStr(wins):'')+'</div>';
+    h+='<div style="font-size:var(--st-hdr,9px);color:var(--muted);margin-top:1px">'+s.w+'W '+s.l+'L'+(bonus>0?' · +'+bonus+' bonus':'')+'</div></div>';
     // delta
     h+='<div style="min-width:24px;text-align:center">'+delta+'</div>';
     // stats mini
     h+='<div style="display:grid;grid-template-columns:repeat(3,36px);gap:4px;text-align:right">';
-    h+='<div><div style="font-size:10px;font-weight:700;color:'+(d>=0?'var(--lime)':'var(--loss)')+'\">'+(d>0?'+':'')+d+'</div><div style="font-size:7px;color:rgba(255,255,255,0.25)">+/-</div></div>';
-    h+='<div><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.5)">'+avg+'</div><div style="font-size:7px;color:rgba(255,255,255,0.25)">avg</div></div>';
-    h+='<div><div style="font-size:11px;font-weight:900;color:'+(isTop3?rankCol:'rgba(200,255,0,0.7)')+'">'+total+'</div><div style="font-size:7px;color:rgba(255,255,255,0.25)">pts</div></div>';
+    h+='<div><div style="font-size:var(--st-stat,10px);font-weight:700;color:'+(d>=0?'var(--lime)':'var(--loss)')+'\">'+(d>0?'+':'')+d+'</div><div style="font-size:var(--st-hdr,7px);color:var(--muted-lt)">+/-</div></div>';
+    h+='<div><div style="font-size:var(--st-stat,10px);font-weight:700;color:var(--text-sec)">'+avg+'</div><div style="font-size:var(--st-hdr,7px);color:var(--muted-lt)">avg</div></div>';
+    h+='<div><div style="font-size:var(--st-stat,11px);font-weight:900;color:'+(isTop3?rankCol:'var(--lime)')+'">'+total+'</div><div style="font-size:var(--st-hdr,7px);color:var(--muted-lt)">pts</div></div>';
     h+='</div></div>';
   });
   h+='</div>';
@@ -1773,24 +1773,23 @@ function rLeaderboard(stats,season,l){
   // When id is present, the name is wrapped with the player-popup click handler.
   const card=(lbl,desc,heroCol,rows)=>{
     if(!rows||!rows.length)return'';
-    let c='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:10px;padding:10px 12px;margin-bottom:8px">';
+    let c='<div style="background:var(--surf1);border:0.5px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">';
     c+='<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">';
-    c+='<div style="font-size:11px;font-weight:900;color:'+heroCol+';letter-spacing:.04em">'+lbl+'</div>';
-    c+='<div style="font-size:8px;color:rgba(255,255,255,0.3)">'+desc+'</div></div>';
+    c+='<div style="font-size:var(--st-name,11px);font-weight:900;color:'+heroCol+';letter-spacing:.04em">'+lbl+'</div>';
+    c+='<div style="font-size:var(--st-hdr,8px);color:var(--muted)">'+desc+'</div></div>';
     rows.slice(0,5).forEach((r,i)=>{
-      const rankCol=i===0?heroCol:'rgba(255,255,255,0.25)';
-      const nameCol=i===0?'#fff':'rgba(255,255,255,0.7)';
-      const valCol=i===0?heroCol:'rgba(255,255,255,0.5)';
-      const fSize=i===0?'12':'11';
+      const rankCol=i===0?heroCol:'var(--muted-lt)';
+      const nameCol=i===0?'var(--text)':'var(--text-sec)';
+      const valCol=i===0?heroCol:'var(--muted)';
       const fWeight=i===0?'800':'500';
       // Clickable name only when an id is provided
       const nameSpan=r.id
-        ? '<span'+pClick(r.id)+' style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:'+nameCol+';cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px">'+r.name+'</span>'
+        ? '<span'+pClick(r.id)+' style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:'+nameCol+';cursor:pointer;text-decoration:underline;text-decoration-color:var(--border-s);text-underline-offset:2px">'+r.name+'</span>'
         : '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:'+nameCol+'">'+r.name+'</span>';
-      c+='<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:'+fSize+'px;font-weight:'+fWeight+'">';
+      c+='<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:var(--st-stat,12px);font-weight:'+fWeight+'">';
       c+='<div style="width:12px;text-align:center;color:'+rankCol+';font-weight:800">'+(i+1)+'</div>';
       c+='<div style="flex:1;min-width:0">'+nameSpan+'</div>';
-      if(r.sub)c+='<div style="font-size:9px;color:rgba(255,255,255,0.3);font-weight:500">'+r.sub+'</div>';
+      if(r.sub)c+='<div style="font-size:var(--st-hdr,9px);color:var(--muted);font-weight:500">'+r.sub+'</div>';
       c+='<div style="color:'+valCol+';min-width:36px;text-align:right;font-variant-numeric:tabular-nums">'+r.val+'</div>';
       c+='</div>';
     });
@@ -1982,7 +1981,27 @@ function render(){
   h+='<div class="hdr-logo"><span class="hdr-logo-text">DS</span></div>';
   h+='<div><h1 class="hdr-title">'+(l?.name||'Dink Society')+'</h1>'+(s?'<div class="hdr-sub">'+s.name+'</div>':'')+'</div>';
   h+='</div>';
+  // ── Header right: admin badge + accessibility button ──
+  h+='<div class="hdr-right">';
   if(isAdmin)h+='<div class="hdr-admin-badge">Admin</div>';
+  {const szLabels={sm:'S',md:'M',lg:'L',xl:'XL',xxl:'XXL'};
+  const thOpts=[{k:'hc-dark',label:'Dark',dot:'dot-hc-dark'},{k:'hc-light',label:'Light',dot:'dot-hc-light'}];
+  h+='<div class="access-hdr-wrap">';
+  if(accessPanelOpen){
+    h+='<div class="access-panel">';
+    h+='<div class="access-panel-lbl">Text size</div>';
+    h+='<div class="access-sz-row">';
+    ['sm','md','lg','xl','xxl'].forEach(sz=>{h+='<button class="access-sz-btn sz-'+sz+(textSize===sz?' active':'')+'" onclick="setTextSize(\''+sz+'\')">'+szLabels[sz]+'</button>';});
+    h+='</div>';
+    h+='<div class="access-panel-lbl">Theme</div>';
+    h+='<div class="access-theme-row">';
+    thOpts.forEach(t=>{h+='<button class="access-theme-btn'+(theme===t.k?' active':'')+'" onclick="setTheme(\''+t.k+'\')">';h+='<span class="access-theme-dot '+t.dot+'"></span>'+t.label+'</button>';});
+    h+='</div></div>';
+  }
+  h+='<button class="access-fab-btn hdr-aa-btn" onclick="toggleAccessPanel()" aria-label="Accessibility options">';
+  h+='<div class="access-fab-aa"><span class="small-a">A</span><span class="big-a">A</span></div>';
+  h+='</button></div>';}
+  h+='</div>';
   h+='</div>';
 
   if(view==='session'){
@@ -2254,34 +2273,7 @@ function render(){
       h+='<button onclick="cancelSwap()" style="background:rgba(255,92,71,0.15);border:1px solid rgba(255,92,71,0.3);color:#ff5c47;font-size:9px;font-weight:700;padding:6px 12px;border-radius:6px;cursor:pointer">Cancel</button>';
       h+='</div>';}}
 
-  // ── Floating accessibility button ──
-  const szLabels={sm:'S',md:'M',lg:'L',xl:'XL',xxl:'XXL'};
-  const themeOpts=[
-    {k:'dark',    label:'Dark',          dot:'dot-dark'},
-    {k:'hc-dark', label:'High contrast', dot:'dot-hc-dark'},
-    {k:'hc-light',label:'Light',         dot:'dot-hc-light'},
-  ];
-  let fab='<div class="access-fab">';
-  if(accessPanelOpen){
-    fab+='<div class="access-panel">';
-    fab+='<div class="access-panel-lbl">Text size</div>';
-    fab+='<div class="access-sz-row">';
-    ['sm','md','lg','xl','xxl'].forEach(s=>{
-      fab+='<button class="access-sz-btn sz-'+s+(textSize===s?' active':'')+'" onclick="setTextSize(\''+s+'\')">'+szLabels[s]+'</button>';
-    });
-    fab+='</div>';
-    fab+='<div class="access-panel-lbl">Theme</div>';
-    fab+='<div class="access-theme-row">';
-    themeOpts.forEach(t=>{
-      fab+='<button class="access-theme-btn'+(theme===t.k?' active':'')+'" onclick="setTheme(\''+t.k+'\')">';
-      fab+='<span class="access-theme-dot '+t.dot+'"></span>'+t.label+'</button>';
-    });
-    fab+='</div></div>';
-  }
-  fab+='<button class="access-fab-btn" onclick="toggleAccessPanel()" aria-label="Accessibility options">';
-  fab+='<div class="access-fab-aa"><span class="small-a">A</span><span class="big-a">A</span></div>';
-  fab+='</button></div>';
-  h+=fab;
+  // (Accessibility button is now in the header — see hdr-right above)
 
   app.innerHTML=h;
   applyTextSize();

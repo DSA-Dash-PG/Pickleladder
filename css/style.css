@@ -586,15 +586,17 @@ body{font-family:'Inter',system-ui,sans-serif;background:#08080f;color:var(--tex
 [data-theme="hc-light"] ::selection{background:#5a8c00;color:#fff}
 
 /* ═══════════════════════════════════════════════════
-   FLOATING Aa ACCESSIBILITY BUTTON
+   HEADER Aa ACCESSIBILITY BUTTON
    ═══════════════════════════════════════════════════ */
-.access-fab{position:fixed;bottom:20px;right:16px;z-index:300;display:flex;flex-direction:column;align-items:flex-end;gap:8px}
-.access-fab-btn{width:46px;height:46px;border-radius:23px;background:var(--surf2);border:1.5px solid var(--border-s);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,0.5)}
+.hdr-right{display:flex;align-items:center;gap:8px}
+.access-hdr-wrap{position:relative}
+.access-fab-btn{width:38px;height:38px;border-radius:19px;background:var(--surf2);border:1.5px solid var(--border-s);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.hdr-aa-btn{width:38px;height:38px}
+.access-panel{position:absolute;top:calc(100% + 8px);right:0;z-index:300;background:var(--surf1);border:1.5px solid var(--border-s);border-radius:14px;padding:14px;min-width:200px;box-shadow:0 4px 24px rgba(0,0,0,0.6)}
 .access-fab-btn:active{transform:scale(.95)}
 .access-fab-aa{display:flex;align-items:baseline;gap:1px;line-height:1}
 .access-fab-aa .small-a{font-size:11px;font-weight:900;color:var(--muted);font-family:'Inter',sans-serif}
 .access-fab-aa .big-a{font-size:17px;font-weight:900;color:var(--lime);font-family:'Inter',sans-serif}
-.access-panel{background:var(--surf1);border:1.5px solid var(--border-s);border-radius:14px;padding:14px;min-width:200px;box-shadow:0 4px 24px rgba(0,0,0,0.6)}
 .access-panel-lbl{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-bottom:7px}
 .access-sz-row{display:flex;gap:5px;margin-bottom:14px}
 .access-sz-btn{flex:1;padding:6px 0;border-radius:7px;border:1px solid var(--border-s);background:var(--surf3);color:var(--muted);font-weight:700;cursor:pointer;text-align:center;font-family:'Inter',sans-serif;transition:all .15s}
@@ -611,6 +613,9 @@ body{font-family:'Inter',system-ui,sans-serif;background:#08080f;color:var(--tex
 .dot-dark{background:#1a1a1a}
 .dot-hc-dark{background:#000;border:1px solid #fff}
 .dot-hc-light{background:#fff;border:1px solid #000}
+
+/* ── Light theme tab hover visibility ── */
+[data-theme="hc-light"] .tab:hover{color:#000}
 
 /* ── Stats table respects size CSS vars ── */
 .st th{font-size:var(--st-hdr,.6rem)}
