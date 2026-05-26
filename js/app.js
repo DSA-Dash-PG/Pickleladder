@@ -11,15 +11,24 @@ const pNum=(p,l)=>{const i=l.players.findIndex(x=>x.id===p.id);return i>=0?i+1:0
 
 // ── Text size preference (persisted) ──
 let textSize=localStorage.getItem('pf_textSize')||'lg';
-function setTextSize(s){textSize=s;localStorage.setItem('pf_textSize',s);applyTextSize();renderSizeBtns()}
+function setTextSize(s){textSize=s;localStorage.setItem('pf_textSize',s);applyTextSize();render()}
 function applyTextSize(){
-  const m={sm:{'--cc-pname':'11px','--cc-score':'34px','--cc-score-empty':'22px','--cc-pad':'8px 7px 9px'},
-            md:{'--cc-pname':'13px','--cc-score':'40px','--cc-score-empty':'26px','--cc-pad':'10px 8px 11px'},
-            lg:{'--cc-pname':'15px','--cc-score':'48px','--cc-score-empty':'30px','--cc-pad':'13px 10px 14px'}};
+  const m={
+    sm: {'--cc-pname':'11px','--cc-score':'34px','--cc-score-empty':'22px','--cc-pad':'8px 7px 9px',  '--st-hdr':'7px', '--st-stat':'11px','--st-name':'11px','--st-rank':'10px'},
+    md: {'--cc-pname':'13px','--cc-score':'40px','--cc-score-empty':'26px','--cc-pad':'10px 8px 11px','--st-hdr':'8px', '--st-stat':'12px','--st-name':'12px','--st-rank':'11px'},
+    lg: {'--cc-pname':'15px','--cc-score':'48px','--cc-score-empty':'30px','--cc-pad':'13px 10px 14px','--st-hdr':'8px', '--st-stat':'12px','--st-name':'13px','--st-rank':'11px'},
+    xl: {'--cc-pname':'19px','--cc-score':'58px','--cc-score-empty':'36px','--cc-pad':'15px 11px 16px','--st-hdr':'10px','--st-stat':'14px','--st-name':'15px','--st-rank':'13px'},
+    xxl:{'--cc-pname':'23px','--cc-score':'70px','--cc-score-empty':'42px','--cc-pad':'17px 12px 18px','--st-hdr':'11px','--st-stat':'16px','--st-name':'18px','--st-rank':'15px'},
+  };
   const vars=m[textSize]||m.lg;
   Object.entries(vars).forEach(([k,v])=>document.documentElement.style.setProperty(k,v))}
 function renderSizeBtns(){
-  ['sm','md','lg'].forEach(s=>{const b=document.getElementById('szBtn-'+s);if(b)b.classList.toggle('active',s===textSize)})}
+  ['sm','md','lg','xl','xxl'].forEach(s=>{const b=document.getElementById('szBtn-'+s);if(b)b.classList.toggle('active',s===textSize)})}
+
+// ── Theme preference (persisted) ──
+let theme=localStorage.getItem('pf_theme')||'dark';
+function setTheme(t){theme=t;localStorage.setItem('pf_theme',t);applyTheme();render()}
+function applyTheme(){document.documentElement.setAttribute('data-theme',theme)}
 
 // ── Numpad state ──
 let npState=null; // {ri, ci, field, value}
@@ -66,6 +75,9 @@ function npCancel(){npState=null;render()}
 function npSwitchField(field,existingVal){if(!npState)return;npState.field=field;npState.value=(existingVal!==null&&existingVal!==undefined&&existingVal!=='null')?String(existingVal):'';render()}
 
 let ladders=[],activeLadderId=null,activeSessionId=null,isAdmin=false,adminPin='';
+let accessPanelOpen=false;
+function toggleAccessPanel(){accessPanelOpen=!accessPanelOpen;render()}
+function closeAccessPanel(){if(accessPanelOpen){accessPanelOpen=false;render()}}
 let view='dashboard',tab='overview',timer=0,timerOn=false,timerInt=null,pinEntry='',editingPid=null,mapOpen=false;
 let formCourtCount=4,viewingRound=-1;
 let swapMode=null;
@@ -2242,8 +2254,38 @@ function render(){
       h+='<button onclick="cancelSwap()" style="background:rgba(255,92,71,0.15);border:1px solid rgba(255,92,71,0.3);color:#ff5c47;font-size:9px;font-weight:700;padding:6px 12px;border-radius:6px;cursor:pointer">Cancel</button>';
       h+='</div>';}}
 
+  // ── Floating accessibility button ──
+  const szLabels={sm:'S',md:'M',lg:'L',xl:'XL',xxl:'XXL'};
+  const themeOpts=[
+    {k:'dark',    label:'Dark',          dot:'dot-dark'},
+    {k:'hc-dark', label:'High contrast', dot:'dot-hc-dark'},
+    {k:'hc-light',label:'Light',         dot:'dot-hc-light'},
+  ];
+  let fab='<div class="access-fab">';
+  if(accessPanelOpen){
+    fab+='<div class="access-panel">';
+    fab+='<div class="access-panel-lbl">Text size</div>';
+    fab+='<div class="access-sz-row">';
+    ['sm','md','lg','xl','xxl'].forEach(s=>{
+      fab+='<button class="access-sz-btn sz-'+s+(textSize===s?' active':'')+'" onclick="setTextSize(\''+s+'\')">'+szLabels[s]+'</button>';
+    });
+    fab+='</div>';
+    fab+='<div class="access-panel-lbl">Theme</div>';
+    fab+='<div class="access-theme-row">';
+    themeOpts.forEach(t=>{
+      fab+='<button class="access-theme-btn'+(theme===t.k?' active':'')+'" onclick="setTheme(\''+t.k+'\')">';
+      fab+='<span class="access-theme-dot '+t.dot+'"></span>'+t.label+'</button>';
+    });
+    fab+='</div></div>';
+  }
+  fab+='<button class="access-fab-btn" onclick="toggleAccessPanel()" aria-label="Accessibility options">';
+  fab+='<div class="access-fab-aa"><span class="small-a">A</span><span class="big-a">A</span></div>';
+  fab+='</button></div>';
+  h+=fab;
+
   app.innerHTML=h;
   applyTextSize();
+  applyTheme();
   renderSizeBtns();
   if(view==='newSession')setTimeout(updateCourtInputs,0);
   if(tab==='stats')setTimeout(tkRenderChart,10);
@@ -2264,6 +2306,7 @@ function render(){
 
 async function init(){
   applyTextSize();
+  applyTheme();
   document.getElementById('app').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0a0f;gap:16px;padding:24px"><div style="font-family:Inter,sans-serif;font-size:1.1rem;font-weight:700;color:#c8ff00" id="initStatus">Connecting...</div><div style="font-size:.75rem;color:#7a7a8a;text-align:center;max-width:280px" id="initDetail">Reaching the server</div></div>';
   const setStatus=(msg,detail)=>{const s=document.getElementById('initStatus');const d=document.getElementById('initDetail');if(s)s.textContent=msg;if(d)d.textContent=detail||''};
   try{
