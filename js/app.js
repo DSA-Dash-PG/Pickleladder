@@ -181,6 +181,7 @@ function renderDelta(prevRank,currentRank,hasPrev){
 // Used by both the initial render (rFullStats / rSearch) AND the live updateSearch
 // patching path so they produce IDENTICAL markup (no flicker on first keystroke).
 function _buildSearchCardsHTML(q,sorted,bonusData,topCtName,mvpCount,courtNames){
+  const isLight=theme==='hc-light';
   if(!q)return'<div style="text-align:center;padding:20px;font-size:.82rem;color:var(--muted)">Type a name to search</div>';
   const matches=sorted.filter(st=>st.name.toLowerCase().includes(q));
   if(!matches.length)return'<div style="text-align:center;padding:20px;font-size:.82rem;color:var(--muted)">No players found for "'+q+'"</div>';
@@ -194,8 +195,8 @@ function _buildSearchCardsHTML(q,sorted,bonusData,topCtName,mvpCount,courtNames)
     h+='<div style="background:var(--surf1);border:0.5px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:10px">';
     h+='<div style="background:var(--surf2);padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)">';
     h+='<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#c8ff00,#4ade80);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#000;flex-shrink:0">'+st.name.slice(0,2).toUpperCase()+'</div>';
-    h+='<div style="flex:1"><div style="font-size:18px;font-weight:900;color:var(--text);line-height:1">'+st.name+(wins>0?' '+crownStr(wins):'')+'</div><div style="display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap"><span style="font-size:10px;color:var(--muted)">'+st.gender+' \u00b7 Rank #'+rank+'</span>'+((mvpCount&&mvpCount[st.id])?'<span style="display:inline-flex;align-items:center;gap:3px;background:rgba(167,139,250,0.12);color:#a78bfa;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px"><span>\u{1F3C5}</span><span>'+mvpCount[st.id]+'\u00d7 Top</span></span>':'')+'</div></div>';
-    h+='<div style="text-align:right"><div style="font-size:28px;font-weight:900;color:#c8ff00;line-height:1">'+total+'</div><div style="font-size:8px;color:rgba(200,255,0,0.5);text-transform:uppercase;letter-spacing:.1em;margin-top:2px">season pts</div></div></div>';
+    h+='<div style="flex:1"><div style="font-size:var(--st-name,18px);font-weight:900;color:var(--text);line-height:1">'+st.name+(wins>0?' '+crownStr(wins):'')+'</div><div style="display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap"><span style="font-size:10px;color:var(--muted)">'+st.gender+' \u00b7 Rank #'+rank+'</span>'+((mvpCount&&mvpCount[st.id])?'<span style="display:inline-flex;align-items:center;gap:3px;background:rgba(167,139,250,0.12);color:#a78bfa;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px"><span>\u{1F3C5}</span><span>'+mvpCount[st.id]+'\u00d7 Top</span></span>':'')+'</div></div>';
+    h+='<div style="text-align:right"><div style="font-size:28px;font-weight:900;color:'+(isLight?'#3d6600':'#c8ff00')+';line-height:1">'+total+'</div><div style="font-size:8px;color:'+(isLight?'rgba(0,100,0,0.55)':'rgba(200,255,0,0.5)')+';text-transform:uppercase;letter-spacing:.1em;margin-top:2px">season pts</div></div></div>';
     h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border)">';
     [{v:st.w,l:'W',c:'var(--lime)'},{v:st.l,l:'L',c:'var(--loss)'},{v:avg,l:'Avg',c:'var(--text-sec)'},{v:winPct,l:'Win %',c:'var(--text-sec)'}].forEach((x,i)=>{
       h+='<div style="padding:12px 8px;text-align:center'+(i<3?';border-right:0.5px solid var(--border)':'')+'"><div style="font-size:18px;font-weight:900;color:'+x.c+';line-height:1">'+x.v+'</div><div style="font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:3px">'+x.l+'</div></div>';});
@@ -210,12 +211,12 @@ function _buildSearchCardsHTML(q,sorted,bonusData,topCtName,mvpCount,courtNames)
       const wCount=rr.filter(r=>r.won).length;
       const lCount=rr.length-wCount;
       const netDiff=rr.reduce((a,r)=>a+(r.diff||0),0);
-      h+='<div style="padding:10px 14px;border-bottom:1px solid #1a1a1a">';
+      h+='<div style="padding:10px 14px;border-bottom:1px solid var(--border)">';
       h+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px"><div style="font-size:8px;font-weight:700;color:var(--muted);letter-spacing:.1em">LAST '+rr.length+' ROUNDS</div><div style="font-size:8px;color:var(--muted)">point margin</div></div>';
       h+='<div style="display:flex;align-items:flex-end;gap:3px;height:48px;position:relative">';
       rr.forEach(r=>{
         const pct=Math.max(8,Math.round(Math.abs(r.diff||0)/maxAbs*100));
-        const col=r.won?'#c8ff00':'#ff5c47';
+        const col=r.won?(isLight?'#3d6600':'#c8ff00'):(isLight?'#cc2200':'#ff5c47');
         if(r.won){
           h+='<div title="+'+r.diff+'" style="flex:1;background:'+col+';height:'+pct+'%;border-radius:2px 2px 0 0"></div>';
         } else {
@@ -223,10 +224,10 @@ function _buildSearchCardsHTML(q,sorted,bonusData,topCtName,mvpCount,courtNames)
         }
       });
       h+='</div>';
-      h+='<div style="display:flex;align-items:center;gap:10px;margin-top:6px;font-size:9px;color:rgba(255,255,255,0.4)">';
-      h+='<span><span style="display:inline-block;width:8px;height:8px;background:#c8ff00;border-radius:1px;vertical-align:-1px;margin-right:3px"></span>won</span>';
-      h+='<span><span style="display:inline-block;width:8px;height:8px;background:#ff5c47;border-radius:1px;vertical-align:-1px;margin-right:3px"></span>lost</span>';
-      h+='<span style="margin-left:auto;font-weight:700;color:rgba(255,255,255,0.55)">'+wCount+'W \u00b7 '+lCount+'L \u00b7 '+(netDiff>0?'+':'')+netDiff+' net</span>';
+      h+='<div style="display:flex;align-items:center;gap:10px;margin-top:6px;font-size:9px;color:'+(isLight?'rgba(0,0,0,0.5)':'rgba(255,255,255,0.4)')+'">';
+      h+='<span><span style="display:inline-block;width:8px;height:8px;background:'+(isLight?'#3d6600':'#c8ff00')+';border-radius:1px;vertical-align:-1px;margin-right:3px"></span>won</span>';
+      h+='<span><span style="display:inline-block;width:8px;height:8px;background:'+(isLight?'#cc2200':'#ff5c47')+';border-radius:1px;vertical-align:-1px;margin-right:3px"></span>lost</span>';
+      h+='<span style="margin-left:auto;font-weight:700;color:'+(isLight?'rgba(0,0,0,0.65)':'rgba(255,255,255,0.55)')+'">'+wCount+'W \u00b7 '+lCount+'L \u00b7 '+(netDiff>0?'+':'')+netDiff+' net</span>';
       h+='</div>';
       h+='</div>';
     }
@@ -253,23 +254,23 @@ function _buildSearchCardsHTML(q,sorted,bonusData,topCtName,mvpCount,courtNames)
       const n=rrAll.length;
       const xStep=n>1?(xR-xL)/(n-1):0;
       const yFor=(court)=>nC>1?yT+(nC-court)*((yB-yT)/(nC-1)):(yT+yB)/2;
-      h+='<div style="padding:10px 14px;border-bottom:1px solid #1a1a1a;background:rgba(0,229,255,0.025)">';
-      h+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px"><div style="font-size:8px;font-weight:700;color:#00e5ff;letter-spacing:.1em">COURT MOVEMENT</div><div style="font-size:8px;color:rgba(255,255,255,0.3)">round &rarr; court</div></div>';
+      h+='<div style="padding:10px 14px;border-bottom:1px solid var(--border);background:'+(isLight?'rgba(0,150,184,0.04)':'rgba(0,229,255,0.025)')+'">';
+      h+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px"><div style="font-size:8px;font-weight:700;color:'+(isLight?'#005f70':'#00e5ff')+';letter-spacing:.1em">COURT MOVEMENT</div><div style="font-size:8px;color:'+(isLight?'rgba(0,0,0,0.4)':'rgba(255,255,255,0.3)')+'">round &rarr; court</div></div>';
       h+='<svg viewBox="0 0 '+W+' 110" style="width:100%;height:110px;display:block">';
       // Y grid + labels
       for(let c=1;c<=nC;c++){
         const y=yFor(c);
-        h+='<line x1="'+xL+'" y1="'+y+'" x2="'+xR+'" y2="'+y+'" stroke="rgba(255,255,255,0.06)" stroke-dasharray="2,3"/>';
-        h+='<text x="'+(xL-8)+'" y="'+(y+3)+'" font-size="8" fill="rgba(255,255,255,0.4)" text-anchor="end" font-family="Sora,sans-serif" font-weight="700">'+labelFor(c)+'</text>';
+        h+='<line x1="'+xL+'" y1="'+y+'" x2="'+xR+'" y2="'+y+'" stroke="'+(isLight?'rgba(0,0,0,0.1)':'rgba(255,255,255,0.06)')+'" stroke-dasharray="2,3"/>';
+        h+='<text x="'+(xL-8)+'" y="'+(y+3)+'" font-size="8" fill="'+(isLight?'rgba(0,0,0,0.55)':'rgba(255,255,255,0.4)')+'" text-anchor="end" font-family="Sora,sans-serif" font-weight="700">'+labelFor(c)+'</text>';
       }
       // Session dividers
       boundaries.forEach(bi=>{
         const x=xL+bi*xStep-xStep/2;
-        h+='<line x1="'+x+'" y1="6" x2="'+x+'" y2="100" stroke="rgba(255,255,255,0.12)" stroke-dasharray="3,2"/>';
+        h+='<line x1="'+x+'" y1="6" x2="'+x+'" y2="100" stroke="'+(isLight?'rgba(0,0,0,0.2)':'rgba(255,255,255,0.12)')+'" stroke-dasharray="3,2"/>';
       });
       // Polyline
       const points=rrAll.map((r,i)=>(xL+i*xStep)+','+yFor(r.court)).join(' ');
-      h+='<polyline fill="none" stroke="#00e5ff" stroke-width="1.5" points="'+points+'"/>';
+      h+='<polyline fill="none" stroke="'+(isLight?'#005f70':'#00e5ff')+'" stroke-width="1.5" points="'+points+'"/>';
       // Dots colored by W/L
       rrAll.forEach((r,i)=>{
         const x=xL+i*xStep;
@@ -277,27 +278,27 @@ function _buildSearchCardsHTML(q,sorted,bonusData,topCtName,mvpCount,courtNames)
         h+='<circle cx="'+x+'" cy="'+y+'" r="2.5" fill="'+(r.won?'#c8ff00':'#ff5c47')+'"/>';
       });
       h+='</svg>';
-      h+='<div style="display:flex;align-items:center;gap:10px;margin-top:6px;font-size:8px;color:rgba(255,255,255,0.4)">';
-      h+='<span><span style="display:inline-block;width:6px;height:6px;background:#c8ff00;border-radius:50%;vertical-align:middle;margin-right:3px"></span>won</span>';
-      h+='<span><span style="display:inline-block;width:6px;height:6px;background:#ff5c47;border-radius:50%;vertical-align:middle;margin-right:3px"></span>lost</span>';
-      h+='<span style="margin-left:auto;color:rgba(255,255,255,0.55);font-weight:700">peak: '+labelFor(peakCourt)+' \u00b7 '+peakCount+' round'+(peakCount!==1?'s':'')+'</span>';
+      h+='<div style="display:flex;align-items:center;gap:10px;margin-top:6px;font-size:8px;color:'+(isLight?'rgba(0,0,0,0.5)':'rgba(255,255,255,0.4)')+'">';
+      h+='<span><span style="display:inline-block;width:6px;height:6px;background:'+(isLight?'#3d6600':'#c8ff00')+';border-radius:50%;vertical-align:middle;margin-right:3px"></span>won</span>';
+      h+='<span><span style="display:inline-block;width:6px;height:6px;background:'+(isLight?'#cc2200':'#ff5c47')+';border-radius:50%;vertical-align:middle;margin-right:3px"></span>lost</span>';
+      h+='<span style="margin-left:auto;color:'+(isLight?'rgba(0,0,0,0.65)':'rgba(255,255,255,0.55)')+';font-weight:700">peak: '+labelFor(peakCourt)+' \u00b7 '+peakCount+' round'+(peakCount!==1?'s':'')+'</span>';
       h+='</div>';
       h+='</div>';
     }
     if(lr.length){
       const maxP=Math.max(...lr.map(x=>x.pts),1);
-      h+='<div style="padding:12px 16px"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px">Per-ladder</div>';
+      h+='<div style="padding:12px 16px"><div style="font-size:8px;font-weight:700;color:'+(isLight?'rgba(0,0,0,0.5)':'rgba(255,255,255,0.3)')+';text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px">Per-ladder</div>';
       lr.slice().reverse().forEach(r=>{
         const w2=Math.round(r.pts/maxP*100);
         const rs=['1st','2nd','3rd'][r.rank-1]||(r.rank+'th');
         const d3=new Date(r.date+'T12:00:00');const ds=(d3.getMonth()+1)+'/'+(d3.getDate());
         const bc=r.rank===1?'1':r.rank===2?'0.7':'0.45';
         h+='<div style="display:flex;align-items:center;gap:8px;padding:5px 0">';
-        h+='<div style="font-size:10px;color:rgba(255,255,255,0.4);width:28px;flex-shrink:0">'+ds+'</div>';
-        h+='<div style="flex:1;height:4px;background:rgba(255,255,255,0.07);border-radius:2px;overflow:hidden"><div style="height:100%;background:rgba(200,255,0,'+bc+');border-radius:2px;width:'+w2+'%"></div></div>';
-        h+='<div style="font-size:11px;font-weight:800;color:rgba(200,255,0,'+bc+');width:26px;text-align:right">'+r.pts+'</div>';
-        h+='<div style="font-size:9px;font-weight:800;color:rgba(200,255,0,'+bc+');width:26px;text-align:right">'+rs+'</div>';
-        if(r.bonus)h+='<div style="font-size:9px;font-weight:800;color:rgba(200,255,0,0.6);width:26px;text-align:right">+'+r.bonus+'</div>';
+        h+='<div style="font-size:10px;color:'+(isLight?'rgba(0,0,0,0.5)':'rgba(255,255,255,0.4)')+';width:28px;flex-shrink:0">'+ds+'</div>';
+        h+='<div style="flex:1;height:4px;background:'+(isLight?'rgba(0,0,0,0.07)':'rgba(255,255,255,0.07)')+';border-radius:2px;overflow:hidden"><div style="height:100%;background:'+(isLight?'rgba(0,100,0,'+bc+')':'rgba(200,255,0,'+bc+')')+';border-radius:2px;width:'+w2+'%"></div></div>';
+        h+='<div style="font-size:11px;font-weight:800;color:'+(isLight?'rgba(0,100,0,'+bc+')':'rgba(200,255,0,'+bc+')')+';width:26px;text-align:right">'+r.pts+'</div>';
+        h+='<div style="font-size:9px;font-weight:800;color:'+(isLight?'rgba(0,100,0,'+bc+')':'rgba(200,255,0,'+bc+')')+';width:26px;text-align:right">'+rs+'</div>';
+        if(r.bonus)h+='<div style="font-size:9px;font-weight:800;color:'+(isLight?'rgba(0,100,0,0.6)':'rgba(200,255,0,0.6)')+';width:26px;text-align:right">+'+r.bonus+'</div>';
         h+='</div>';});
       h+='</div>';}
     h+='</div>';});
@@ -878,10 +879,10 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
   const _dk={[nC]:{col:'#ffcc00',dim:'rgba(255,204,0,0.18)',bd:'rgba(255,204,0,0.35)',stripe:'#1c1400,#1c1400 5px,#140f00 5px,#140f00 10px',bg:'#0a0800'},
              [nC-1]:{col:'#00e5ff',dim:'rgba(0,229,255,0.15)',bd:'rgba(0,229,255,0.3)',stripe:'#001618,#001618 5px,#000e10 5px,#000e10 10px',bg:'#000c10'},
              [nC-2]:{col:'#3b82f6',dim:'rgba(59,130,246,0.12)',bd:'rgba(59,130,246,0.25)',stripe:'#000a20,#000a20 5px,#000718 5px,#000718 10px',bg:'#00081a'}};
-  const _lt={[nC]:{col:'#b07d00',dim:'rgba(176,125,0,0.12)',bd:'rgba(176,125,0,0.3)',stripe:'#fffbeb,#fffbeb 5px,#fff7d6 5px,#fff7d6 10px',bg:'#fefce8'},
-             [nC-1]:{col:'#0099b8',dim:'rgba(0,153,184,0.12)',bd:'rgba(0,153,184,0.25)',stripe:'#f0fdff,#f0fdff 5px,#e2f9ff 5px,#e2f9ff 10px',bg:'#f0fdff'},
-             [nC-2]:{col:'#2563eb',dim:'rgba(37,99,235,0.1)',bd:'rgba(37,99,235,0.2)',stripe:'#eff6ff,#eff6ff 5px,#dbeafe 5px,#dbeafe 10px',bg:'#eff6ff'}};
-  const acc=(isLight?_lt:_dk)[ct.court]||(isLight?{col:'#7c3aed',dim:'rgba(124,58,237,0.1)',bd:'rgba(124,58,237,0.25)',stripe:'#faf5ff,#faf5ff 5px,#ede8ff 5px,#ede8ff 10px',bg:'#faf5ff'}:{col:'#a78bfa',dim:'rgba(167,139,250,0.12)',bd:'rgba(167,139,250,0.3)',stripe:'#0e0a1a,#0e0a1a 5px,#080612 5px,#080612 10px',bg:'#0a0814'});
+  const _lt={[nC]:{col:'#000',dim:'rgba(0,0,0,0.06)',bd:'rgba(0,0,0,0.5)',stripe:'#fff,#fff',bg:'#fff'},
+             [nC-1]:{col:'#000',dim:'rgba(0,0,0,0.06)',bd:'rgba(0,0,0,0.5)',stripe:'#fff,#fff',bg:'#fff'},
+             [nC-2]:{col:'#000',dim:'rgba(0,0,0,0.06)',bd:'rgba(0,0,0,0.5)',stripe:'#fff,#fff',bg:'#fff'}};
+  const acc=(isLight?_lt:_dk)[ct.court]||(isLight?{col:'#000',dim:'rgba(0,0,0,0.06)',bd:'rgba(0,0,0,0.5)',stripe:'#fff,#fff',bg:'#fff'}:{col:'#a78bfa',dim:'rgba(167,139,250,0.12)',bd:'rgba(167,139,250,0.3)',stripe:'#0e0a1a,#0e0a1a 5px,#080612 5px,#080612 10px',bg:'#0a0814'});
 
   const wTeam=w==='A'?ct.team1:ct.team2;
   const lTeam=w==='A'?ct.team2:ct.team1;
@@ -906,20 +907,20 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
 
   const winGlow=isKitchen?'rgba(255,204,0,0.75)':'rgba(200,255,0,0.65)';
   const winGlowSoft=isKitchen?'rgba(255,204,0,0.28)':'rgba(200,255,0,0.22)';
-  const winScoreCol=isKitchen?'#ffcc00':'#c8ff00';
+  const winScoreCol=isLight?'#000':(isKitchen?'#ffcc00':'#c8ff00');
 
-  let h='<div class="fu" style="border:1px solid '+acc.bd+';border-radius:14px;overflow:hidden;margin-bottom:10px">';
+  let h='<div class="fu" style="border:'+(isLight?'1.5px solid #000':'1px solid '+acc.bd)+';border-radius:14px;overflow:hidden;margin-bottom:10px">';
 
   // ── Jersey header ──
-  h+='<div style="background:repeating-linear-gradient(45deg,'+acc.stripe+');border-bottom:2px solid '+acc.col+';padding:7px 12px;display:flex;align-items:center;justify-content:space-between">';
+  h+='<div style="background:'+(isLight?'#fff':'repeating-linear-gradient(45deg,'+acc.stripe+')')+';border-bottom:'+(isLight?'3px solid #000':'2px solid '+acc.col)+';padding:7px 12px;display:flex;align-items:center;justify-content:space-between">';
   h+='<div style="display:flex;align-items:center;gap:8px">';
-  if(isKitchen){h+='<div style="width:28px;height:28px;border-radius:50%;background:'+acc.col+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#000;flex-shrink:0">'+nm+'</div>';}
-  else{h+='<div style="width:28px;height:28px;border-radius:50%;background:'+acc.dim+';border:2px solid '+acc.col+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:'+acc.col+';flex-shrink:0">'+nm+'</div>';}
+  if(isKitchen){h+='<div style="width:28px;height:28px;border-radius:50%;background:'+(isLight?'#000':acc.col)+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:'+(isLight?'#fff':'#000')+';flex-shrink:0">'+nm+'</div>';}
+  else{h+='<div style="width:28px;height:28px;border-radius:50%;background:'+(isLight?'#fff':acc.dim)+';border:2px solid '+(isLight?'#000':acc.col)+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:'+(isLight?'#000':acc.col)+';flex-shrink:0">'+nm+'</div>';}
   h+='<div>';
-  if(isKitchen){h+='<div style="font-size:10px;font-weight:900;color:'+acc.col+';letter-spacing:.07em;text-transform:uppercase">&#128081; Owns the Kitchen</div><div style="font-size:7px;color:'+(isLight?'rgba(140,90,0,0.6)':'rgba(255,204,0,0.45)')+';margin-top:1px">Top court &#183; Winners stay &amp; split</div>';}
-  else{h+='<div style="font-size:10px;font-weight:900;color:'+acc.col+';letter-spacing:.07em;text-transform:uppercase">Court '+nm+'</div>';}
+  if(isKitchen){h+='<div style="font-size:10px;font-weight:900;color:'+(isLight?'#000':acc.col)+';letter-spacing:.07em;text-transform:uppercase">&#128081; Owns the Kitchen</div><div style="font-size:7px;color:'+(isLight?'rgba(0,0,0,0.45)':'rgba(255,204,0,0.45)')+';margin-top:1px">Top court &#183; Winners stay &amp; split</div>';}
+  else{h+='<div style="font-size:10px;font-weight:900;color:'+(isLight?'#000':acc.col)+';letter-spacing:.07em;text-transform:uppercase">Court '+nm+'</div>';}
   h+='</div></div>';
-  if(hb&&w){h+='<span style="font-size:12px;font-weight:900;color:'+acc.col+';letter-spacing:.02em">'+sc.t1+' &#8211; '+sc.t2+'</span>';}
+  if(hb&&w){h+='<span style="font-size:12px;font-weight:900;color:'+(isLight?'#000':acc.col)+';letter-spacing:.02em">'+sc.t1+' &#8211; '+sc.t2+'</span>';}
   else{h+='<span style="font-size:7px;font-weight:800;color:'+(isLight?'rgba(0,0,0,0.3)':'#555')+';text-transform:uppercase;letter-spacing:.08em">'+(adminMode?'Tap to score':'Not scored')+'</span>';}
   h+='</div>';
 
@@ -937,18 +938,18 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
       const ti=side==='A'?0:1;
       const isWinner=w===side;
       // Visual treatment
-      const panelBg=isWinner?(isKitchen?(isLight?'#fefce8':'#1a1000'):(isLight?'#f0fff4':'#0d1f00')):(isLight?'#fff5f5':'#1a0000');
+      const panelBg=isWinner?(isLight?'#fff':(isKitchen?'#1a1000':'#0d1f00')):(isLight?'#f0f0f0':'#1a0000');
       const labelText=isWinner?'Winner':'Loser';
-      const labelCol=isWinner?winScoreCol:(isLight?'rgba(200,50,30,0.8)':'rgba(255,92,71,0.7)');
+      const labelCol=isWinner?(isLight?'#000':winScoreCol):(isLight?'rgba(0,0,0,0.5)':'rgba(255,92,71,0.7)');
       const scoreStyle=isWinner
-        ?'font-size:var(--cc-score,44px);font-weight:900;color:'+winScoreCol+';line-height:1;letter-spacing:-.03em;text-shadow:0 0 18px '+winGlow+',0 0 36px '+winGlowSoft
-        :'font-size:var(--cc-score,44px);font-weight:900;color:'+(isLight?'rgba(200,50,30,0.28)':'rgba(255,92,71,0.3)')+';line-height:1;letter-spacing:-.03em';
+        ?'font-size:var(--cc-score,44px);font-weight:900;color:'+(isLight?'#000':winScoreCol)+';line-height:1;letter-spacing:-.03em'+(isLight?'':';text-shadow:0 0 18px '+winGlow+',0 0 36px '+winGlowSoft)
+        :'font-size:var(--cc-score,44px);font-weight:900;color:'+(isLight?'rgba(0,0,0,0.3)':'rgba(255,92,71,0.3)')+';line-height:1;letter-spacing:-.03em';
       const moveStyle=isWinner
-        ?'background:'+winScoreCol+';color:#000'
-        :'background:'+(isLight?'rgba(200,50,30,0.1)':'rgba(255,92,71,0.15)')+';color:'+(isLight?'rgba(180,30,20,0.8)':'rgba(255,92,71,0.7)')+';border:1px solid '+(isLight?'rgba(200,50,30,0.25)':'rgba(255,92,71,0.25)');
+        ?(isLight?'background:#000;color:#fff':'background:'+winScoreCol+';color:#000')
+        :(isLight?'background:#e0e0e0;color:rgba(0,0,0,0.65);border:1px solid rgba(0,0,0,0.3)':'background:rgba(255,92,71,0.15);color:rgba(255,92,71,0.7);border:1px solid rgba(255,92,71,0.25)');
       const moveText=isWinner?wMove:lMove;
-      const nameDimColor=isWinner?(isLight?'#111':'#f4f4f0'):(isLight?'rgba(0,0,0,0.4)':'rgba(255,255,255,0.35)');
-      const borderL=isRight?';border-left:1px solid rgba(255,92,71,0.08)':'';
+      const nameDimColor=isWinner?(isLight?'#000':'#f4f4f0'):(isLight?'rgba(0,0,0,0.35)':'rgba(255,255,255,0.35)');
+      const borderL=isRight?';border-left:1px solid '+(isLight?'rgba(0,0,0,0.15)':'rgba(255,92,71,0.08)')+'':'';
       let p='<div style="background:'+panelBg+';padding:10px 12px;text-align:center'+borderL+'">';
       p+='<div style="font-size:7px;font-weight:900;color:'+labelCol+';text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">'+labelText+'</div>';
       // Show "—" for empty slots in the public name string so the position
@@ -978,8 +979,8 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
             p+='<button onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+ti+','+pi+')" style="width:100%;background:rgba(0,229,255,0.15);border:1px solid rgba(0,229,255,0.4);color:#00e5ff;font-size:10px;font-weight:700;padding:5px 0;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">Swap here</button>';
           } else {
             p+='<div style="display:flex;gap:4px">';
-            p+='<button onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+ti+','+pi+')" style="flex:1;background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.3);color:#00e5ff;font-size:10px;font-weight:700;padding:5px 0;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">Move</button>';
-            p+='<button onclick="event.stopPropagation();openSubModal('+vr+','+ci+','+ti+','+pi+')" style="flex:1;background:rgba(255,92,71,0.1);border:1px solid rgba(255,92,71,0.3);color:#ff5c47;font-size:10px;font-weight:700;padding:5px 0;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">Sub</button>';
+            p+='<button onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+ti+','+pi+')" style="flex:1;background:'+(isLight?'#fff':'rgba(0,229,255,0.1)')+';border:1px solid '+(isLight?'#000':'rgba(0,229,255,0.3)')+';color:'+(isLight?'#000':'#00e5ff')+';font-size:10px;font-weight:700;padding:5px 0;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">Move</button>';
+            p+='<button onclick="event.stopPropagation();openSubModal('+vr+','+ci+','+ti+','+pi+')" style="flex:1;background:'+(isLight?'#fff':'rgba(255,92,71,0.1)')+';border:1px solid '+(isLight?'#000':'rgba(255,92,71,0.3)')+';color:'+(isLight?'#000':'#ff5c47')+';font-size:10px;font-weight:700;padding:5px 0;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">Sub</button>';
             p+='</div>';
           }
           p+='</div>';
@@ -998,16 +999,16 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
     h+=renderTeamPanel('B',true);
     h+='</div>';
     // Footer
-    h+='<div style="padding:5px 12px;font-size:7px;font-weight:700;color:'+(isLight?'rgba(0,0,0,0.35)':'rgba(255,255,255,0.28)')+';background:'+acc.bg+';border-top:1px solid '+(isLight?'rgba(0,0,0,0.07)':'rgba(255,255,255,0.04)')+';letter-spacing:.03em">';
+    h+='<div style="padding:5px 12px;font-size:7px;font-weight:700;color:'+(isLight?'rgba(0,0,0,0.5)':'rgba(255,255,255,0.28)')+';background:'+(isLight?'#f0f0f0':acc.bg)+';border-top:1px solid '+(isLight?'rgba(0,0,0,0.12)':'rgba(255,255,255,0.04)')+';letter-spacing:.03em">';
     h+=wNamesShort+' '+wMove.replace(/&#8593;/g,'↑').replace(/&#8595;/g,'↓').replace(/&#x21D5;/g,'↕').replace(/&amp;/g,'&').toLowerCase()+' &#183; '+lNamesShort+' '+lMove.replace(/&#8593;/g,'↑').replace(/&#8595;/g,'↓').replace(/&#x21D5;/g,'↕').replace(/&amp;/g,'&').toLowerCase();
     h+='</div>';
   } else {
     // Unscored panels
     const mkPanel=(team,side,isRight)=>{
       const fld=side==='A'?'t1':'t2';const ti=side==='A'?0:1;
-      const onclk=adminMode?` onclick="openNumpad(${vr},${ci},'${fld}')" style="cursor:pointer;text-align:center;background:${acc.bg};padding:10px 12px${isRight?';border-left:1px solid rgba(255,255,255,0.04)':''}"`:`style="text-align:center;background:${acc.bg};padding:10px 12px${isRight?';border-left:1px solid rgba(255,255,255,0.04)':''}"`;
-      let p='<div '+onclk+'>';
-      p+='<div style="font-size:7px;font-weight:900;color:'+acc.col+';opacity:.65;text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">Team '+side+'</div>';
+      const _ubg=isLight?'#fff':acc.bg;
+      const _ubl=isRight?(isLight?';border-left:1px solid rgba(0,0,0,0.12)':';border-left:1px solid rgba(255,255,255,0.04)'):'';      const onclk=adminMode?` onclick="openNumpad(${vr},${ci},'${fld}')" style="cursor:pointer;text-align:center;background:${_ubg};padding:10px 12px${_ubl}"`:` style="text-align:center;background:${_ubg};padding:10px 12px${_ubl}"`;      let p='<div '+onclk+'>';
+      p+='<div style="font-size:7px;font-weight:900;color:'+(isLight?'#000':acc.col)+';opacity:'+(isLight?'1':'.65')+';text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px">Team '+side+'</div>';
       if(adminMode){team.forEach((pl,pi)=>{
           // Empty slot — Choose Player placeholder
           if(!pl){
@@ -1030,20 +1031,20 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
             p+='<button onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+ti+','+pi+')" style="width:100%;background:rgba(0,229,255,0.15);border:1px solid rgba(0,229,255,0.4);color:#00e5ff;font-size:10px;font-weight:700;padding:5px 0;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">Swap here</button>';
           } else {
             p+='<div style="display:flex;gap:4px">';
-            p+='<button onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+ti+','+pi+')" style="flex:1;background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.3);color:#00e5ff;font-size:10px;font-weight:700;padding:5px 0;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">Move</button>';
-            p+='<button onclick="event.stopPropagation();openSubModal('+vr+','+ci+','+ti+','+pi+')" style="flex:1;background:rgba(255,92,71,0.1);border:1px solid rgba(255,92,71,0.3);color:#ff5c47;font-size:10px;font-weight:700;padding:5px 0;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">Sub</button>';
+            p+='<button onclick="event.stopPropagation();beginSwap('+vr+','+ci+','+ti+','+pi+')" style="flex:1;background:'+(isLight?'#fff':'rgba(0,229,255,0.1)')+';border:1px solid '+(isLight?'#000':'rgba(0,229,255,0.3)')+';color:'+(isLight?'#000':'#00e5ff')+';font-size:10px;font-weight:700;padding:5px 0;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">Move</button>';
+            p+='<button onclick="event.stopPropagation();openSubModal('+vr+','+ci+','+ti+','+pi+')" style="flex:1;background:'+(isLight?'#fff':'rgba(255,92,71,0.1)')+';border:1px solid '+(isLight?'#000':'rgba(255,92,71,0.3)')+';color:'+(isLight?'#000':'#ff5c47')+';font-size:10px;font-weight:700;padding:5px 0;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">Sub</button>';
             p+='</div>';
           }
           p+='</div>'})}
-      else{const nameStr=team.map(pl=>pl?pl.name:'—').join(' + ')||'TBD';p+='<div style="font-size:var(--cc-pname,15px);font-weight:700;color:'+(isLight?'rgba(0,0,0,0.7)':'rgba(255,255,255,0.6)')+';margin-bottom:6px;line-height:1.35">'+nameStr+'</div>';}
-      p+='<div style="font-size:var(--cc-score,40px);font-weight:900;line-height:1;color:'+acc.col+';opacity:.1;letter-spacing:-.03em">--</div>';
+      else{const nameStr=team.map(pl=>pl?pl.name:'—').join(' + ')||'TBD';p+='<div style="font-size:var(--cc-pname,15px);font-weight:700;color:'+(isLight?'#000':'rgba(255,255,255,0.6)')+';margin-bottom:6px;line-height:1.35">'+nameStr+'</div>';}
+      p+='<div style="font-size:var(--cc-score,40px);font-weight:900;line-height:1;color:'+(isLight?'#000':acc.col)+';opacity:.08;letter-spacing:-.03em">--</div>';
       if(adminMode)p+='<div style="font-size:7px;color:'+(isLight?'rgba(0,0,0,0.3)':'rgba(255,255,255,0.18)')+';margin-top:6px">Tap to score</div>';
       p+='</div>';return p};
     h+='<div style="display:grid;grid-template-columns:1fr 1fr">';
     h+=mkPanel(ct.team1,'A',false);
     h+=mkPanel(ct.team2,'B',true);
     h+='</div>';
-    h+='<div style="padding:5px 12px;font-size:7px;font-weight:700;color:'+(isLight?'rgba(0,0,0,0.4)':'#555')+';background:'+acc.bg+';border-top:1px solid '+(isLight?'rgba(0,0,0,0.07)':'rgba(255,255,255,0.04)')+'">'+footWin+' &#183; '+footLose+'</div>';
+    h+='<div style="padding:5px 12px;font-size:7px;font-weight:700;color:'+(isLight?'rgba(0,0,0,0.5)':'#555')+';background:'+(isLight?'#f0f0f0':acc.bg)+';border-top:1px solid '+(isLight?'rgba(0,0,0,0.12)':'rgba(255,255,255,0.04)')+'">'+footWin+' &#183; '+footLose+'</div>';
   }
 
   // numpad rendered as centered overlay in render()
@@ -2192,9 +2193,10 @@ function render(){
       const sortedP=[...allStatsP].filter(st=>st.w+st.l+st.t>0).sort((a,b)=>totalPtsP(b)-totalPtsP(a)||(b.pf-b.pa)-(a.pf-a.pa));
       const topCtNameP=(st)=>{const wonCs=(st.roundRes||[]).filter(r=>r.won).map(r=>r.court);if(!wonCs.length)return'--';const best=Math.max(...wonCs);const refSS=sp.sessions.slice().reverse().find(x=>x.started);const nC=refSS?.config?.courts||4;const idx=(refSS?.config?.courtNames?.length||0)-best;return refSS?.config?.courtNames?.[idx]||String.fromCharCode(65+nC-best)};
       const target=sortedP.find(st=>st.id===playerStatsModalId);
-      let pv='<div style="position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:500;display:flex;justify-content:center;align-items:flex-start;padding:24px 14px;backdrop-filter:blur(6px);overflow-y:auto" onclick="closePlayerStats()">';
+      const isLightM=theme==='hc-light';
+      let pv='<div style="position:fixed;inset:0;background:'+(isLightM?'rgba(0,0,0,0.6)':'rgba(0,0,0,0.85)')+';z-index:500;display:flex;justify-content:center;align-items:flex-start;padding:24px 14px;backdrop-filter:blur(6px);overflow-y:auto" onclick="closePlayerStats()">';
       pv+='<div style="width:100%;max-width:420px" onclick="event.stopPropagation()">';
-      pv+='<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button onclick="closePlayerStats()" style="background:rgba(255,255,255,0.07);border:none;color:#7a7a8a;font-size:18px;width:34px;height:34px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center">&#x2715;</button></div>';
+      pv+='<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button onclick="closePlayerStats()" style="background:'+(isLightM?'rgba(0,0,0,0.08)':'rgba(255,255,255,0.07)')+';border:none;color:'+(isLightM?'#333':'#7a7a8a')+';font-size:18px;width:34px;height:34px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center">&#x2715;</button></div>';
       if(target){
         // Reuse the search card builder by passing the exact player name so
         // the helper renders just this one card.
@@ -2203,7 +2205,7 @@ function render(){
         const courtNamesP=_refSSP?.config?.courtNames||null;
         pv+=_buildSearchCardsHTML(target.name.toLowerCase(),sortedP,bonusDataP,topCtNameP,mvpCountP,courtNamesP);
       } else {
-        pv+='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:12px;padding:24px;text-align:center;color:var(--muted);font-size:.85rem">No stats yet for this player.</div>';
+        pv+='<div style="background:'+(isLightM?'var(--surf1)':'#0d0d0d')+';border:0.5px solid '+(isLightM?'var(--border)':'#1e1e1e')+';border-radius:12px;padding:24px;text-align:center;color:var(--muted);font-size:.85rem">No stats yet for this player.</div>';
       }
       pv+='</div></div>';
       h+=pv;
