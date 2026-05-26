@@ -2321,14 +2321,4 @@ setInterval(()=>{
 // switches back from another app).
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible')refreshLadder();
-});ch tabs.
-setInterval(()=>{
-  if(view==='session'&&activeSessionId){
-    const ss=gSS();
-    if(ss&&ss.started&&!ss.finished)refreshLadder();
-  }
-},10000);
-
-// Also refresh on tab/window focus regain.
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshLadder();});
-window.addEventListener('focus',refreshLadder);
+});
