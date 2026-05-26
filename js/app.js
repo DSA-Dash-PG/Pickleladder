@@ -14,11 +14,11 @@ let textSize=localStorage.getItem('pf_textSize')||'lg';
 function setTextSize(s){textSize=s;localStorage.setItem('pf_textSize',s);applyTextSize();render()}
 function applyTextSize(){
   const m={
-    sm: {'--cc-pname':'11px','--cc-score':'34px','--cc-score-empty':'22px','--cc-pad':'8px 7px 9px',  '--st-hdr':'7px', '--st-stat':'11px','--st-name':'11px','--st-rank':'10px'},
-    md: {'--cc-pname':'13px','--cc-score':'40px','--cc-score-empty':'26px','--cc-pad':'10px 8px 11px','--st-hdr':'8px', '--st-stat':'12px','--st-name':'12px','--st-rank':'11px'},
-    lg: {'--cc-pname':'15px','--cc-score':'48px','--cc-score-empty':'30px','--cc-pad':'13px 10px 14px','--st-hdr':'8px', '--st-stat':'12px','--st-name':'13px','--st-rank':'11px'},
-    xl: {'--cc-pname':'19px','--cc-score':'58px','--cc-score-empty':'36px','--cc-pad':'15px 11px 16px','--st-hdr':'10px','--st-stat':'14px','--st-name':'15px','--st-rank':'13px'},
-    xxl:{'--cc-pname':'23px','--cc-score':'70px','--cc-score-empty':'42px','--cc-pad':'17px 12px 18px','--st-hdr':'11px','--st-stat':'16px','--st-name':'18px','--st-rank':'15px'},
+    sm: {'--cc-pname':'11px','--cc-score':'34px','--cc-score-empty':'22px','--cc-pad':'8px 7px 9px',  '--st-hdr':'7px', '--st-stat':'11px','--st-name':'11px','--st-rank':'10px','--ui-num':'15px'},
+    md: {'--cc-pname':'13px','--cc-score':'40px','--cc-score-empty':'26px','--cc-pad':'10px 8px 11px','--st-hdr':'8px', '--st-stat':'12px','--st-name':'12px','--st-rank':'11px','--ui-num':'20px'},
+    lg: {'--cc-pname':'15px','--cc-score':'48px','--cc-score-empty':'30px','--cc-pad':'13px 10px 14px','--st-hdr':'8px', '--st-stat':'12px','--st-name':'13px','--st-rank':'11px','--ui-num':'22px'},
+    xl: {'--cc-pname':'19px','--cc-score':'58px','--cc-score-empty':'36px','--cc-pad':'15px 11px 16px','--st-hdr':'10px','--st-stat':'14px','--st-name':'15px','--st-rank':'13px','--ui-num':'26px'},
+    xxl:{'--cc-pname':'23px','--cc-score':'70px','--cc-score-empty':'42px','--cc-pad':'17px 12px 18px','--st-hdr':'11px','--st-stat':'16px','--st-name':'18px','--st-rank':'15px','--ui-num':'32px'},
   };
   const vars=m[textSize]||m.lg;
   Object.entries(vars).forEach(([k,v])=>document.documentElement.style.setProperty(k,v))}
@@ -1492,7 +1492,7 @@ function rPlayers(l){
   h+='<div class="card fu"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><h3 class="card-t" style="margin:0">Active players</h3><span class="pill ok">'+active.length+'</span></div>';
   if(!active.length)h+='<p class="subtext" style="text-align:center;padding:20px">No active players.</p>';
   else if(isAdmin){
-    h+=sortedActive.map(p=>'<div class="pr"><span style="flex:1;font-weight:600;font-size:.88rem">'+p.name+'</span><span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span><button class="edit-btn" onclick="openEditPlayer(\''+p.id+'\')">Edit</button><button class="edit-btn" style="color:var(--loss)" onclick="deactivatePlayer(\''+p.id+'\')">Deactivate</button></div>').join('');
+    h+=sortedActive.map(p=>'<div class="pr"><span style="flex:1;font-weight:600;font-size:var(--st-name,.88rem)">'+p.name+'</span><span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span><button class="edit-btn" onclick="openEditPlayer(\''+p.id+'\')">Edit</button><button class="edit-btn" style="color:var(--loss)" onclick="deactivatePlayer(\''+p.id+'\')">Deactivate</button></div>').join('');
   } else {
     h+=sortedActive.map((p,i)=>{
       const wins=bonusData[p.id]?.wins||0;
@@ -1500,18 +1500,18 @@ function rPlayers(l){
       const crown=wins>0?(' '+crownStr(wins)):'';
       const bg=i===0?'background:#0d1400;border:0.5px solid rgba(200,255,0,0.15);':'background:var(--surf2);border:1px solid var(--border);';
       return'<div style="display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:var(--rx);margin-bottom:6px;'+bg+'">'
-        +'<div style="width:32px;height:32px;border-radius:50%;background:'+(i===0?'rgba(200,255,0,0.15)':'rgba(255,255,255,0.06)')+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:'+(i===0?'#c8ff00':'var(--muted)')+';flex-shrink:0">'+p.name.slice(0,2).toUpperCase()+'</div>'
-        +'<div style="flex:1"><div style="font-size:14px;font-weight:700;color:var(--text)">'+p.name+crown+'</div>'
-        +(wins>0?'<div style="font-size:9px;color:rgba(200,255,0,0.5);margin-top:1px">'+wins+' ladder win'+(wins!==1?'s':'')+'</div>':'<div style="font-size:9px;color:var(--muted);margin-top:1px">no wins yet</div>')
+        +'<div style="width:32px;height:32px;border-radius:50%;background:'+(i===0?'rgba(200,255,0,0.15)':'rgba(255,255,255,0.06)')+';display:flex;align-items:center;justify-content:center;font-size:var(--st-rank,11px);font-weight:900;color:'+(i===0?'#c8ff00':'var(--muted)')+';flex-shrink:0">'+p.name.slice(0,2).toUpperCase()+'</div>'
+        +'<div style="flex:1"><div style="font-size:var(--st-name,14px);font-weight:700;color:var(--text)">'+p.name+crown+'</div>'
+        +(wins>0?'<div style="font-size:var(--st-hdr,9px);color:rgba(200,255,0,0.5);margin-top:1px">'+wins+' ladder win'+(wins!==1?'s':'')+'</div>':'<div style="font-size:var(--st-hdr,9px);color:var(--muted);margin-top:1px">no wins yet</div>')
         +'</div>'
         +'<span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span>'
-        +(pts>0?'<div style="font-size:13px;font-weight:800;color:rgba(200,255,0,0.7)">'+pts+'</div>':'')
+        +(pts>0?'<div style="font-size:var(--st-stat,13px);font-weight:800;color:rgba(200,255,0,0.7)">'+pts+'</div>':'')
         +'</div>'}).join('');
   }
   h+='</div>';
   if(inactive.length&&isAdmin){
     h+='<div class="card fu"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><h3 class="card-t" style="margin:0">Inactive players</h3><span class="pill">'+inactive.length+'</span></div>';
-    h+=[...inactive].sort((a,b)=>a.name.localeCompare(b.name)).map(p=>'<div class="pr" style="opacity:.5"><span style="flex:1;font-weight:600;font-size:.88rem">'+p.name+'</span><span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span><button class="edit-btn" onclick="openEditPlayer(\''+p.id+'\')">Edit</button><button class="edit-btn" style="color:var(--lime)" onclick="reactivatePlayer(\''+p.id+'\')">Activate</button></div>').join('');
+    h+=[...inactive].sort((a,b)=>a.name.localeCompare(b.name)).map(p=>'<div class="pr" style="opacity:.5"><span style="flex:1;font-weight:600;font-size:var(--st-name,.88rem)">'+p.name+'</span><span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span><button class="edit-btn" onclick="openEditPlayer(\''+p.id+'\')">Edit</button><button class="edit-btn" style="color:var(--lime)" onclick="reactivatePlayer(\''+p.id+'\')">Activate</button></div>').join('');
     h+='</div>'}
   return h}
 function timeUntil(ss){
@@ -1601,7 +1601,7 @@ function rSessionRoster(l,ss){let h='';const parts=ss.participants||[];const act
   const _rs=gS();
   const drRatings=(!isAdmin&&_rs)?calcDinkRating(calcStats(_rs.sessions,l.players),_rs.sessions,l.players):{};
   if(!isAdmin&&!sortedRoster.length)h+='<div style="text-align:center;padding:24px;color:var(--muted);font-size:.85rem">No players in this ladder yet.</div>';
-  h+=sortedRoster.map(p=>{const isIn=parts.includes(p.id);const canToggle=isAdmin&&!ss.started;const dr=drRatings[p.id];const drStr=dr!=null?dr.toFixed(1):'—';return'<div class="pr pick-row'+(isIn?' pick-in':'')+'"'+(canToggle?' onclick="toggleParticipant(\''+p.id+'\')" style="cursor:pointer"':'')+'>'+(isAdmin?'<div class="pick-check">'+(isIn?'✓':'')+'</div>':'')+(!isAdmin?'<span style="flex:1;font-weight:600;font-size:.88rem;cursor:pointer" onclick="event.stopPropagation();openPlayerStats(\''+p.id+'\')">'+p.name+'</span>':'<span style="flex:1;font-weight:600;font-size:.88rem">'+p.name+'</span>')+'<span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span>'+(!isAdmin?'<div style="text-align:right;min-width:42px"><div style="font-size:13px;font-weight:700;color:var(--muted)">'+drStr+'</div><div style="font-size:9px;color:var(--muted);opacity:.6">DR</div></div>':'')+(isAdmin?'<button class="edit-btn" onclick="event.stopPropagation();openEditPlayer(\''+p.id+'\')">Edit</button>':'')+(isAdmin&&ss.started?'<button class="edit-btn" style="color:var(--warn)" onclick="event.stopPropagation();replacePlayer(\''+p.id+'\')">Swap</button>':'')+'</div>'}).join('');
+  h+=sortedRoster.map(p=>{const isIn=parts.includes(p.id);const canToggle=isAdmin&&!ss.started;const dr=drRatings[p.id];const drStr=dr!=null?dr.toFixed(1):'—';return'<div class="pr pick-row'+(isIn?' pick-in':'')+'"'+(canToggle?' onclick="toggleParticipant(\''+p.id+'\')" style="cursor:pointer"':'')+'>'+(isAdmin?'<div class="pick-check">'+(isIn?'✓':'')+'</div>':'')+(!isAdmin?'<span style="flex:1;font-weight:600;font-size:var(--st-name,.88rem);cursor:pointer" onclick="event.stopPropagation();openPlayerStats(\''+p.id+'\')">'+p.name+'</span>':'<span style="flex:1;font-weight:600;font-size:var(--st-name,.88rem)">'+p.name+'</span>')+'<span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span>'+(!isAdmin?'<div style="text-align:right;min-width:42px"><div style="font-size:var(--st-name,13px);font-weight:700;color:var(--muted)">'+drStr+'</div><div style="font-size:var(--st-hdr,9px);color:var(--muted);opacity:.6">DR</div></div>':'')+(isAdmin?'<button class="edit-btn" onclick="event.stopPropagation();openEditPlayer(\''+p.id+'\')">Edit</button>':'')+(isAdmin&&ss.started?'<button class="edit-btn" style="color:var(--warn)" onclick="event.stopPropagation();replacePlayer(\''+p.id+'\')">Swap</button>':'')+'</div>'}).join('');
   h+='</div>';
   if(isAdmin&&nSelected<4)h+='<div style="text-align:center;padding:10px"><p style="color:var(--warn);font-size:.82rem">Need at least 4 participants to start.</p></div>';
   if(isAdmin&&ss.started&&!ss.finished){
@@ -1671,7 +1671,7 @@ function rNoSeason(){let h='<div class="card fu" style="text-align:center;paddin
 function rOverview(l,s,stats){const as=s.sessions.filter(x=>!x.archived);let h='<div class="card fu"><div class="overline">Current season</div><h2 class="heading" style="font-size:1.2rem;color:var(--lime)">'+s.name+'</h2><div class="subtext" style="margin-top:4px">'+as.length+' ladder'+(as.length!==1?'s':'')+' · '+l.players.filter(p=>p.active!==false).length+' active players</div></div>';
   if(stats.some(x=>x.w+x.l+x.t>0))h+='<div class="chip-grid fu">'+[{l:'Ladders',v:as.filter(x=>x.started).length},{l:'Games',v:Math.floor(stats.reduce((a,x)=>a+x.w+x.l+x.t,0)/2)},{l:'Players',v:l.players.filter(p=>p.active!==false).length},{l:'High Pts',v:stats.reduce((m,x)=>Math.max(m,x.pf),0)}].map(c=>'<div class="chip"><div class="chip-n">'+c.v+'</div><div class="chip-l">'+c.l+'</div></div>').join('')+'</div>';
   if(isAdmin)h+='<button class="bp full" onclick="go(\'newSession\')" style="margin-bottom:12px">New ladder</button>';
-  const ladderBtn=(x,dim)=>{const nParts=x.participants?x.participants.length:l.players.filter(p=>p.active!==false).length;const st=x.finished?'<span class="pill ok">Complete</span>':x.started?'<span class="pill live"><span class="dot"></span>Rd '+(x.currentRound+1)+'</span>':'<span class="pill draft">Upcoming</span>';return'<button class="sc" style="'+(dim?'opacity:.6':'')+';" onclick="openSession(\''+x.id+'\')">'+'<div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:700;font-size:.9rem">'+(x.name||fmtDate(x.date))+'</div><div class="subtext" style="font-size:.72rem;margin-top:2px">'+fmtDate(x.date)+(x.config.startTime?' · '+fmt12(x.config.startTime):'')+' · '+nParts+' players · '+x.config.courts+' courts'+(x.config.place?' · '+x.config.place:'')+'</div></div>'+st+'</div></button>'};
+  const ladderBtn=(x,dim)=>{const nParts=x.participants?x.participants.length:l.players.filter(p=>p.active!==false).length;const st=x.finished?'<span class="pill ok">Complete</span>':x.started?'<span class="pill live"><span class="dot"></span>Rd '+(x.currentRound+1)+'</span>':'<span class="pill draft">Upcoming</span>';return'<button class="sc" style="'+(dim?'opacity:.6':'')+';" onclick="openSession(\''+x.id+'\')">'+'<div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:700;font-size:var(--st-name,.9rem)">'+(x.name||fmtDate(x.date))+'</div><div class="subtext" style="font-size:var(--st-hdr,.72rem);margin-top:2px">'+fmtDate(x.date)+(x.config.startTime?' · '+fmt12(x.config.startTime):'')+' · '+nParts+' players · '+x.config.courts+' courts'+(x.config.place?' · '+x.config.place:'')+'</div></div>'+st+'</div></button>'};
   if(!as.length){h+='<div class="card fu"><h3 class="card-t">Ladders</h3><p class="subtext" style="text-align:center;padding:20px">No ladders scheduled yet.</p></div>'}
   else{
     const active_ls=[...as].filter(x=>!x.finished).sort((a,b)=>a.date.localeCompare(b.date));
@@ -1916,18 +1916,18 @@ function rFullStats(stats,season,l){
   h+='<div style="flex:1;text-align:center;padding:8px 4px"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">Scope</div><div style="font-size:10px;font-weight:900;color:#c8ff00;line-height:1.3">All<br>ladders</div></div></div>';
 
   // Hint about the row-tap profile popup so users know what they get
-  h+='<div style="font-size:10px;color:rgba(255,255,255,0.45);text-align:center;line-height:1.5;padding:0 4px 8px">Tap a row for expanded Player Profile Stats.</div>';
+  h+='<div style="font-size:var(--st-stat,10px);color:var(--muted);text-align:center;line-height:1.5;padding:0 4px 8px">Tap a row for expanded Player Profile Stats.</div>';
 
   // Uniform table — top 3 differ only by rank label color, total color, and row tint
   const podLabel=['1st','2nd','3rd'];
   const podCol=['#ffcc00','#c0c0c0','#cd7f32'];
-  const podBg=['#1a1200','#111','#12100a'];
+  const podBg=['rgba(255,204,0,0.08)','rgba(180,180,180,0.06)','rgba(205,127,50,0.08)'];
   // Add a Dink Rating column on the right. New grid: rank, delta, player, W, L, Diff, Bonus, Total, DR
   const cols='28px 24px 1fr 24px 24px 36px 38px 42px 38px';
   // Composite skill rating per player — same calc used in the Full Stats table.
   const drRatings=calcDinkRating(stats,season.sessions,l.players);
-  h+='<div style="background:#0d0d0d;border:0.5px solid #1e1e1e;border-radius:10px;overflow:hidden">';
-  h+='<div style="display:grid;grid-template-columns:'+cols+';gap:5px;padding:7px 12px;background:#0a0a0a;border-bottom:1px solid #1a1a1a;font-size:8px;font-weight:700;color:rgba(255,255,255,0.35);letter-spacing:.1em;text-transform:uppercase">';
+  h+='<div style="background:var(--surf1);border:0.5px solid var(--border);border-radius:10px;overflow:hidden">';
+  h+='<div style="display:grid;grid-template-columns:'+cols+';gap:5px;padding:7px 12px;background:var(--surf2);border-bottom:1px solid var(--border);font-size:var(--st-hdr,8px);font-weight:700;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">';
   ['#','\u0394','Player','W','L','Diff','Bonus','Total','DR'].forEach((c,j)=>{
     const align=j===2?'left':j===1?'center':'right';
     const extra=c==='DR'?';color:#a78bfa;border-left:1px solid rgba(167,139,250,0.25);padding-left:4px':'';
@@ -1942,20 +1942,20 @@ function rFullStats(stats,season,l){
     const total=s.pf+bonus;
     const d=s.pf-s.pa;
     const isPod=rank<=3;
-    const rankColor=isPod?podCol[rank-1]:'rgba(255,255,255,0.4)';
-    const totalColor=isPod?podCol[rank-1]:'#c8ff00';
-    const stripeBg=isPod?podBg[rank-1]:(i%2===1?'#0a0a0a':'transparent');
-    h+='<div'+pClick(s.id)+' style="display:grid;grid-template-columns:'+cols+';gap:5px;padding:9px 12px;border-bottom:0.5px solid #111;background:'+stripeBg+';align-items:center;font-variant-numeric:tabular-nums'+pCur()+'">';
-    h+='<div style="text-align:right;font-size:11px;font-weight:'+(isPod?'700':'400')+';color:'+rankColor+'">'+(isPod?podLabel[rank-1]:rank)+'</div>';
+    const rankColor=isPod?podCol[rank-1]:'var(--muted)';
+    const totalColor=isPod?podCol[rank-1]:'var(--lime)';
+    const stripeBg=isPod?podBg[rank-1]:(i%2===1?'var(--surf2)':'transparent');
+    h+='<div'+pClick(s.id)+' style="display:grid;grid-template-columns:'+cols+';gap:5px;padding:9px 12px;border-bottom:0.5px solid var(--border);background:'+stripeBg+';align-items:center;font-variant-numeric:tabular-nums'+pCur()+'">';
+    h+='<div style="text-align:right;font-size:var(--st-rank,11px);font-weight:'+(isPod?'700':'400')+';color:'+rankColor+'">'+(isPod?podLabel[rank-1]:rank)+'</div>';
     h+='<div style="text-align:center;font-size:9px">'+renderDelta(prevRankMap[s.id],rank,hasPrev)+'</div>';
-    h+='<div style="font-size:'+(isPod?'13':'12')+'px;font-weight:700;color:'+(isPod?'#f4f4f0':'rgba(255,255,255,0.85)')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+(wins>0?' '+crownStr(wins):'')+'</div>';
-    h+='<div style="text-align:right;font-size:12px;font-weight:700;color:#c8ff00">'+s.w+'</div>';
-    h+='<div style="text-align:right;font-size:12px;color:rgba(255,255,255,0.45)">'+s.l+'</div>';
-    h+='<div style="text-align:right;font-size:11px;font-weight:'+(d>=0?'700':'400')+';color:'+(d>0?'#c8ff00':d<0?'#ff5c47':'rgba(255,255,255,0.4)')+'">'+(d>0?'+':'')+d+'</div>';
-    h+='<div style="text-align:right;font-size:11px;font-weight:800;color:'+(bonus>0?'#c8ff00':'rgba(255,255,255,0.2)')+'">'+(bonus>0?'+'+bonus:'\u2014')+'</div>';
-    h+='<div style="text-align:right;font-size:'+(isPod?'14':'13')+'px;font-weight:900;color:'+totalColor+'">'+total+'</div>';
+    h+='<div style="font-size:var(--st-name,13px);font-weight:700;color:'+(isPod?'var(--text)':'var(--text-sec)')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+(wins>0?' '+crownStr(wins):'')+'</div>';
+    h+='<div style="text-align:right;font-size:var(--st-stat,12px);font-weight:700;color:var(--lime)">'+s.w+'</div>';
+    h+='<div style="text-align:right;font-size:var(--st-stat,12px);color:var(--muted)">'+s.l+'</div>';
+    h+='<div style="text-align:right;font-size:var(--st-rank,11px);font-weight:'+(d>=0?'700':'400')+';color:'+(d>0?'var(--lime)':d<0?'#ff5c47':'var(--muted)')+'">'+(d>0?'+':'')+d+'</div>';
+    h+='<div style="text-align:right;font-size:var(--st-rank,11px);font-weight:800;color:'+(bonus>0?'var(--lime)':'var(--muted-lt)')+'">'+(bonus>0?'+'+bonus:'\u2014')+'</div>';
+    h+='<div style="text-align:right;font-size:var(--st-stat,13px);font-weight:900;color:'+totalColor+'">'+total+'</div>';
     const dr=drRatings[s.id];const drStr=dr!=null?dr:'\u2014';
-    h+='<div style="text-align:right;font-size:11px;font-weight:900;color:#a78bfa;border-left:1px solid rgba(167,139,250,0.18);padding-left:4px;font-family:\'Sora\',sans-serif">'+drStr+'</div>';
+    h+='<div style="text-align:right;font-size:var(--st-rank,11px);font-weight:900;color:#a78bfa;border-left:1px solid rgba(167,139,250,0.18);padding-left:4px;font-family:\'Sora\',sans-serif">'+drStr+'</div>';
     h+='</div>';
   });
   h+='</div>';

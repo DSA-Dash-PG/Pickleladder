@@ -78,8 +78,8 @@ body{font-family:'Inter',system-ui,sans-serif;background:#08080f;color:var(--tex
 
 /* ── Typography ── */
 .heading{font-family:'Sora',sans-serif;font-weight:800;color:var(--text);letter-spacing:-.02em}
-.subtext{color:var(--muted);font-size:.82rem;line-height:1.5}
-.overline{font-family:'Sora',sans-serif;font-size:.6rem;font-weight:700;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
+.subtext{color:var(--muted);font-size:var(--st-name,.82rem);line-height:1.5}
+.overline{font-family:'Sora',sans-serif;font-size:var(--st-hdr,.6rem);font-weight:700;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
 
 /* ── Header ── */
 .hdr{background:#08080f;padding:0 16px 0;position:sticky;top:0;z-index:50;border-bottom:1px solid rgba(200,255,0,0.12)}
@@ -102,8 +102,8 @@ body{font-family:'Inter',system-ui,sans-serif;background:#08080f;color:var(--tex
 .content{max-width:540px;margin:0 auto;padding:14px 13px 80px}
 
 /* ── Cards ── */
-.card{background:#0d0d0d;border-radius:var(--r);padding:16px 18px;margin-bottom:10px;border:0.5px solid #1e1e1e}
-.card-t{font-family:'Sora',sans-serif;font-size:.88rem;color:var(--text);margin:0 0 12px;font-weight:700;display:flex;align-items:center;gap:8px}
+.card{background:var(--surf1);border-radius:var(--r);padding:16px 18px;margin-bottom:10px;border:1px solid var(--border)}
+.card-t{font-family:'Sora',sans-serif;font-size:var(--st-name,.88rem);color:var(--text);margin:0 0 12px;font-weight:700;display:flex;align-items:center;gap:8px}
 
 /* ── Form inputs ── */
 .inp{width:100%;padding:11px 14px;background:var(--surf2);border:1.5px solid var(--border-s);border-radius:var(--rx);color:var(--text);font-family:'Inter',sans-serif;font-size:.88rem;outline:none;box-sizing:border-box;transition:border-color .15s}
@@ -125,7 +125,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#08080f;color:var(--tex
 .full{width:100%}
 
 /* ── Session list button ── */
-.sc{background:var(--surf1);border-radius:var(--rs);padding:13px 15px;border:1px solid var(--border);cursor:pointer;width:100%;text-align:left;font-family:'Inter',sans-serif;color:var(--text);margin-bottom:8px;transition:all .15s}
+.sc{background:var(--surf1);border-radius:var(--rs);padding:13px 15px;border:1.5px solid var(--border);cursor:pointer;width:100%;text-align:left;font-family:'Inter',sans-serif;color:var(--text);margin-bottom:8px;transition:all .15s}
 .sc:hover{border-color:var(--lime-bd);background:var(--surf2)}
 
 /* ── Pills ── */
@@ -138,8 +138,8 @@ body{font-family:'Inter',system-ui,sans-serif;background:#08080f;color:var(--tex
 /* ── Stat chips ── */
 .chip-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
 .chip{background:var(--surf2);border-radius:var(--rs);padding:11px 6px;text-align:center;border:1px solid var(--border)}
-.chip-n{font-family:'Sora',sans-serif;font-size:1.3rem;color:var(--lime);font-weight:800;letter-spacing:-.02em}
-.chip-l{font-size:.58rem;color:var(--muted);font-weight:600;margin-top:2px}
+.chip-n{font-family:'Sora',sans-serif;font-size:var(--ui-num,1.3rem);color:var(--lime);font-weight:800;letter-spacing:-.02em}
+.chip-l{font-size:var(--st-hdr,.58rem);color:var(--muted);font-weight:600;margin-top:2px}
 
 /* ── Player rows ── */
 .pr{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf2);border-radius:var(--rx);margin-bottom:6px;transition:all .15s;border:1px solid transparent}
@@ -531,6 +531,8 @@ body{font-family:'Inter',system-ui,sans-serif;background:#08080f;color:var(--tex
 [data-theme="hc-dark"] body{background:#000000}
 [data-theme="hc-dark"] .cc{border-width:2px}
 [data-theme="hc-dark"] .card{border-color:rgba(255,255,255,0.15)}
+[data-theme="hc-light"] .card{border:1.5px solid rgba(0,0,0,0.14);box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+[data-theme="hc-light"] .sc{border:1.5px solid rgba(0,0,0,0.14)}
 [data-theme="hc-dark"] .hdr{border-bottom-color:rgba(200,255,0,0.3)}
 
 [data-theme="hc-light"]{
