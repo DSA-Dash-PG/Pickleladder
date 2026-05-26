@@ -61,9 +61,8 @@ async function npConfirm(){
       // Other team not entered yet — flip to it
       npState={...npState,field:other,value:''};render();
     } else if(myVal!=null&&otherVal!=null&&myVal===otherVal){
-      // Both entered but tied — keep modal open, switch to other field so
-      // admin can drop a point. Tied lockout UI takes over from here.
-      npState={...npState,field:other,value:String(otherVal)};render();
+      // Tied — keep numpad open so admin can press Moves Up
+      render();
     } else {
       npState=null;render();
     }
@@ -72,6 +71,15 @@ async function npConfirm(){
   }
 }
 function npCancel(){npState=null;render()}
+function setTieWinner(ri,ci,side){
+  const l=gL();const ss=gSS();if(!l||!ss)return;
+  const sc=ss.rounds[ri]?.courts[ci]?.score;if(!sc)return;
+  sc.winner=side;
+  const idx=ladders.findIndex(x=>x.id===l.id);if(idx>=0)ladders[idx]=l;
+  clearTimeout(scoreTimer);scoreTimer=setTimeout(()=>apiSave(l),800);
+  npState=null;render();}
+function setTieA(ri,ci){setTieWinner(ri,ci,'A')}
+function setTieB(ri,ci){setTieWinner(ri,ci,'B')}
 function npSwitchField(field,existingVal){if(!npState)return;npState.field=field;npState.value=(existingVal!==null&&existingVal!==undefined&&existingVal!=='null')?String(existingVal):'';render()}
 
 let ladders=[],activeLadderId=null,activeSessionId=null,isAdmin=false,adminPin='';
@@ -344,8 +352,7 @@ function gParts(ss,l){if(!ss||!l)return[];if(!ss.participants||!ss.participants.
 async function save(l,skipRender){const i=ladders.findIndex(x=>x.id===l.id);if(i>=0)ladders[i]=l;else ladders.push(l);const r=await apiSave(l);if(r&&!skipRender)render();return r}
 
 let scoreTimer=null;
-// ── THE BUG FIX: submitScoreRound no longer calls render() directly ──
-// Score is stored in memory and debounced to API. render() is NOT called here.
+// Score mutation: no render on every digit; save+refresh only when both scores are set.
 async function _applyScore(ri,ci,field,v){
   const l=gL();const ss=gSS();if(!l||!ss||!ss.rounds[ri])return;
   const ct=ss.rounds[ri].courts[ci];
@@ -355,7 +362,17 @@ async function _applyScore(ri,ci,field,v){
   else{sc.winner=null}
   ct.score=sc;
   const idx=ladders.findIndex(x=>x.id===l.id);if(idx>=0)ladders[idx]=l;
-  clearTimeout(scoreTimer);scoreTimer=setTimeout(()=>apiSave(l),800);}
+  clearTimeout(scoreTimer);
+  if(sc.t1!==null&&sc.t2!==null){
+    // Both scores entered — save immediately and sync all tabs
+    scoreTimer=setTimeout(async()=>{
+      const res=await apiSave(l);
+      scoreTimer=null;
+      if(res)await refreshLadder();
+    },500);
+  }
+  // Single score only: skip save until the pair is complete
+}
 
 // kept for win/loss mode (no numpad needed there)
 async function submitScoreRound(ri,ci,f,v){await _applyScore(ri,ci,f,v===''?null:parseInt(v)||0);render()}
@@ -761,7 +778,7 @@ function _buildStrengthFn(l){
 }
 async function startSessionAction(){const l=gL();const ss=gSS();if(!l||!ss)return;const parts=gParts(ss,l);if(parts.length<4)return alert('Need at least 4 participants. Go to the Roster tab to select players.');const strength=_buildStrengthFn(l);ss.rounds=[genR1(parts,ss.config.courts,strength)];ss.currentRound=0;ss.started=true;resetTimer(ss);tab='play';mapOpen=true;await save(l)}
 async function finishLadderEarly(){const l=gL();const ss=gSS();if(!l||!ss)return;if(!confirm('End this ladder now?'))return;ss.finished=true;tab='stats';await save(l)}
-async function nextRound(){const l=gL();const ss=gSS();if(!l||!ss)return;const tied=ss.rounds[ss.currentRound].courts.filter(c=>c.score&&c.score.t1!==null&&c.score.t2!==null&&!c.score.winner);if(tied.length)return alert(tied.length+' court(s) have tied scores. There are no ties — remove the last point so there is a winner.');const un=ss.rounds[ss.currentRound].courts.filter(c=>!c.score);if(un.length&&!confirm(un.length+' court(s) unscored. Continue?'))return;if(ss.currentRound>=ss.config.rounds-1){ss.finished=true;tab='stats';await save(l);return}const strength=_buildStrengthFn(l);ss.rounds.push(genNR(ss.rounds[ss.currentRound],ss.config.courts,strength));ss.currentRound++;viewingRound=-1;npState=null;resetTimer(ss);await save(l)}
+async function nextRound(){const l=gL();const ss=gSS();if(!l||!ss)return;const tied=ss.rounds[ss.currentRound].courts.filter(c=>c.score&&c.score.t1!==null&&c.score.t2!==null&&!c.score.winner);if(tied.length)return alert(tied.length+' court(s) have tied scores with no winner selected. Tap each tied court and press "Moves Up" for the winning team.');const un=ss.rounds[ss.currentRound].courts.filter(c=>!c.score);if(un.length&&!confirm(un.length+' court(s) unscored. Continue?'))return;if(ss.currentRound>=ss.config.rounds-1){ss.finished=true;tab='stats';await save(l);return}const strength=_buildStrengthFn(l);ss.rounds.push(genNR(ss.rounds[ss.currentRound],ss.config.courts,strength));ss.currentRound++;viewingRound=-1;npState=null;resetTimer(ss);await save(l)}
 async function reshuffleRound(){const l=gL();const ss=gSS();if(!l||!ss||!confirm('Reshuffle? Scores cleared.'))return;const all=[];ss.rounds[ss.currentRound].courts.forEach(c=>[...c.team1,...c.team2].filter(Boolean).forEach(p=>all.push(p)));const strength=_buildStrengthFn(l);ss.rounds[ss.currentRound]=genR1(all,ss.config.courts,strength);npState=null;await save(l)}
 async function restartRound(ri){const l=gL();const ss=gSS();if(!l||!ss)return;if(!confirm('Restart Round '+(ri+1)+'? All rounds after it will be removed.'))return;ss.rounds[ri].courts.forEach(c=>{c.score=null});ss.rounds=ss.rounds.slice(0,ri+1);ss.currentRound=ri;ss.finished=false;viewingRound=-1;npState=null;resetTimer(ss);await save(l)}
 function beginSwap(ri,ci,ti,pi){if(!isAdmin)return;if(swapMode){doSwap(ri,ci,ti,pi);return}swapMode={ri,ci,ti,pi};render()}
@@ -1057,7 +1074,7 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
     h+='</div>'}
 
   // ── Tie warning ──
-  if(adminMode&&hb&&!w)h+='<div class="th" style="padding:6px 12px 8px">Scores tied \u2014 remove the last point to determine a winner</div>';
+  if(adminMode&&hb&&!w)h+='<div class="th" style="padding:6px 12px 8px">Scores tied \u2014 tap score to pick who advances</div>';
 
   h+='</div>';return h}
 
@@ -1505,7 +1522,8 @@ function rPlayers(l){
       const wins=bonusData[p.id]?.wins||0;
       const pts=totalPts(p.id);
       const crown=wins>0?(' '+crownStr(wins)):'';
-      const bg=i===0?'background:#0d1400;border:0.5px solid rgba(200,255,0,0.15);':'background:var(--surf2);border:1px solid var(--border);';
+      const isLtSt=theme==='hc-light';
+      const bg=i===0?(isLtSt?'background:var(--lime-dim);border:0.5px solid var(--lime-bd);':'background:#0d1400;border:0.5px solid rgba(200,255,0,0.15);'):'background:var(--surf2);border:1px solid var(--border);';
       return'<div style="display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:var(--rx);margin-bottom:6px;'+bg+'">'
         +'<div style="width:32px;height:32px;border-radius:50%;background:'+(i===0?'rgba(200,255,0,0.15)':'rgba(255,255,255,0.06)')+';display:flex;align-items:center;justify-content:center;font-size:var(--st-rank,11px);font-weight:900;color:'+(i===0?'#c8ff00':'var(--muted)')+';flex-shrink:0">'+p.name.slice(0,2).toUpperCase()+'</div>'
         +'<div style="flex:1"><div style="font-size:var(--st-name,14px);font-weight:700;color:var(--text)">'+p.name+crown+'</div>'
@@ -1896,6 +1914,7 @@ function rLeaderboard(stats,season,l){
 // identical across the table. Tap any row to open the player profile modal.
 function rFullStats(stats,season,l){
   if(!season)return'';
+  const isLight=theme==='hc-light';
   const bonusData=calcBonusPts(season.sessions,l.players);
   const totalPts=(s)=>s.pf+(bonusData[s.id]?.bonus||0);
   // Skip temp/one-round subs on the season leaderboard. Their per-ladder
@@ -1916,11 +1935,11 @@ function rFullStats(stats,season,l){
 
   let h='';
   // Bonus strip
-  h+='<div style="display:flex;background:#0d1400;border:0.5px solid rgba(200,255,0,0.15);border-radius:8px;overflow:hidden;margin-bottom:8px">';
+  h+='<div style="display:flex;background:'+(isLight?'var(--lime-dim)':'#0d1400')+';border:0.5px solid '+(isLight?'var(--lime-bd)':'rgba(200,255,0,0.15)')+';border-radius:8px;overflow:hidden;margin-bottom:8px">';
   [{p:'1st',b:15},{p:'2nd',b:10},{p:'3rd',b:5}].forEach((x,i)=>{
-    h+='<div style="flex:1;text-align:center;padding:8px 4px;border-right:1px solid rgba(200,255,0,0.1)"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">'+x.p+'</div><div style="font-size:16px;font-weight:900;color:#c8ff00;line-height:1">+'+x.b+'</div><div style="font-size:8px;color:rgba(200,255,0,0.4);margin-top:1px">bonus</div></div>';
+    h+='<div style="flex:1;text-align:center;padding:8px 4px;border-right:1px solid '+(isLight?'var(--lime-bd)':'rgba(200,255,0,0.1)')+'"><div style="font-size:8px;font-weight:700;color:'+(isLight?'var(--muted)':'rgba(255,255,255,0.3)')+';text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">'+x.p+'</div><div style="font-size:16px;font-weight:900;color:var(--lime);line-height:1">+'+x.b+'</div><div style="font-size:8px;color:'+(isLight?'var(--lime)':'rgba(200,255,0,0.4)')+';opacity:'+(isLight?'.7':'1')+';margin-top:1px">bonus</div></div>';
   });
-  h+='<div style="flex:1;text-align:center;padding:8px 4px"><div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">Scope</div><div style="font-size:10px;font-weight:900;color:#c8ff00;line-height:1.3">All<br>ladders</div></div></div>';
+  h+='<div style="flex:1;text-align:center;padding:8px 4px"><div style="font-size:8px;font-weight:700;color:'+(isLight?'var(--muted)':'rgba(255,255,255,0.3)')+';text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">Scope</div><div style="font-size:10px;font-weight:900;color:var(--lime);line-height:1.3">All<br>ladders</div></div></div>';
 
   // Hint about the row-tap profile popup so users know what they get
   h+='<div style="font-size:var(--st-stat,10px);color:var(--muted);text-align:center;line-height:1.5;padding:0 4px 8px">Tap a row for expanded Player Profile Stats.</div>';
@@ -1991,6 +2010,7 @@ function render(){
   // ── Header right: admin badge + accessibility button ──
   h+='<div class="hdr-right">';
   if(isAdmin)h+='<div class="hdr-admin-badge">Admin</div>';
+  h+='<button onclick="'+(isAdmin?'lockAdmin()':'openPin()')+'" style="background:'+(isAdmin?'rgba(255,92,71,0.12)':'rgba(255,255,255,0.06)')+';border:1px solid '+(isAdmin?'rgba(255,92,71,0.35)':'rgba(255,255,255,0.12)')+';color:'+(isAdmin?'#ff5c47':'var(--muted-lt)')+';font-size:10px;font-weight:800;padding:5px 10px;border-radius:20px;cursor:pointer;letter-spacing:.04em;white-space:nowrap;font-family:Inter,sans-serif">'+(isAdmin?'Lock Admin':'🔐 Admin')+'</button>';
   {const szLabels={sm:'S',md:'M',lg:'L',xl:'XL',xxl:'XXL'};
   const thOpts=[{k:'hc-dark',label:'Dark',dot:'dot-hc-dark'},{k:'hc-light',label:'Light',dot:'dot-hc-light'}];
   h+='<div class="access-hdr-wrap">';
@@ -2109,73 +2129,65 @@ function render(){
       // works so they can fix it.
       const isTied=bothDone&&t1val===t2val;
       const cur=npState.value===''?'--':npState.value;
-      // Backdrop click closes the modal — but only if not tied.
-      const backdropClose=isTied?'':' onclick="npCancel()"';
-      const modalBorder=isTied?'border:1px solid rgba(255,92,71,0.55);box-shadow:0 0 0 4px rgba(255,92,71,0.15)':'border:1px solid rgba(255,255,255,0.1)';
-      const headerBg=isTied?'#1a0606':'#0e0e1a';
-      const headerBd=isTied?'border-bottom:1px solid rgba(255,92,71,0.3)':'border-bottom:1px solid rgba(255,255,255,0.07)';
+      const isNpLight=theme==='hc-light';
+      const npTieAcc=isNpLight?'#cc2200':'#ff5c47';
+      const npModalBg=isNpLight?'#ffffff':'#111118';
+      const npNumBg=isNpLight?'#f0f0f0':'#0e0e1a';
+      const npNumCol=isNpLight?'#000':'#f4f4f0';
+      const npGridBg=isNpLight?'rgba(0,0,0,0.08)':'rgba(255,255,255,0.06)';
+      const backdropClose=' onclick="npCancel()"';
+      const modalBorder=isTied
+        ?('border:1.5px solid '+(isNpLight?'#cc2200':'rgba(255,92,71,0.55)')+';box-shadow:0 0 0 4px '+(isNpLight?'rgba(200,0,0,0.08)':'rgba(255,92,71,0.15)'))
+        :('border:1px solid '+(isNpLight?'rgba(0,0,0,0.15)':'rgba(255,255,255,0.1)'));
+      const headerBg=isTied?(isNpLight?'#fff5f5':'#1a0606'):(isNpLight?'#f0f0f0':'#0e0e1a');
+      const headerBd='border-bottom:1px solid '+(isTied?(isNpLight?'rgba(200,0,0,0.2)':'rgba(255,92,71,0.3)'):(isNpLight?'rgba(0,0,0,0.1)':'rgba(255,255,255,0.07)'));
       const headerLabel=isTied?'COURT '+nm2+' · TIED':'Court '+nm2;
-      const headerLabelCol=isTied?'#ff5c47':col2;
-      const headerSub=isTied?'Pick a winner':'Enter scores';
-      const headerSubCol=isTied?'#ff5c47':'#f4f4f0';
-      let ov='<div style="position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:500;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:16px;backdrop-filter:blur(6px)"'+backdropClose+'>';
-      ov+='<div style="background:#111118;border-radius:20px;width:100%;max-width:380px;'+modalBorder+';overflow:hidden" onclick="event.stopPropagation()">';
-      // header
+      const headerLabelCol=isTied?npTieAcc:col2;
+      const headerSub=isTied?'Which team advances?':'Enter scores';
+      const headerSubCol=isTied?npTieAcc:(isNpLight?'#111':'#f4f4f0');
+      let ov='<div style="position:fixed;inset:0;background:'+(isNpLight?'rgba(0,0,0,0.45)':'rgba(0,0,0,0.8)')+';z-index:500;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:16px;backdrop-filter:blur(6px)"'+backdropClose+'>';
+      ov+='<div style="background:'+npModalBg+';border-radius:20px;width:100%;max-width:380px;'+modalBorder+';overflow:hidden" onclick="event.stopPropagation()">';
       ov+='<div style="background:'+headerBg+';padding:12px 16px;'+headerBd+';display:flex;justify-content:space-between;align-items:center">';
       ov+='<div><div style="font-size:9px;font-weight:900;color:'+headerLabelCol+';text-transform:uppercase;letter-spacing:.1em">'+headerLabel+'</div><div style="font-size:13px;font-weight:700;color:'+headerSubCol+';margin-top:2px">'+headerSub+'</div></div>';
-      if(isTied){
-        ov+='<div title="Locked until tie is resolved" style="background:rgba(255,92,71,0.1);border:1px solid rgba(255,92,71,0.3);color:#ff5c47;font-size:14px;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:not-allowed;opacity:.6">\u{1F512}</div>';
-      } else {
-        ov+='<button onclick="npCancel()" style="background:rgba(255,255,255,0.07);border:none;color:#7a7a8a;font-size:18px;width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center">&#x2715;</button>';
-      }
+      ov+='<button onclick="npCancel()" style="background:'+(isNpLight?'rgba(0,0,0,0.07)':'rgba(255,255,255,0.07)')+';border:none;color:'+(isNpLight?'#333':'#7a7a8a')+';font-size:18px;width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center">&#x2715;</button>';
       ov+='</div>';
-      // Tie warning panel
       if(isTied){
-        ov+='<div style="margin:10px 14px 0;background:rgba(255,92,71,0.12);border:1px solid rgba(255,92,71,0.35);border-radius:8px;padding:9px 11px;font-size:11px;font-weight:600;color:#ff5c47;line-height:1.5"><b style="font-weight:800">Scores can’t tie.</b> Tap ⌫ to remove the last point and pick a winner before exiting.</div>';
+        const mvBg=isNpLight?'#000':'rgba(255,255,255,0.9)';
+        const mvCol=isNpLight?'#fff':'#000';
+        ov+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:12px 14px 0">';
+        ov+='<button onclick="setTieA('+npState.ri+','+npState.ci+')" style="background:'+mvBg+';border:none;border-radius:10px;padding:10px 6px;font-size:11px;font-weight:900;color:'+mvCol+';cursor:pointer;letter-spacing:.04em">Moves Up ↑</button>';
+        ov+='<button onclick="setTieB('+npState.ri+','+npState.ci+')" style="background:'+mvBg+';border:none;border-radius:10px;padding:10px 6px;font-size:11px;font-weight:900;color:'+mvCol+';cursor:pointer;letter-spacing:.04em">Moves Up ↑</button>';
+        ov+='</div>';
       }
-      // score display — both teams side by side
-      ov+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;margin:12px 14px 0;border-radius:12px;overflow:hidden">';
-      // Team 1
+      ov+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;margin:'+(isTied?'4px':'12px')+' 14px 0;border-radius:12px;overflow:hidden">';
       const t1active=npState.field==='t1';
-      const t1border=t1active?'border:2px solid '+col2+';':'border:2px solid rgba(255,255,255,0.1);';
-      const t1bg=t1active?'background:#000e18':'background:#0a0a14';
+      const t1border=t1active?('border:2px solid '+col2+';'):('border:2px solid '+(isNpLight?'rgba(0,0,0,0.12)':'rgba(255,255,255,0.1)')+';');
+      const t1bg=t1active?(isNpLight?'background:#e8f0ff':'background:#000e18'):(isNpLight?'background:#f5f5f5':'background:#0a0a14');
       const t1score=t1val!==null&&!t1active?String(t1val):(t1active?cur:'--');
-      const t1col=t1val!==null&&!t1active?col2:'rgba(255,255,255,0.15)';
+      const t1col=t1val!==null&&!t1active?col2:(isNpLight?'rgba(0,0,0,0.15)':'rgba(255,255,255,0.15)');
       ov+='<div style="'+t1bg+';padding:12px 8px;text-align:center;'+t1border+'border-radius:12px 0 0 12px;cursor:pointer" onclick="npSwitchField(\'t1\',' + (t1val!==null?t1val:'null') + ')">';
-      ov+='<div style="font-size:8px;font-weight:900;color:'+(t1active?col2:'#555')+';text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">'+t1names+'</div>';
+      ov+='<div style="font-size:8px;font-weight:900;color:'+(t1active?col2:(isNpLight?'#888':'#555'))+';text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">'+t1names+'</div>';
       ov+='<div style="font-size:44px;font-weight:900;color:'+(t1active?col2:t1col)+';line-height:1;letter-spacing:-.03em">'+(t1active?cur:t1score)+'</div>';
-      ov+='<div style="font-size:8px;margin-top:5px;color:'+(t1val!==null&&!t1active?col2:'#444')+';">'+(t1val!==null&&!t1active?'✓ Entered':t1active?'← Entering now':'--')+'</div>';
+      ov+='<div style="font-size:8px;margin-top:5px;color:'+(t1val!==null&&!t1active?col2:(isNpLight?'#aaa':'#444'))+';">'+(t1val!==null&&!t1active?'✓ Entered':t1active?'← Entering now':'--')+'</div>';
       ov+='</div>';
-      // Team 2
       const t2active=npState.field==='t2';
-      const t2border=t2active?'border:2px solid '+col2+';':'border:2px solid rgba(255,255,255,0.1);';
-      const t2bg=t2active?'background:#000e18':'background:#0a0a14';
+      const t2border=t2active?('border:2px solid '+col2+';'):('border:2px solid '+(isNpLight?'rgba(0,0,0,0.12)':'rgba(255,255,255,0.1)')+';');
+      const t2bg=t2active?(isNpLight?'background:#e8f0ff':'background:#000e18'):(isNpLight?'background:#f5f5f5':'background:#0a0a14');
       const t2score=t2val!==null&&!t2active?String(t2val):(t2active?cur:'--');
-      const t2col=t2val!==null&&!t2active?col2:'rgba(255,255,255,0.15)';
+      const t2col=t2val!==null&&!t2active?col2:(isNpLight?'rgba(0,0,0,0.15)':'rgba(255,255,255,0.15)');
       ov+='<div style="'+t2bg+';padding:12px 8px;text-align:center;'+t2border+'border-radius:0 12px 12px 0;cursor:pointer" onclick="npSwitchField(\'t2\',' + (t2val!==null?t2val:'null') + ')">';
-      ov+='<div style="font-size:8px;font-weight:900;color:'+(t2active?col2:'#555')+';text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">'+t2names+'</div>';
+      ov+='<div style="font-size:8px;font-weight:900;color:'+(t2active?col2:(isNpLight?'#888':'#555'))+';text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">'+t2names+'</div>';
       ov+='<div style="font-size:44px;font-weight:900;color:'+(t2active?col2:t2col)+';line-height:1;letter-spacing:-.03em">'+(t2active?cur:t2score)+'</div>';
-      ov+='<div style="font-size:8px;margin-top:5px;color:'+(t2val!==null&&!t2active?col2:'#444')+';">'+(t2val!==null&&!t2active?'✓ Entered':t2active?'← Entering now':'--')+'</div>';
+      ov+='<div style="font-size:8px;margin-top:5px;color:'+(t2val!==null&&!t2active?col2:(isNpLight?'#aaa':'#444'))+';">'+(t2val!==null&&!t2active?'✓ Entered':t2active?'← Entering now':'--')+'</div>';
       ov+='</div></div>';
-      // Confirm bar — present whenever both teams have scores. Live and green
-      // when scores differ, dashed/disabled placeholder when tied.
-      if(bothDone){
-        if(isTied){
-          ov+='<div style="padding:14px 14px 6px"><div style="width:100%;background:rgba(255,92,71,0.05);border:1px dashed rgba(255,92,71,0.3);border-radius:12px;padding:13px;font-size:12px;font-weight:700;color:rgba(255,92,71,0.7);text-align:center;cursor:not-allowed">Confirm disabled · scores tied</div></div>';
-        } else {
-          ov+='<div style="padding:14px 14px 6px"><button onclick="npState=null;render()" style="width:100%;background:#c8ff00;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:900;color:#000;cursor:pointer">✓ Confirm '+t1val+' – '+t2val+'</button></div>';
-        }
+      if(bothDone&&!isTied){
+        ov+='<div style="padding:14px 14px 6px"><button onclick="npState=null;render()" style="width:100%;background:'+(isNpLight?'#000':'#c8ff00')+';border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:900;color:'+(isNpLight?'#fff':'#000')+';cursor:pointer">✓ Confirm '+t1val+' – '+t2val+'</button></div>';
       }
-      // Numpad grid — ALL keys (including SET) always work. SET is the path
-      // OUT of a tie — pressing it applies the current edit, which may or
-      // may not still tie. After SET, if still tied, the modal stays open
-      // (npConfirm handles that). The lockout is only on the modal-EXIT
-      // controls (Confirm bar, close ✕, backdrop), not on SET itself.
-      ov+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(255,255,255,0.06);margin:'+(bothDone?'8px':'0')+' 14px 14px;border-radius:12px;overflow:hidden">';
-      [1,2,3,4,5,6,7,8,9].forEach(d=>{ov+='<button onclick="npPress(\''+d+'\')" style="background:#0e0e1a;padding:16px 0;text-align:center;font-size:20px;font-weight:700;color:#f4f4f0;cursor:pointer;border:none;width:100%">'+d+'</button>'});
-      ov+='<button onclick="npDel()" style="background:'+(isTied?'#1a0606':'#0e0e1a')+';padding:16px 0;text-align:center;font-size:16px;color:#ff5c47;cursor:pointer;'+(isTied?'border:1px solid rgba(255,92,71,0.4);font-weight:800':'border:none')+'">⌫</button>';
-      ov+='<button onclick="npPress(\'0\')" style="background:#0e0e1a;padding:16px 0;text-align:center;font-size:20px;font-weight:700;color:#f4f4f0;cursor:pointer;border:none">0</button>';
-      ov+='<button onclick="npConfirm()" style="background:#c8ff00;padding:16px 0;text-align:center;font-size:12px;font-weight:900;color:#000;cursor:pointer;border:none">SET &rarr;</button>';
+      ov+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:'+npGridBg+';margin:'+(bothDone?'8px':'0')+' 14px 14px;border-radius:12px;overflow:hidden">';
+      [1,2,3,4,5,6,7,8,9].forEach(d=>{ov+='<button onclick="npPress(\''+d+'\')" style="background:'+npNumBg+';padding:16px 0;text-align:center;font-size:20px;font-weight:700;color:'+npNumCol+';cursor:pointer;border:none;width:100%">'+d+'</button>'});
+      ov+='<button onclick="npDel()" style="background:'+(isNpLight?(isTied?'#fff5f5':npNumBg):(isTied?'#1a0606':npNumBg))+';padding:16px 0;text-align:center;font-size:16px;color:'+npTieAcc+';cursor:pointer;border:none">⌫</button>';
+      ov+='<button onclick="npPress(\'0\')" style="background:'+npNumBg+';padding:16px 0;text-align:center;font-size:20px;font-weight:700;color:'+npNumCol+';cursor:pointer;border:none">0</button>';
+      ov+='<button onclick="npConfirm()" style="background:'+(isNpLight?'#000':'#c8ff00')+';padding:16px 0;text-align:center;font-size:12px;font-weight:900;color:'+(isNpLight?'#fff':'#000')+';cursor:pointer;border:none">SET &rarr;</button>';
       ov+='</div>';
       ov+='</div></div>';
       h+=ov;}}
@@ -2253,7 +2265,7 @@ function render(){
       sm+='<div style="display:grid;grid-template-columns:1fr 56px 70px;gap:6px">';
       sm+='<input id="subModalPermName" placeholder="Name" style="background:#0a0a0a;border:0.5px solid #1e1e1e;color:#f4f4f0;font-size:13px;padding:8px 10px;border-radius:6px;font-family:inherit;outline:none">';
       sm+='<select id="subModalPermGender" style="background:#0a0a0a;border:0.5px solid #1e1e1e;color:#f4f4f0;font-size:13px;padding:8px 6px;border-radius:6px;font-family:inherit;outline:none"><option value="M">M</option><option value="F">F</option></select>';
-      sm+='<button onclick="subAddPermAt()" style="background:#c8ff00;border:none;color:#000;font-size:11px;font-weight:800;border-radius:6px;cursor:pointer">Add</button>';
+      sm+='<button onclick="subAddPermAt()" style="background:var(--lime);border:none;color:#0a0a0f;font-size:11px;font-weight:800;border-radius:6px;cursor:pointer">Add</button>';
       sm+='</div></div>';
       sm+='<div style="padding:8px 14px 6px"><div style="font-size:9px;font-weight:900;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">One-round / temp sub</div>';
       sm+='<div style="font-size:9px;color:rgba(255,255,255,0.35);margin-bottom:6px">Counts in this ladder’s stats. NOT on the season leaderboard.</div>';
@@ -2283,6 +2295,10 @@ function render(){
 
   // (Accessibility button is now in the header — see hdr-right above)
 
+  // Bottom admin button
+  h+='<div style="display:flex;justify-content:center;padding:20px 16px 32px">';
+  h+='<button onclick="'+(isAdmin?'lockAdmin()':'openPin()')+'" style="background:'+(isAdmin?'rgba(255,92,71,0.08)':'var(--surf2)')+';border:1px solid '+(isAdmin?'rgba(255,92,71,0.3)':'var(--border)')+';color:'+(isAdmin?'#ff5c47':'var(--muted)')+';font-size:11px;font-weight:700;padding:10px 22px;border-radius:24px;cursor:pointer;font-family:Inter,sans-serif;letter-spacing:.04em">'+(isAdmin?'🔓 Lock Admin':'🔐 Admin Login')+'</button>';
+  h+='</div>';
   app.innerHTML=h;
   applyTextSize();
   applyTheme();
