@@ -808,8 +808,10 @@ function _buildStrengthFn(l){
   stats.forEach(x=>{m[x.id]=x.roundPts.length?x.pf/x.roundPts.length:0;});
   return(id)=>m[id]||0;
 }
-async function startSessionAction(){const l=gL();const ss=gSS();if(!l||!ss)return;const parts=gParts(ss,l);if(parts.length<4)return alert('Need at least 4 participants. Go to the Roster tab to select players.');const strength=_buildStrengthFn(l);ss.rounds=[genR1(parts,ss.config.courts,strength)];ss.currentRound=0;ss.started=true;resetTimer(ss);tab='play';mapOpen=true;await save(l)}
+async function startSessionAction(){const l=gL();const ss=gSS();if(!l||!ss)return;const parts=gParts(ss,l);if(parts.length<4)return alert('Need at least 4 participants. Go to the Roster tab to select players.');const strength=_buildStrengthFn(l);ss.rounds=[genR1(parts,ss.config.courts,strength)];ss.currentRound=0;ss.started=true;ss.liveStarted=false;tab='play';mapOpen=true;await save(l)}
 async function finishLadderEarly(){const l=gL();const ss=gSS();if(!l||!ss)return;if(!confirm('End this ladder now?'))return;ss.finished=true;tab='stats';await save(l)}
+async function beginRound(){const l=gL();const ss=gSS();if(!l||!ss)return;ss.liveStarted=true;resetTimer(ss);await save(l)}
+async function restartLadder(){const l=gL();const ss=gSS();if(!l||!ss)return;if(!confirm('Restart this ladder? All rounds and scores will be cleared.'))return;ss.rounds=[];ss.currentRound=-1;ss.started=false;delete ss.liveStarted;ss.finished=false;viewingRound=-1;npState=null;tab='play';await save(l)}
 async function nextRound(){const l=gL();const ss=gSS();if(!l||!ss)return;const curRound=ss.rounds[ss.currentRound];if(curRound.wave2started===false)return alert('Wave 2 has not been started yet. Start Wave 2 before advancing to the next round.');const tied=curRound.courts.filter(c=>c.score&&c.score.t1!==null&&c.score.t2!==null&&!c.score.winner);if(tied.length)return alert(tied.length+' court(s) have tied scores with no winner selected. Tap each tied court and press "Moves Up" for the winning team.');const un=curRound.courts.filter(c=>!c.score);if(un.length&&!confirm(un.length+' court(s) unscored. Continue?'))return;if(ss.currentRound>=ss.config.rounds-1){ss.finished=true;tab='stats';await save(l);return}const strength=_buildStrengthFn(l);ss.rounds.push(genNR(curRound,ss.config.courts,strength));ss.currentRound++;viewingRound=-1;npState=null;resetTimer(ss);await save(l)}
 async function reshuffleRound(){const l=gL();const ss=gSS();if(!l||!ss||!confirm('Reshuffle? Scores cleared.'))return;const all=[];ss.rounds[ss.currentRound].courts.forEach(c=>[...c.team1,...c.team2].filter(Boolean).forEach(p=>all.push(p)));const strength=_buildStrengthFn(l);ss.rounds[ss.currentRound]=genR1(all,ss.config.courts,strength);npState=null;await save(l)}
 async function startWave2(){const l=gL();const ss=gSS();if(!l||!ss)return;const round=ss.rounds[ss.currentRound];if(!round||round.wave2started!==false)return;round.wave2started=true;await save(l)}
@@ -1181,13 +1183,21 @@ function rPlayerView(l,ss){
       const done=rndI&&rndI.courts.every(c=>c.score&&c.score.winner)&&rndI.wave2started!==false;
       h+='<button class="rd-pill'+(isV?' active':'')+'" onclick="viewRound('+(ri===ss.currentRound?-1:ri)+')">Rd '+(ri+1)+(done?' ✓':'')+'</button>'}
     h+='</div>'}
-  const timerPct=(timer/(ss.config.roundMin*60))*100;
-  const timerColor=timer<=60?'#ff5c47':timer<=180?'#ffcc00':'#c8ff00';
-  h+='<div style="background:var(--surf2);border-bottom:1px solid var(--border);padding:8px 14px;display:flex;align-items:center;gap:12px">';
-  h+='<div><div style="font-family:\'Sora\',sans-serif;font-size:22px;font-weight:900;color:var(--lime);font-variant-numeric:tabular-nums;letter-spacing:-.03em;line-height:1">'+fmtT(timer)+'</div>';
-  h+='<div style="font-size:.65rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.07em;margin-top:2px">On clock</div></div>';
-  h+='<div style="flex:1"><div style="height:4px;background:var(--surf4);border-radius:2px;overflow:hidden;margin-bottom:4px"><div style="height:100%;width:'+timerPct+'%;background:'+timerColor+';border-radius:2px;transition:width 1s linear"></div></div>';
-  h+='<div style="font-size:.78rem;color:var(--muted)">Finish rally when timer hits zero</div></div></div>';
+  const isPreviewPv=ss.started&&ss.liveStarted===false;
+  if(!isPreviewPv){
+    const timerPct=(timer/(ss.config.roundMin*60))*100;
+    const timerColor=timer<=60?'#ff5c47':timer<=180?'#ffcc00':'#c8ff00';
+    h+='<div style="background:var(--surf2);border-bottom:1px solid var(--border);padding:8px 14px;display:flex;align-items:center;gap:12px">';
+    h+='<div><div style="font-family:\'Sora\',sans-serif;font-size:22px;font-weight:900;color:var(--lime);font-variant-numeric:tabular-nums;letter-spacing:-.03em;line-height:1">'+fmtT(timer)+'</div>';
+    h+='<div style="font-size:.65rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.07em;margin-top:2px">On clock</div></div>';
+    h+='<div style="flex:1"><div style="height:4px;background:var(--surf4);border-radius:2px;overflow:hidden;margin-bottom:4px"><div style="height:100%;width:'+timerPct+'%;background:'+timerColor+';border-radius:2px;transition:width 1s linear"></div></div>';
+    h+='<div style="font-size:.78rem;color:var(--muted)">Finish rally when timer hits zero</div></div></div>';
+  }else{
+    h+='<div style="background:var(--surf2);border-bottom:1px solid var(--border);padding:10px 14px;display:flex;align-items:center;gap:10px">';
+    h+='<div style="width:32px;height:32px;border-radius:50%;background:'+(isLight?'rgba(255,204,0,0.2)':'rgba(255,204,0,0.15)')+';display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">📋</div>';
+    h+='<div><div style="font-size:.78rem;font-weight:900;color:'+(isLight?'#7a5800':'#ffcc00')+';text-transform:uppercase;letter-spacing:.07em">Lineup posted</div>';
+    h+='<div style="font-size:.72rem;color:var(--muted);margin-top:1px">Check your court below — waiting for admin to start</div></div></div>';
+  }
   h+='<div class="pv-tabs">';
   h+='<button class="pv-tab'+(pvTab==='now'?' on':'')+'" onclick="setPvTab(\'now\')">Now Playing</button>';
   h+='<button class="pv-tab'+(pvTab==='next'?' on':'')+'" onclick="setPvTab(\'next\')">Up Next</button>';
@@ -1289,15 +1299,16 @@ function rPlayerView(l,ss){
 function rPlay(l,ss){
   const isLight=theme==='hc-light';
   const physCourts=ss.config.courts;const parts=gParts(ss,l);
-  if(!ss.started)return'<div class="card fu" style="text-align:center;padding:28px"><h3 class="heading" style="font-size:1.05rem;color:var(--lime);margin-bottom:6px">'+(ss.name||'Ladder')+'</h3><p class="subtext" style="margin-bottom:2px">'+fmtDate(ss.date)+(ss.config.startTime?' · '+fmt12(ss.config.startTime):'')+'</p><p class="subtext" style="margin-bottom:14px">'+parts.length+' players · '+physCourts+' courts · '+ss.config.rounds+' rounds</p>'+(isAdmin?(parts.length>=4?'<button class="bp full" style="padding:14px;font-size:.92rem" onclick="startSessionAction()">Generate lineups &amp; start</button>':'<p style="color:var(--warn);font-size:.82rem">Need at least 4 participants. Go to Roster tab to select players.</p>'):'<p class="subtext">Lineups will appear when the ladder starts.</p>')+'</div>';
+  if(!ss.started)return'<div class="card fu" style="text-align:center;padding:28px"><h3 class="heading" style="font-size:1.05rem;color:var(--lime);margin-bottom:6px">'+(ss.name||'Ladder')+'</h3><p class="subtext" style="margin-bottom:2px">'+fmtDate(ss.date)+(ss.config.startTime?' · '+fmt12(ss.config.startTime):'')+'</p><p class="subtext" style="margin-bottom:14px">'+parts.length+' players · '+physCourts+' courts · '+ss.config.rounds+' rounds</p>'+(isAdmin?(parts.length>=4?'<button class="bp full" style="padding:14px;font-size:.92rem" onclick="startSessionAction()">Generate lineups</button>':'<p style="color:var(--warn);font-size:.82rem">Need at least 4 participants. Go to Roster tab to select players.</p>'):'<p class="subtext">Lineups will appear when the ladder starts.</p>')+'</div>';
   const isCurrent=viewingRound===-1||viewingRound===ss.currentRound,vr=isCurrent?ss.currentRound:viewingRound;
   const round=ss.rounds[vr];if(!round)return'';
   const tC=round.totalCourts||round.courts.length;
   const hasWaves=tC>physCourts&&round.wave2started!==undefined;
+  const isPreview=ss.started&&ss.liveStarted===false;
   let h='';
 
   // Sticky timer
-  if(isCurrent&&ss.started&&!ss.finished){
+  if(isCurrent&&ss.started&&!ss.finished&&!isPreview){
     h+='<div class="sticky-timer" id="stickyTimer"><div class="sticky-timer-inner">';
     h+='<div class="sticky-timer-rd">Rd '+(ss.currentRound+1)+'/'+ss.config.rounds+'</div>';
     h+='<div class="sticky-timer-time'+(timer<=60?' urgent':'')+'" id="stickyTd">'+fmtT(timer)+'</div>';
@@ -1308,19 +1319,28 @@ function rPlay(l,ss){
 
   // Round header + timer
   if(isCurrent){
-    h+='<div class="round-hdr fu"><div><div class="overline">Round</div><div class="round-num">'+(ss.currentRound+1)+' <span class="round-of">of '+ss.config.rounds+'</span></div></div>';
-    h+='<div id="td" class="timer-disp'+(timer<=60?' urgent':'')+'">'+fmtT(timer)+'</div></div>';
-    h+='<div class="timer-bar"><div id="tf" class="timer-fill" style="width:'+(timer/(ss.config.roundMin*60))*100+'%;background:'+(timer<=60?'#ff5c47':timer<=180?'#ffcc00':'#c8ff00')+'"></div></div>';
-    if(isAdmin){
-      h+='<div style="display:flex;gap:8px;margin-bottom:12px">';
-      h+=timerOn?'<button class="bw" style="flex:1;padding:11px" onclick="pauseTimer()">⏸ Pause</button>':'<button class="bp" style="flex:2;padding:11px" onclick="startTimer()">'+(timer===0?'Start timer':'Resume')+'</button>';
-      h+='<button class="bg-btn" style="flex:1;padding:11px" onclick="editTimer()">Edit</button>';
-      h+='<button class="bds" style="flex:1;padding:11px" onclick="endTimer()">End</button></div>';
-      h+='<div style="display:flex;gap:8px;margin-bottom:12px">';
-      h+='<button class="bg-btn" style="flex:1" onclick="reshuffleRound()">Reshuffle</button>';
-      h+='<button class="bp" style="flex:2" onclick="nextRound()">'+(ss.currentRound>=ss.config.rounds-1?'Finish ladder':'Next round')+'</button>';
-      h+='</div>';
-      if(ss.currentRound<ss.config.rounds-1)h+='<div style="margin-bottom:12px"><button class="bds full" onclick="finishLadderEarly()">End ladder early</button></div>';
+    if(isPreview){
+      // Lineup preview mode — lineups visible but round not live yet
+      h+='<div class="round-hdr fu"><div><div class="overline">Lineup ready</div><div class="round-num">Rd 1 <span class="round-of">of '+ss.config.rounds+'</span></div></div><span style="font-size:10px;font-weight:800;color:'+(isLight?'#7a5800':'#ffcc00')+';text-transform:uppercase;letter-spacing:.07em;background:'+(isLight?'rgba(255,204,0,0.18)':'rgba(255,204,0,0.12)')+';padding:4px 10px;border-radius:20px">Preview</span></div>';
+      if(isAdmin){
+        h+='<div style="margin-bottom:12px"><button class="bp full" style="padding:14px;font-size:.95rem;font-weight:900" onclick="beginRound()">▶ Start Round 1</button></div>';
+        h+='<div style="display:flex;gap:6px;margin-bottom:12px"><button class="bg-btn" style="flex:1" onclick="reshuffleRound()">Reshuffle</button><button class="bds" style="flex:1" onclick="restartLadder()">Restart</button></div>';
+      }
+    }else{
+      h+='<div class="round-hdr fu"><div><div class="overline">Round</div><div class="round-num">'+(ss.currentRound+1)+' <span class="round-of">of '+ss.config.rounds+'</span></div></div>';
+      h+='<div id="td" class="timer-disp'+(timer<=60?' urgent':'')+'">'+fmtT(timer)+'</div></div>';
+      h+='<div class="timer-bar"><div id="tf" class="timer-fill" style="width:'+(timer/(ss.config.roundMin*60))*100+'%;background:'+(timer<=60?'#ff5c47':timer<=180?'#ffcc00':'#c8ff00')+'"></div></div>';
+      if(isAdmin){
+        h+='<div style="display:flex;gap:8px;margin-bottom:12px">';
+        h+=timerOn?'<button class="bw" style="flex:1;padding:11px" onclick="pauseTimer()">⏸ Pause</button>':'<button class="bp" style="flex:2;padding:11px" onclick="startTimer()">'+(timer===0?'Start timer':'Resume')+'</button>';
+        h+='<button class="bg-btn" style="flex:1;padding:11px" onclick="editTimer()">Edit</button>';
+        h+='<button class="bds" style="flex:1;padding:11px" onclick="endTimer()">End</button></div>';
+        h+='<div style="display:flex;gap:8px;margin-bottom:12px">';
+        h+='<button class="bg-btn" style="flex:1" onclick="reshuffleRound()">Reshuffle</button>';
+        h+='<button class="bp" style="flex:2" onclick="nextRound()">'+(ss.currentRound>=ss.config.rounds-1?'Finish ladder':'Next round')+'</button>';
+        h+='</div>';
+        if(ss.currentRound<ss.config.rounds-1)h+='<div style="margin-bottom:12px"><button class="bds full" onclick="finishLadderEarly()">End ladder early</button></div>';
+      }
     }}
   else{
     h+='<div class="viewing-banner fu"><div class="subtext" style="font-size:.7rem">Viewing</div>';
@@ -1396,11 +1416,13 @@ function rPlay(l,ss){
   }
 
   // Next round / finish buttons also at bottom for convenience
-  if(isAdmin&&isCurrent){
+  if(isAdmin&&isCurrent&&!isPreview){
     h+='<div style="display:flex;gap:8px;margin-top:4px">';
     h+='<button class="bp full" onclick="nextRound()">'+(ss.currentRound>=ss.config.rounds-1?'Finish ladder':'Next round')+'</button>';
     h+='</div>';
-    if(ss.currentRound<ss.config.rounds-1)h+='<div style="margin-top:8px"><button class="bds full" onclick="finishLadderEarly()">End ladder early</button></div>'}
+    if(ss.currentRound<ss.config.rounds-1)h+='<div style="margin-top:8px"><button class="bds full" onclick="finishLadderEarly()">End ladder early</button></div>';
+  }else if(isAdmin&&isCurrent&&isPreview){
+    h+='<div style="margin-top:8px"><button class="bp full" style="padding:13px;font-weight:900" onclick="beginRound()">▶ Start Round 1</button></div>';}
   if(!isCurrent)h+='<div style="margin-top:10px"><button class="bp full" onclick="viewRound(-1)">Back to current round</button></div>';
   if(ss.finished)h+='<div class="card fu" style="margin-top:12px;text-align:center;padding:20px"><div style="font-size:1.6rem;margin-bottom:6px">🏆</div><h3 class="heading" style="font-size:1rem;color:var(--lime);margin-bottom:4px">Ladder complete!</h3><p class="subtext">Check the Stats tab for final results.</p></div>';
   return h}
@@ -1805,7 +1827,7 @@ function rSessionAdmin(l,ss){let h='<div class="admin-bar-bottom">Ladder admin</
   // mode are editable at any point (active or finished). Court COUNT stays
   // creation-only since changing it would invalidate round assignments.
   h+='<div class="admin-section"><div class="admin-section-t">Ladder settings</div>'+[['Name',ss.name||'Untitled','<button class="edit-btn" onclick="editSessionName()">Edit</button>'],['Date',fmtDate(ss.date),'<button class="edit-btn" onclick="editSessionDate()">Edit</button>'],['Start',ss.config.startTime?fmt12(ss.config.startTime):'—','<button class="edit-btn" onclick="editSessionTime()">Edit</button>'],['Location',ss.config.place||'—','<button class="edit-btn" onclick="editSessionPlace()">Edit</button>'],['Courts',ss.config.courtNames?.join(', ')||defaultCourtNames(ss.config.courts).join(', '),'<button class="edit-btn" onclick="editSessionCourtNames()">Edit</button>'],['Rounds',ss.config.rounds,'<button class="edit-btn" onclick="editSessionRounds()">Edit</button>'],['Round time',ss.config.roundMin+' min','<button class="edit-btn" onclick="editSessionRoundTime()">Edit</button>'],['Scoring',ss.config.scoreMode==='points'?'Points':'Win / Loss','<button class="edit-btn" onclick="editSessionScoring()">Edit</button>'],['Participants',gParts(ss,l).length+' players','']].map(([k,v,eb])=>'<div class="cfg-row"><span class="subtext">'+k+'</span><span style="font-weight:600">'+v+' '+(eb||'')+'</span></div>').join('')+'</div>';
-  h+='<div class="admin-section"><div class="admin-section-t">Danger zone</div><div style="display:flex;gap:6px"><button class="bg-btn" style="flex:1" onclick="cloneSession(\''+ss.id+'\')">Clone</button><button class="bg-btn" style="flex:1" onclick="archiveSession(\''+ss.id+'\');go(\'dashboard\',\'overview\')">Archive</button><button class="bd" style="flex:1" onclick="deleteSession(\''+ss.id+'\');go(\'dashboard\',\'overview\')">Delete</button></div></div>';return h}
+  h+='<div class="admin-section"><div class="admin-section-t">Danger zone</div>'+(ss.started&&!ss.finished?'<div style="margin-bottom:6px"><button class="bds full" onclick="restartLadder()">Restart ladder</button></div>':'')+'<div style="display:flex;gap:6px"><button class="bg-btn" style="flex:1" onclick="cloneSession(\''+ss.id+'\')">Clone</button><button class="bg-btn" style="flex:1" onclick="archiveSession(\''+ss.id+'\');go(\'dashboard\',\'overview\')">Archive</button><button class="bd" style="flex:1" onclick="deleteSession(\''+ss.id+'\');go(\'dashboard\',\'overview\')">Delete</button></div></div>';return h}
 
 function rNoLadder(){return'<div style="text-align:center;padding:60px 20px" class="fu"><div style="font-size:2.5rem;margin-bottom:12px">🥒</div><h2 class="heading" style="font-size:1.4rem;color:var(--lime);margin-bottom:8px">Pickle Friends</h2><p class="subtext" style="margin-bottom:24px;line-height:1.6;max-width:320px;margin:0 auto 24px">Pickleball ladder play — automatic lineups, live scoring, and season stats.</p>'+(isAdmin?'<button class="bp" onclick="go(\'newLadder\')" style="padding:14px 28px">Create league</button>':'<p class="subtext">No active leagues yet.</p>')+'</div>'}
 function rNoSeason(){let h='<div class="card fu" style="text-align:center;padding:32px"><h3 class="heading" style="font-size:1.1rem;margin-bottom:6px">No seasons yet</h3>'+(isAdmin?'<button class="bp" onclick="go(\'newSeason\')">Create first season</button>':'<p class="subtext">Check back soon!</p>')+'</div>';if(isAdmin){const l=gL();h+='<div class="admin-section fu" style="margin-top:12px"><div class="admin-section-t">League settings</div><div class="cfg-row"><span class="subtext">Name</span><span style="font-weight:600">'+(l?.name||'')+' <button class="edit-btn" onclick="renameLadder()">Edit</button></span></div><div style="display:flex;gap:6px;margin-top:10px"><button class="bp" style="flex:1" onclick="go(\'newLadder\')">New league</button><button class="bd" style="flex:1" onclick="deleteLadderAction()">Delete</button></div></div>'}return h}
