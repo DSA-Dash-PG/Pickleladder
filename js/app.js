@@ -4,7 +4,7 @@ const shuffle=a=>{const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floo
 const fmtT=s=>`${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
 const fmtDate=d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}catch{return d}};
 const fmt12=t=>{if(!t)return'';const[h,m]=t.split(':').map(Number);return`${h%12||12}:${String(m).padStart(2,'0')} ${h>=12?'PM':'AM'}`};
-function cName(n,ss){if(!ss?.config?.courtNames?.length)return String.fromCharCode(65+(ss?.config?.courts||4)-n);const idx=ss.config.courtNames.length-n;return ss.config.courtNames[idx]||String.fromCharCode(65+idx)}
+function cName(n,ss,tC){const base=tC!==undefined?tC:(ss?.config?.courts||4);const idx=base-n;if(!ss?.config?.courtNames?.length)return String.fromCharCode(65+idx);return ss.config.courtNames[idx]||String.fromCharCode(65+idx)}
 function defaultCourtNames(n){return Array.from({length:n},(_,i)=>String.fromCharCode(65+i))}
 const pTag=(p,l)=>{if(!p||!l)return'?';const i=l.players.findIndex(x=>x.id===p.id);return'#'+(i>=0?i+1:'?')};
 const pNum=(p,l)=>{const i=l.players.findIndex(x=>x.id===p.id);return i>=0?i+1:0};
@@ -483,8 +483,9 @@ function makeCoed(group,pp,strength){
   if(!chosen)return{t1:[g[0]||null,g[1]||null],t2:[g[2]||null,g[3]||null]};
   return{t1:[chosen[0][0]||null,chosen[0][1]||null],t2:[chosen[1][0]||null,chosen[1][1]||null]};
 }
-function genR1(players,nC,strength){const males=shuffle(players.filter(p=>p.gender==='M')),females=shuffle(players.filter(p=>p.gender==='F'));const courts=[];let mi=0,fi=0;for(let c=0;c<nC;c++){const g=[];for(let x=0;x<2;x++){if(mi<males.length)g.push(males[mi++])}for(let x=0;x<2;x++){if(fi<females.length)g.push(females[fi++])}while(g.length<4&&mi<males.length)g.push(males[mi++]);while(g.length<4&&fi<females.length)g.push(females[fi++]);const{t1,t2}=makeCoed(g,null,strength);courts.push({court:c+1,team1:[t1[0]||null,t1[1]||null],team2:[t2[0]||null,t2[1]||null],score:null})}return{courts,completed:false}}
+function genR1(players,nC,strength){const tC=Math.min(Math.floor(players.length/4),2*nC);const males=shuffle(players.filter(p=>p.gender==='M')),females=shuffle(players.filter(p=>p.gender==='F'));const courts=[];let mi=0,fi=0;for(let c=0;c<tC;c++){const g=[];for(let x=0;x<2;x++){if(mi<males.length)g.push(males[mi++])}for(let x=0;x<2;x++){if(fi<females.length)g.push(females[fi++])}while(g.length<4&&mi<males.length)g.push(males[mi++]);while(g.length<4&&fi<females.length)g.push(females[fi++]);const{t1,t2}=makeCoed(g,null,strength);courts.push({court:c+1,team1:[t1[0]||null,t1[1]||null],team2:[t2[0]||null,t2[1]||null],score:null})}const res={courts,completed:false,totalCourts:tC};if(tC>nC)res.wave2started=false;return res}
 function genNR(prev,nC,strength){
+  const tC=prev.courts.length; // total virtual courts from previous round
   // Build previous-partner map so we can guarantee splits
   const pp={};
   prev.courts.forEach(c=>{
@@ -492,7 +493,7 @@ function genNR(prev,nC,strength){
       if(t[0]&&t[1]){pp[t[0].id]=t[1].id;pp[t[1].id]=t[0].id}})});
 
   // Movement rules:
-  // Court nC (top/king): winners STAY (move to nC), losers DROP to nC-1
+  // Court tC (top/king): winners STAY (move to tC), losers DROP to tC-1
   // Court 1 (bottom):    winners RISE to 2,         losers STAY (move to 1)
   // All others:          winners RISE one,           losers DROP one
   // Everyone SPLITS — no repeat partners enforced by makeCoed
@@ -504,26 +505,28 @@ function genNR(prev,nC,strength){
       all.forEach(p=>mvs.push({p,to:c.court}));return}
     const w=c.score.winner==='A'?c.team1:c.team2;
     const lo=c.score.winner==='A'?c.team2:c.team1;
-    // Winners move up (capped at nC — top court winners stay)
-    w.filter(Boolean).forEach(p=>mvs.push({p,to:Math.min(nC,c.court+1)}));
+    // Winners move up (capped at tC — top court winners stay)
+    w.filter(Boolean).forEach(p=>mvs.push({p,to:Math.min(tC,c.court+1)}));
     // Losers move down (floor at 1 — bottom court losers stay)
     lo.filter(Boolean).forEach(p=>mvs.push({p,to:Math.max(1,c.court-1)}));
   });
 
   // Bucket players by destination court
-  const bk={};for(let i=1;i<=nC;i++)bk[i]=[];
+  const bk={};for(let i=1;i<=tC;i++)bk[i]=[];
   mvs.forEach(m=>{if(bk[m.to])bk[m.to].push(m.p)});
 
   // Shuffle within each bucket (randomises team assignment within the court)
   // then pair with makeCoed which enforces no-repeat-partner rule
-  for(let i=1;i<=nC;i++)bk[i]=shuffle(bk[i]);
+  for(let i=1;i<=tC;i++)bk[i]=shuffle(bk[i]);
 
   const courts=[];
-  for(let c=0;c<nC;c++){
+  for(let c=0;c<tC;c++){
     const g=bk[c+1]||[];
     const{t1,t2}=makeCoed(g.slice(0,4),pp,strength);
     courts.push({court:c+1,team1:[t1[0]||null,t1[1]||null],team2:[t2[0]||null,t2[1]||null],score:null})}
-  return{courts,completed:false}}
+  const res={courts,completed:false,totalCourts:tC};
+  if(tC>nC)res.wave2started=false;
+  return res}
 
 function crownStr(wins){
   if(!wins||wins<1)return'';
@@ -807,8 +810,9 @@ function _buildStrengthFn(l){
 }
 async function startSessionAction(){const l=gL();const ss=gSS();if(!l||!ss)return;const parts=gParts(ss,l);if(parts.length<4)return alert('Need at least 4 participants. Go to the Roster tab to select players.');const strength=_buildStrengthFn(l);ss.rounds=[genR1(parts,ss.config.courts,strength)];ss.currentRound=0;ss.started=true;resetTimer(ss);tab='play';mapOpen=true;await save(l)}
 async function finishLadderEarly(){const l=gL();const ss=gSS();if(!l||!ss)return;if(!confirm('End this ladder now?'))return;ss.finished=true;tab='stats';await save(l)}
-async function nextRound(){const l=gL();const ss=gSS();if(!l||!ss)return;const tied=ss.rounds[ss.currentRound].courts.filter(c=>c.score&&c.score.t1!==null&&c.score.t2!==null&&!c.score.winner);if(tied.length)return alert(tied.length+' court(s) have tied scores with no winner selected. Tap each tied court and press "Moves Up" for the winning team.');const un=ss.rounds[ss.currentRound].courts.filter(c=>!c.score);if(un.length&&!confirm(un.length+' court(s) unscored. Continue?'))return;if(ss.currentRound>=ss.config.rounds-1){ss.finished=true;tab='stats';await save(l);return}const strength=_buildStrengthFn(l);ss.rounds.push(genNR(ss.rounds[ss.currentRound],ss.config.courts,strength));ss.currentRound++;viewingRound=-1;npState=null;resetTimer(ss);await save(l)}
+async function nextRound(){const l=gL();const ss=gSS();if(!l||!ss)return;const curRound=ss.rounds[ss.currentRound];if(curRound.wave2started===false)return alert('Wave 2 has not been started yet. Start Wave 2 before advancing to the next round.');const tied=curRound.courts.filter(c=>c.score&&c.score.t1!==null&&c.score.t2!==null&&!c.score.winner);if(tied.length)return alert(tied.length+' court(s) have tied scores with no winner selected. Tap each tied court and press "Moves Up" for the winning team.');const un=curRound.courts.filter(c=>!c.score);if(un.length&&!confirm(un.length+' court(s) unscored. Continue?'))return;if(ss.currentRound>=ss.config.rounds-1){ss.finished=true;tab='stats';await save(l);return}const strength=_buildStrengthFn(l);ss.rounds.push(genNR(curRound,ss.config.courts,strength));ss.currentRound++;viewingRound=-1;npState=null;resetTimer(ss);await save(l)}
 async function reshuffleRound(){const l=gL();const ss=gSS();if(!l||!ss||!confirm('Reshuffle? Scores cleared.'))return;const all=[];ss.rounds[ss.currentRound].courts.forEach(c=>[...c.team1,...c.team2].filter(Boolean).forEach(p=>all.push(p)));const strength=_buildStrengthFn(l);ss.rounds[ss.currentRound]=genR1(all,ss.config.courts,strength);npState=null;await save(l)}
+async function startWave2(){const l=gL();const ss=gSS();if(!l||!ss)return;const round=ss.rounds[ss.currentRound];if(!round||round.wave2started!==false)return;round.wave2started=true;await save(l)}
 async function restartRound(ri){const l=gL();const ss=gSS();if(!l||!ss)return;if(!confirm('Restart Round '+(ri+1)+'? All rounds after it will be removed.'))return;ss.rounds[ri].courts.forEach(c=>{c.score=null});ss.rounds=ss.rounds.slice(0,ri+1);ss.currentRound=ri;ss.finished=false;viewingRound=-1;npState=null;resetTimer(ss);await save(l)}
 function beginSwap(ri,ci,ti,pi){if(!isAdmin)return;if(swapMode){doSwap(ri,ci,ti,pi);return}swapMode={ri,ci,ti,pi};render()}
 async function doSwap(ri,ci,ti,pi){if(!swapMode)return;const l=gL();const ss=gSS();if(!l||!ss)return;const round=ss.rounds[ri];if(!round)return;const src=swapMode;const srcTeam=src.ti===0?round.courts[src.ci].team1:round.courts[src.ci].team2;const dstTeam=ti===0?round.courts[ci].team1:round.courts[ci].team2;const tmp=srcTeam[src.pi];srcTeam[src.pi]=dstTeam[pi];dstTeam[pi]=tmp;swapMode=null;await save(l)}
@@ -926,15 +930,17 @@ function rRoundMVPs(round,vr,ss,l){
 // COURT CARD RENDERER — Jersey + Split Panel + SVG court
 // ═══════════════════════════════════════════════════
 function rCourtCard(ct,ci,vr,ss,l,adminMode){
-  const nC=ss.config.courts;
+  const physCourts=ss.config.courts;
+  const tC=(ss.rounds&&vr>=0?ss.rounds[vr]?.totalCourts:null)||physCourts;
+  const nC=tC;
   const isLight=theme==='hc-light';
   const sc=ct.score;
   const h1=sc&&sc.t1!==null&&sc.t1!==undefined;
   const h2=sc&&sc.t2!==null&&sc.t2!==undefined;
   const hb=h1&&h2;
   const w=hb?sc.winner:null;
-  const nm=cName(ct.court,ss);
-  const isTop=ct.court===nC;
+  const nm=cName(ct.court,ss,tC);
+  const isTop=ct.court===tC;
   const isBot=ct.court===1;
   const isKitchen=isTop;
 
@@ -958,14 +964,14 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
   // movement badges with arrows
   let wMove='',lMove='',wArrow='',lArrow='';
   if(hb&&w){
-    if(isTop){wMove='Stay &amp; split';wArrow='&#x21D5;';lMove='&#8595; '+cName(Math.max(1,ct.court-1),ss);lArrow='&#8595;'}
-    else if(isBot){wMove='&#8593; '+cName(Math.min(nC,ct.court+1),ss);wArrow='&#8593;';lMove='Stay &amp; split';lArrow='&#x21D5;'}
-    else{wMove='&#8593; '+cName(Math.min(nC,ct.court+1),ss);wArrow='&#8593;';lMove='&#8595; '+cName(Math.max(1,ct.court-1),ss);lArrow='&#8595;'}}
+    if(isTop){wMove='Stay &amp; split';wArrow='&#x21D5;';lMove='&#8595; '+cName(Math.max(1,ct.court-1),ss,tC);lArrow='&#8595;'}
+    else if(isBot){wMove='&#8593; '+cName(Math.min(tC,ct.court+1),ss,tC);wArrow='&#8593;';lMove='Stay &amp; split';lArrow='&#x21D5;'}
+    else{wMove='&#8593; '+cName(Math.min(tC,ct.court+1),ss,tC);wArrow='&#8593;';lMove='&#8595; '+cName(Math.max(1,ct.court-1),ss,tC);lArrow='&#8595;'}}
   let footWin='',footLose='';
   if(!hb||!w){
-    if(isTop){footWin='Winners &#x21D5; stay &amp; split';footLose='Losers &#8595; '+cName(Math.max(1,ct.court-1),ss)}
-    else if(isBot){footWin='Winners &#8593; '+cName(Math.min(nC,ct.court+1),ss);footLose='Losers &#x21D5; stay &amp; split'}
-    else{footWin='Winners &#8593; '+cName(Math.min(nC,ct.court+1),ss);footLose='Losers &#8595; '+cName(Math.max(1,ct.court-1),ss)}}
+    if(isTop){footWin='Winners &#x21D5; stay &amp; split';footLose='Losers &#8595; '+cName(Math.max(1,ct.court-1),ss,tC)}
+    else if(isBot){footWin='Winners &#8593; '+cName(Math.min(tC,ct.court+1),ss,tC);footLose='Losers &#x21D5; stay &amp; split'}
+    else{footWin='Winners &#8593; '+cName(Math.min(tC,ct.court+1),ss,tC);footLose='Losers &#8595; '+cName(Math.max(1,ct.court-1),ss,tC)}}
 
   const winGlow=isKitchen?'rgba(255,204,0,0.75)':'rgba(200,255,0,0.65)';
   const winGlowSoft=isKitchen?'rgba(255,204,0,0.28)':'rgba(200,255,0,0.22)';
@@ -1128,11 +1134,13 @@ function rCourtCard(ct,ci,vr,ss,l,adminMode){
 // ═══════════════════════════════════════════════════
 function rPlayerView(l,ss){
   const isLight=theme==='hc-light';
-  const nC=ss.config.courts;
+  const physCourts=ss.config.courts;
   const isCurrent=viewingRound===-1||viewingRound===ss.currentRound;
   const vr=isCurrent?ss.currentRound:viewingRound;
   const round=ss.rounds[vr];
   if(!round)return'';
+  const tCpv=round.totalCourts||round.courts.length;
+  const hasWavesPv=tCpv>physCourts&&round.wave2started!==undefined;
   let h='';
 
   // ── COMPLETED LADDER ──
@@ -1140,7 +1148,8 @@ function rPlayerView(l,ss){
     h+='<div class="round-pills" style="padding:8px 12px 0">';
     for(let ri=0;ri<=ss.currentRound;ri++){
       const isV=(!isCurrent&&ri===vr)||(isCurrent&&ri===ss.currentRound);
-      const done=ss.rounds[ri]?.courts.every(c=>c.score&&c.score.winner);
+      const rndI=ss.rounds[ri];
+      const done=rndI&&rndI.courts.every(c=>c.score&&c.score.winner)&&rndI.wave2started!==false;
       h+='<button class="rd-pill'+(isV?' active':'')+'" onclick="viewRound('+(ri===ss.currentRound?-1:ri)+')">Rd '+(ri+1)+(done?' ✓':'')+'</button>'}
     h+='</div>';
     h+='<div class="pv-tabs">';
@@ -1168,7 +1177,8 @@ function rPlayerView(l,ss){
     h+='<div class="round-pills" style="padding:8px 12px 0">';
     for(let ri=0;ri<=ss.currentRound;ri++){
       const isV=(isCurrent&&ri===ss.currentRound)||(!isCurrent&&ri===vr);
-      const done=ss.rounds[ri]?.courts.every(c=>c.score&&c.score.winner);
+      const rndI=ss.rounds[ri];
+      const done=rndI&&rndI.courts.every(c=>c.score&&c.score.winner)&&rndI.wave2started!==false;
       h+='<button class="rd-pill'+(isV?' active':'')+'" onclick="viewRound('+(ri===ss.currentRound?-1:ri)+')">Rd '+(ri+1)+(done?' ✓':'')+'</button>'}
     h+='</div>'}
   const timerPct=(timer/(ss.config.roundMin*60))*100;
@@ -1184,11 +1194,38 @@ function rPlayerView(l,ss){
   h+='</div>';
   // Now Playing
   h+='<div class="pv-panel'+(pvTab==='now'?' active':'')+'" id="pv-now">';
-  h+='<div class="pv-sec-label">Round '+(vr+1)+' — all courts</div>';
-  h+='<div class="court-grid">';
-  [...round.courts].sort((a,b)=>b.court-a.court).forEach(ct=>{
-    h+=rCourtCard(ct,round.courts.indexOf(ct),vr,ss,l,false)});
-  h+='</div>';
+  if(!hasWavesPv){
+    h+='<div class="pv-sec-label">Round '+(vr+1)+' — all courts</div>';
+    h+='<div class="court-grid">';
+    [...round.courts].sort((a,b)=>b.court-a.court).forEach(ct=>{
+      h+=rCourtCard(ct,round.courts.indexOf(ct),vr,ss,l,false)});
+    h+='</div>';
+  }else{
+    const w1pv=round.courts.filter(c=>c.court>tCpv-physCourts).sort((a,b)=>b.court-a.court);
+    const w2pv=round.courts.filter(c=>c.court<=tCpv-physCourts).sort((a,b)=>b.court-a.court);
+    h+='<div class="pv-sec-label">Round '+(vr+1)+' \u2014 Wave 1 (Higher seeds)</div>';
+    h+='<div class="court-grid">';
+    w1pv.forEach(ct=>{h+=rCourtCard(ct,round.courts.indexOf(ct),vr,ss,l,false)});
+    h+='</div>';
+    if(round.wave2started===false){
+      h+='<div style="margin:14px 0 6px;padding:14px 16px;background:rgba(167,139,250,0.07);border:1.5px dashed rgba(167,139,250,0.25);border-radius:12px">';
+      h+='<div style="font-size:9px;font-weight:900;color:'+(isLight?'#5a3ea0':'#a78bfa')+';text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">\u23F3 Wave 2 \u2014 Waiting to play</div>';
+      h+='<div style="font-size:12px;color:'+(isLight?'rgba(0,0,0,0.6)':'rgba(255,255,255,0.5)')+';margin-bottom:8px">Lower seeds play once Wave 1 completes</div>';
+      h+='<div>';
+      w2pv.forEach(ct=>{
+        const nm=cName(ct.court,ss,tCpv);
+        h+='<div style="padding:6px 0;border-top:1px solid '+(isLight?'rgba(0,0,0,0.08)':'rgba(255,255,255,0.06)')+';font-size:12px;color:'+(isLight?'rgba(0,0,0,0.65)':'rgba(255,255,255,0.55)')+'">';
+        h+='Court '+nm+': '+ct.team1.filter(Boolean).map(p=>p.name).join(' &amp; ')+' <span style="opacity:.5">vs</span> '+ct.team2.filter(Boolean).map(p=>p.name).join(' &amp; ');
+        h+='</div>';
+      });
+      h+='</div></div>';
+    }else{
+      h+='<div class="pv-sec-label" style="margin-top:14px">Wave 2 \u2014 Lower seeds</div>';
+      h+='<div class="court-grid">';
+      w2pv.forEach(ct=>{h+=rCourtCard(ct,round.courts.indexOf(ct),vr,ss,l,false)});
+      h+='</div>';
+    }
+  }
   h+=rRoundMVPs(round,vr,ss,l);
   const scored=round.courts.filter(c=>c.score&&c.score.winner).length;
   const total=round.courts.length;
@@ -1217,11 +1254,12 @@ function rPlayerView(l,ss){
   } else {
     h+='<div class="pv-sec-label">Round '+nextRd+' — projected</div>';
     const allScored=round.courts.every(c=>c.score&&c.score.winner);
-    if(!allScored){h+='<div class="upnext-banner"><div class="upnext-banner-icon">⏳</div><div><div class="upnext-banner-top">Waiting on scores</div><div class="upnext-banner-bot">Lineups lock in once all courts are scored</div></div></div>'}
+    const wave2Pending=round.wave2started===false;
+    if(!allScored||wave2Pending){h+='<div class="upnext-banner"><div class="upnext-banner-icon">⏳</div><div><div class="upnext-banner-top">Waiting on scores</div><div class="upnext-banner-bot">'+(wave2Pending?'Wave 2 must complete first':'Lineups lock in once all courts are scored')+'</div></div></div>'}
     [...round.courts].sort((a,b)=>b.court-a.court).forEach(ct=>{
-      const sc=ct.score;const w=sc?.winner;const nm=cName(ct.court,ss);
-      const isTop=ct.court===nC;const isBot=ct.court===1;
-      const ltrCls=ct.court===nC?'cc-ltr-gold':ct.court===nC-1?'cc-ltr-cyan':ct.court===nC-2?'cc-ltr-blue':'cc-ltr-gray';
+      const sc=ct.score;const w=sc?.winner;const nm=cName(ct.court,ss,tCpv);
+      const isTop=ct.court===tCpv;const isBot=ct.court===1;
+      const ltrCls=ct.court===tCpv?'cc-ltr-gold':ct.court===tCpv-1?'cc-ltr-cyan':ct.court===tCpv-2?'cc-ltr-blue':'cc-ltr-gray';
       h+='<div class="next-cc"><div class="next-cc-hdr"><div style="display:flex;align-items:center;gap:7px"><div class="cc-ltr '+ltrCls+'" style="width:24px;height:24px;border-radius:6px;font-size:12px">'+nm+'</div>';
       h+='<span class="next-cc-title">Court '+nm+(isTop?' · Owns the Kitchen':'')+'</span></div>';
       if(isTop)h+='<span class="next-cc-cond next-cond-win">Winners stay</span>';
@@ -1232,14 +1270,14 @@ function rPlayerView(l,ss){
         h+='<div class="next-from"><div class="cc-ltr '+ltrCls+'" style="width:20px;height:20px;border-radius:4px;font-size:10px">'+nm+'</div><span class="next-from-txt">Winners split</span></div>';
         if(w){(w==='A'?ct.team1:ct.team2).filter(Boolean).forEach(p=>h+='<div class="next-name">'+p.name+'</div>')}
         else h+='<div class="next-name tbd">Pending...</div>'}
-      else{const fromNm=cName(Math.min(nC,ct.court+1),ss);const fromCls=ct.court+1===nC?'cc-ltr-gold':ct.court+1===nC-1?'cc-ltr-cyan':'cc-ltr-blue';
+      else{const fromNm=cName(Math.min(tCpv,ct.court+1),ss,tCpv);const fromCls=ct.court+1===tCpv?'cc-ltr-gold':ct.court+1===tCpv-1?'cc-ltr-cyan':'cc-ltr-blue';
         h+='<div class="next-from"><div class="cc-ltr '+fromCls+'" style="width:20px;height:20px;border-radius:4px;font-size:10px">'+fromNm+'</div><span class="next-from-txt">Winners of '+fromNm+'</span></div><div class="next-name tbd">Pending...</div>'}
       h+='</div><div class="next-vs">VS</div><div class="next-team-col">';
       if(isBot){
         h+='<div class="next-from"><div class="cc-ltr '+ltrCls+'" style="width:20px;height:20px;border-radius:4px;font-size:10px">'+nm+'</div><span class="next-from-txt">Losers split</span></div>';
         if(w){(w==='A'?ct.team2:ct.team1).filter(Boolean).forEach(p=>h+='<div class="next-name">'+p.name+'</div>')}
         else h+='<div class="next-name tbd">Pending...</div>'}
-      else{const fromNm2=cName(Math.max(1,ct.court-1),ss);const fromCls2=ct.court-1===0?'cc-ltr-gray':ct.court-1===nC-2?'cc-ltr-blue':'cc-ltr-cyan';
+      else{const fromNm2=cName(Math.max(1,ct.court-1),ss,tCpv);const fromCls2=ct.court-1===0?'cc-ltr-gray':ct.court-1===tCpv-2?'cc-ltr-blue':'cc-ltr-cyan';
         h+='<div class="next-from"><div class="cc-ltr '+fromCls2+'" style="width:20px;height:20px;border-radius:4px;font-size:10px">'+fromNm2+'</div><span class="next-from-txt">Losers of '+fromNm2+'</span></div><div class="next-name tbd">Pending...</div>'}
       h+='</div></div></div>'});}
   h+='</div>';
@@ -1250,10 +1288,13 @@ function rPlayerView(l,ss){
 // ═══════════════════════════════════════════════════
 function rPlay(l,ss){
   const isLight=theme==='hc-light';
-  const nC=ss.config.courts;const parts=gParts(ss,l);
-  if(!ss.started)return'<div class="card fu" style="text-align:center;padding:28px"><h3 class="heading" style="font-size:1.05rem;color:var(--lime);margin-bottom:6px">'+(ss.name||'Ladder')+'</h3><p class="subtext" style="margin-bottom:2px">'+fmtDate(ss.date)+(ss.config.startTime?' · '+fmt12(ss.config.startTime):'')+'</p><p class="subtext" style="margin-bottom:14px">'+parts.length+' players · '+nC+' courts · '+ss.config.rounds+' rounds</p>'+(isAdmin?(parts.length>=4?'<button class="bp full" style="padding:14px;font-size:.92rem" onclick="startSessionAction()">Generate lineups &amp; start</button>':'<p style="color:var(--warn);font-size:.82rem">Need at least 4 participants. Go to Roster tab to select players.</p>'):'<p class="subtext">Lineups will appear when the ladder starts.</p>')+'</div>';
+  const physCourts=ss.config.courts;const parts=gParts(ss,l);
+  if(!ss.started)return'<div class="card fu" style="text-align:center;padding:28px"><h3 class="heading" style="font-size:1.05rem;color:var(--lime);margin-bottom:6px">'+(ss.name||'Ladder')+'</h3><p class="subtext" style="margin-bottom:2px">'+fmtDate(ss.date)+(ss.config.startTime?' · '+fmt12(ss.config.startTime):'')+'</p><p class="subtext" style="margin-bottom:14px">'+parts.length+' players · '+physCourts+' courts · '+ss.config.rounds+' rounds</p>'+(isAdmin?(parts.length>=4?'<button class="bp full" style="padding:14px;font-size:.92rem" onclick="startSessionAction()">Generate lineups &amp; start</button>':'<p style="color:var(--warn);font-size:.82rem">Need at least 4 participants. Go to Roster tab to select players.</p>'):'<p class="subtext">Lineups will appear when the ladder starts.</p>')+'</div>';
   const isCurrent=viewingRound===-1||viewingRound===ss.currentRound,vr=isCurrent?ss.currentRound:viewingRound;
-  const round=ss.rounds[vr];if(!round)return'';let h='';
+  const round=ss.rounds[vr];if(!round)return'';
+  const tC=round.totalCourts||round.courts.length;
+  const hasWaves=tC>physCourts&&round.wave2started!==undefined;
+  let h='';
 
   // Sticky timer
   if(isCurrent&&ss.started&&!ss.finished){
@@ -1290,7 +1331,8 @@ function rPlay(l,ss){
   h+='<div class="round-pills">';
   for(let ri=0;ri<=ss.currentRound;ri++){
     const isV=(isCurrent&&ri===ss.currentRound)||(!isCurrent&&ri===vr);
-    const done=ss.rounds[ri]?.courts.every(c=>c.score&&c.score.winner);
+    const rndI=ss.rounds[ri];
+    const done=rndI&&rndI.courts.every(c=>c.score&&c.score.winner)&&rndI.wave2started!==false;
     h+='<button class="rd-pill'+(isV?' active':'')+'" onclick="viewRound('+(ri===ss.currentRound?-1:ri)+')">Rd '+(ri+1)+(ri===ss.currentRound?' ·':done?' ✓':'')+'</button>'}
   h+='</div>';
 
@@ -1312,16 +1354,46 @@ function rPlay(l,ss){
   h+='<div class="map-toggle'+(isOpen?' open':'')+'" onclick="toggleMap()"><span class="label">Court map — Rd '+(vr+1)+'</span><span class="arrow">▼</span></div>';
   h+='<div class="court-map'+(isOpen?' open':'')+'">';
   [...round.courts].sort((a,b)=>b.court-a.court).forEach(ct=>{
-    const nm=cName(ct.court,ss);const sc=ct.score;const hb=sc&&sc.t1!==null&&sc.t2!==null;
-    h+='<div class="cmc'+(hb?' scored':'')+'"><div class="cmc-ltr">Ct '+nm+'</div><div class="cmc-match">'+ct.team1.filter(Boolean).map(p=>pTag(p,l)).join(' &amp; ')+'<span class="vs-s">vs</span>'+ct.team2.filter(Boolean).map(p=>pTag(p,l)).join(' &amp; ')+'</div>'+(hb?'<div class="cmc-score">'+sc.t1+' – '+sc.t2+'</div>':'')+'</div>'});
+    const nm=cName(ct.court,ss,tC);const sc=ct.score;const hb=sc&&sc.t1!==null&&sc.t2!==null;
+    const isW2=hasWaves&&ct.court<=tC-physCourts;
+    h+='<div class="cmc'+(hb?' scored':'')+(isW2?' style="opacity:0.55"':'')+'"><div class="cmc-ltr">Ct '+nm+(isW2?' ⏳':'')+'</div><div class="cmc-match">'+ct.team1.filter(Boolean).map(p=>pTag(p,l)).join(' &amp; ')+'<span class="vs-s">vs</span>'+ct.team2.filter(Boolean).map(p=>pTag(p,l)).join(' &amp; ')+'</div>'+(hb?'<div class="cmc-score">'+sc.t1+' – '+sc.t2+'</div>':'')+'</div>'});
   h+='</div>';
 
   // Court cards — admin mode (2-col grid on iPad)
-  h+='<div class="court-grid">';
-  [...round.courts].sort((a,b)=>b.court-a.court).forEach(ct=>{
-    const ci=round.courts.indexOf(ct);
-    h+=rCourtCard(ct,ci,vr,ss,l,true)});
-  h+='</div>';
+  if(!hasWaves){
+    h+='<div class="court-grid">';
+    [...round.courts].sort((a,b)=>b.court-a.court).forEach(ct=>{
+      h+=rCourtCard(ct,round.courts.indexOf(ct),vr,ss,l,true)});
+    h+='</div>';
+  }else{
+    const w1cts=round.courts.filter(c=>c.court>tC-physCourts).sort((a,b)=>b.court-a.court);
+    const w2cts=round.courts.filter(c=>c.court<=tC-physCourts).sort((a,b)=>b.court-a.court);
+    const w1done=w1cts.every(c=>c.score&&c.score.winner);
+    h+='<div style="font-size:9px;font-weight:900;color:'+(isLight?'#444':'#aaa')+';text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">Wave 1 — Higher seeds</div>';
+    h+='<div class="court-grid">';
+    w1cts.forEach(ct=>{h+=rCourtCard(ct,round.courts.indexOf(ct),vr,ss,l,true)});
+    h+='</div>';
+    if(round.wave2started===false){
+      h+='<div style="margin:16px 0 8px;padding:14px 16px;background:rgba(255,204,0,0.07);border:1.5px dashed rgba(255,204,0,0.3);border-radius:12px">';
+      h+='<div style="font-size:9px;font-weight:900;color:'+(isLight?'#7a5800':'#ffcc00')+';text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">\u23F3 Wave 2 \u2014 Waiting to play</div>';
+      h+='<div style="font-size:12px;color:'+(isLight?'rgba(0,0,0,0.6)':'rgba(255,255,255,0.5)')+';margin-bottom:'+(isAdmin&&w1done?'12px':'4px')+'">'+w2cts.length+' court'+(w2cts.length!==1?'s':'')+' ready once Wave 1 finishes</div>';
+      if(isAdmin&&w1done){h+='<button class="bp full" style="padding:11px;margin-bottom:10px" onclick="startWave2()">\u25B6 Start Wave 2</button>';}
+      h+='<div>';
+      w2cts.forEach(ct=>{
+        const nm=cName(ct.court,ss,tC);
+        h+='<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid '+(isLight?'rgba(0,0,0,0.08)':'rgba(255,255,255,0.06)')+'">';
+        h+='<div style="width:26px;height:26px;border-radius:50%;background:'+(isLight?'rgba(0,0,0,0.08)':'rgba(255,255,255,0.08)')+';display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:'+(isLight?'#444':'#aaa')+';flex-shrink:0">'+nm+'</div>';
+        h+='<div style="font-size:12px;color:'+(isLight?'rgba(0,0,0,0.65)':'rgba(255,255,255,0.55)')+'">'+ct.team1.filter(Boolean).map(p=>p.name).join(' &amp; ')+' <span style="opacity:.5">vs</span> '+ct.team2.filter(Boolean).map(p=>p.name).join(' &amp; ')+'</div>';
+        h+='</div>';
+      });
+      h+='</div></div>';
+    }else{
+      h+='<div style="font-size:9px;font-weight:900;color:'+(isLight?'#444':'#aaa')+';text-transform:uppercase;letter-spacing:.1em;margin:16px 0 8px">Wave 2 \u2014 Lower seeds</div>';
+      h+='<div class="court-grid">';
+      w2cts.forEach(ct=>{h+=rCourtCard(ct,round.courts.indexOf(ct),vr,ss,l,true)});
+      h+='</div>';
+    }
+  }
 
   // Next round / finish buttons also at bottom for convenience
   if(isAdmin&&isCurrent){
