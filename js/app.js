@@ -2457,6 +2457,11 @@ async function refreshLadder(){
     const data=await res.json();
     if(data.ladder){
       const idx=ladders.findIndex(x=>x.id===activeLadderId);
+      // Only re-render if the server data actually differs from what's in memory.
+      // Prevents unnecessary full DOM rebuilds (and apparent lineup "shuffling")
+      // caused by the 5-s poll re-rendering identical data on every tick.
+      const incoming=JSON.stringify(data.ladder);
+      if(idx>=0&&JSON.stringify(ladders[idx])===incoming)return;
       if(idx>=0)ladders[idx]=data.ladder;else ladders.push(data.ladder);
       render();
     }
