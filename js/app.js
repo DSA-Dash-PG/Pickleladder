@@ -102,6 +102,7 @@ function setStatsInnerTab(t){statsInnerTab=t;statsSearchQ='';render()}
 // ladder (entering scores, swapping players, advancing rounds) and an
 // accidental tap on a name shouldn't pop a modal over their workflow.
 let playerStatsModalId=null;
+let playerLadderOpen=new Set([0]);
 // In-round Sub modal: opens from the [Sub] button on an admin court chip.
 let subModalState=null; // {ri,ci,ti,pi,pid,name}
 function openSubModal(ri,ci,ti,pi){
@@ -167,8 +168,31 @@ async function subClearAt(){await _subAt({kind:'clear'});}
 // risk that earlier worried us — accidental taps interrupting score entry —
 // is mitigated because admin court chips now use explicit Move/Sub BUTTONS
 // (not name-tap), so the standings name-tap is in a different surface.
-function openPlayerStats(pid){playerStatsModalId=pid;render()}
+function openPlayerStats(pid){playerStatsModalId=pid;playerLadderOpen=new Set([0]);render()}
 function closePlayerStats(){playerStatsModalId=null;render()}
+function togglePlayerLadder(idx){if(playerLadderOpen.has(idx))playerLadderOpen.delete(idx);else playerLadderOpen.add(idx);render()}
+// Build a court-movement SVG for a single ladder's roundRes data.
+// roundRes: [{round,court,won},...], courtNames: string[], nCourts: number
+function buildLadderChartSVG(roundRes,isLight,courtNames,nCourts){
+  const n=roundRes.length;if(n<1)return'';
+  const nC=nCourts||Math.max(2,...roundRes.map(r=>r.court));
+  const W=320,xL=22,xR=314,yT=14,yB=98;
+  const xStep=n>1?(xR-xL)/(n-1):0;
+  const labelFor=court=>{if(courtNames&&courtNames.length>=nC)return courtNames[nC-court]||String.fromCharCode(65+nC-court);return String.fromCharCode(65+nC-court)};
+  const yFor=court=>nC>1?yT+(nC-court)*((yB-yT)/(nC-1)):(yT+yB)/2;
+  const gridCol=isLight?'rgba(0,0,0,0.1)':'rgba(255,255,255,0.06)';
+  const axisCol=isLight?'rgba(0,0,0,0.55)':'rgba(255,255,255,0.4)';
+  const lineCol=isLight?'#005f70':'#00e5ff';
+  const winCol=isLight?'#3d6600':'#c8ff00';
+  const lossCol=isLight?'#cc2200':'#ff5c47';
+  let s='<svg viewBox="0 0 '+W+' 110" style="width:100%;height:110px;display:block">';
+  for(let c=1;c<=nC;c++){const y=yFor(c);s+='<line x1="'+xL+'" y1="'+y+'" x2="'+xR+'" y2="'+y+'" stroke="'+gridCol+'" stroke-dasharray="2,3"/>';s+='<text x="'+(xL-8)+'" y="'+(y+3)+'" font-size="8" fill="'+axisCol+'" text-anchor="end" font-family="Sora,sans-serif" font-weight="700">'+labelFor(c)+'</text>';}
+  const pts=roundRes.map((r,i)=>(xL+i*xStep)+','+yFor(r.court)).join(' ');
+  s+='<polyline fill="none" stroke="'+lineCol+'" stroke-width="1.5" points="'+pts+'"/>';
+  roundRes.forEach((r,i)=>{const x=xL+i*xStep;const y=yFor(r.court);s+='<circle cx="'+x+'" cy="'+y+'" r="2.5" fill="'+(r.won?winCol:lossCol)+'" stroke="'+(isLight?'rgba(255,255,255,0.7)':'rgba(0,0,0,0.5)')+'" stroke-width="1"/>';});
+  s+='</svg>';
+  return s;
+}
 // Helper: returns an `onclick=...` attribute string for a player name row —
 // but ONLY for non-admins. Admins get an empty string so the row is inert.
 // Callers should ALSO append ';cursor:pointer' to their existing style attr
@@ -271,10 +295,15 @@ function _buildSearchCardsHTML(q,sorted,bonusData,topCtName,mvpCount,courtNames)
         h+='<line x1="'+xL+'" y1="'+y+'" x2="'+xR+'" y2="'+y+'" stroke="'+(isLight?'rgba(0,0,0,0.1)':'rgba(255,255,255,0.06)')+'" stroke-dasharray="2,3"/>';
         h+='<text x="'+(xL-8)+'" y="'+(y+3)+'" font-size="8" fill="'+(isLight?'rgba(0,0,0,0.55)':'rgba(255,255,255,0.4)')+'" text-anchor="end" font-family="Sora,sans-serif" font-weight="700">'+labelFor(c)+'</text>';
       }
-      // Session dividers
+      // Session dividers — solid line + "new ladder" label
       boundaries.forEach(bi=>{
         const x=xL+bi*xStep-xStep/2;
-        h+='<line x1="'+x+'" y1="6" x2="'+x+'" y2="100" stroke="'+(isLight?'rgba(0,0,0,0.2)':'rgba(255,255,255,0.12)')+'" stroke-dasharray="3,2"/>';
+        const _dCol=isLight?'rgba(0,0,0,0.28)':'rgba(255,255,255,0.28)';
+        const _lCol=isLight?'rgba(0,0,0,0.42)':'rgba(255,255,255,0.38)';
+        const _lBg=isLight?'rgba(0,0,0,0.07)':'rgba(255,255,255,0.09)';
+        h+='<line x1="'+x+'" y1="12" x2="'+x+'" y2="102" stroke="'+_dCol+'" stroke-width="1" stroke-dasharray="4,3"/>';
+        h+='<rect x="'+(x-20)+'" y="1" width="40" height="10" rx="3" fill="'+_lBg+'"/>';
+        h+='<text x="'+x+'" y="8.5" font-size="6.5" fill="'+_lCol+'" text-anchor="middle" font-family="Sora,sans-serif" font-weight="700" letter-spacing=".04em">new ladder</text>';
       });
       // Polyline
       const points=rrAll.map((r,i)=>(xL+i*xStep)+','+yFor(r.court)).join(' ');
@@ -283,7 +312,7 @@ function _buildSearchCardsHTML(q,sorted,bonusData,topCtName,mvpCount,courtNames)
       rrAll.forEach((r,i)=>{
         const x=xL+i*xStep;
         const y=yFor(r.court);
-        h+='<circle cx="'+x+'" cy="'+y+'" r="2.5" fill="'+(r.won?'#c8ff00':'#ff5c47')+'"/>';
+        h+='<circle cx="'+x+'" cy="'+y+'" r="2.5" fill="'+(r.won?(isLight?'#3d6600':'#c8ff00'):(isLight?'#cc2200':'#ff5c47'))+'"/>';
       });
       h+='</svg>';
       h+='<div style="display:flex;align-items:center;gap:10px;margin-top:6px;font-size:8px;color:'+(isLight?'rgba(0,0,0,0.5)':'rgba(255,255,255,0.4)')+'">';
@@ -2216,6 +2245,58 @@ function render(){
         const _refSSP=sp.sessions.slice().reverse().find(x=>x.started);
         const courtNamesP=_refSSP?.config?.courtNames||null;
         pv+=_buildSearchCardsHTML(target.name.toLowerCase(),sortedP,bonusDataP,topCtNameP,mvpCountP,courtNamesP);
+      // ── Per-ladder collapsible court movement charts ──
+      const _allSess=sp.sessions.filter(se=>se.started);
+      // Most-recent first
+      const _playerSess=_allSess.slice().reverse().filter(se=>{
+        const _ps=calcStats([se],lp.players).find(x=>x.id===playerStatsModalId);
+        return _ps&&(_ps.w+_ps.l+_ps.t>0);
+      });
+      if(_playerSess.length){
+        pv+='<div style="margin-top:8px">';
+        pv+='<div style="font-size:9px;font-weight:700;letter-spacing:.12em;color:'+(isLightM?'rgba(0,0,0,0.4)':'rgba(255,255,255,0.3)')+';text-transform:uppercase;padding:4px 4px 8px">Court movement — per ladder</div>';
+        _playerSess.forEach((se,idx)=>{
+          const _seStats=calcStats([se],lp.players);
+          const _pStat=_seStats.find(x=>x.id===playerStatsModalId);
+          if(!_pStat||!_pStat.roundRes.length)return;
+          const _rr=_pStat.roundRes;
+          const _nC=se.config?.courts||Math.max(2,..._rr.map(r=>r.court));
+          const _cN=se.config?.courtNames||null;
+          const _wins=_rr.filter(r=>r.won).length;
+          const _losses=_rr.length-_wins;
+          const _startC=_rr[0].court;
+          const _endC=_rr[_rr.length-1].court;
+          const _moved=_startC-_endC;
+          const _movedTxt=_moved>0?'↑ '+_moved+' court'+(_moved!==1?'s':''):_moved<0?'↓ '+Math.abs(_moved)+' court'+(Math.abs(_moved)!==1?'s':''):'Same court';
+          const _movedCol=_moved>0?(isLightM?'#3d6600':'#c8ff00'):_moved<0?(isLightM?'#cc2200':'#ff5c47'):(isLightM?'rgba(0,0,0,0.4)':'rgba(255,255,255,0.4)');
+          const _sessLabel=se.name||fmtDate(se.date);
+          const _isOpen=playerLadderOpen.has(idx);
+          const _cardBg=isLightM?'#ffffff':'#1a1a28';
+          const _borderCol=isLightM?'rgba(0,0,0,0.1)':'rgba(255,255,255,0.08)';
+          const _textCol=isLightM?'#111':'#f4f4f0';
+          const _mutedCol=isLightM?'rgba(0,0,0,0.45)':'rgba(255,255,255,0.4)';
+          const _chevBg=isLightM?'rgba(0,0,0,0.05)':'rgba(255,255,255,0.06)';
+          pv+='<div style="background:'+_cardBg+';border:0.5px solid '+_borderCol+';border-radius:12px;overflow:hidden;margin-bottom:8px">';
+          pv+='<div onclick="togglePlayerLadder('+idx+')" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;'+(isLightM?'border-bottom:0.5px solid '+(_isOpen?_borderCol:'transparent'):'')+'">';
+          pv+='<div style="flex:1">';
+          pv+='<div style="font-size:13px;font-weight:800;color:'+_textCol+';line-height:1.2">'+_sessLabel+'</div>';
+          pv+='<div style="font-size:11px;margin-top:2px;color:'+_mutedCol+'">'+_wins+'W–'+_losses+'L &nbsp;·&nbsp; <span style="color:'+_movedCol+';font-weight:700">'+_movedTxt+'</span></div>';
+          pv+='</div>';
+          pv+='<div style="background:'+_chevBg+';border-radius:20px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:13px;color:'+_mutedCol+';transition:transform .2s;transform:rotate('+(_isOpen?'180':'0')+'deg)">▾</div>';
+          pv+='</div>';
+          if(_isOpen){
+            pv+='<div style="padding:10px 12px 12px;border-top:0.5px solid '+_borderCol+'">';
+            pv+=buildLadderChartSVG(_rr,isLightM,_cN,_nC);
+            pv+='<div style="display:flex;align-items:center;gap:10px;margin-top:6px;font-size:9px;color:'+_mutedCol+'">';
+            pv+='<span><span style="display:inline-block;width:7px;height:7px;background:'+(isLightM?'#3d6600':'#c8ff00')+';border-radius:50%;vertical-align:middle;margin-right:3px"></span>Won</span>';
+            pv+='<span><span style="display:inline-block;width:7px;height:7px;background:'+(isLightM?'#cc2200':'#ff5c47')+';border-radius:50%;vertical-align:middle;margin-right:3px"></span>Lost</span>';
+            pv+='</div>';
+            pv+='</div>';
+          }
+          pv+='</div>';
+        });
+        pv+='</div>';
+      }
       } else {
         pv+='<div style="background:'+(isLightM?'var(--surf1)':'#0d0d0d')+';border:0.5px solid '+(isLightM?'var(--border)':'#1e1e1e')+';border-radius:12px;padding:24px;text-align:center;color:var(--muted);font-size:.85rem">No stats yet for this player.</div>';
       }
