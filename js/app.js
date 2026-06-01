@@ -178,7 +178,7 @@ function buildLadderChartSVG(roundRes,isLight,courtNames,nCourts){
   const nC=nCourts||Math.max(2,...roundRes.map(r=>r.court));
   const W=320,xL=22,xR=314,yT=14,yB=98;
   const xStep=n>1?(xR-xL)/(n-1):0;
-  const labelFor=court=>{if(courtNames&&courtNames.length>=nC)return courtNames[nC-court]||String.fromCharCode(65+nC-court);return String.fromCharCode(65+nC-court)};
+  const labelFor=court=>{if(courtNames&&courtNames.length>0){const idx=courtNames.length-court;if(idx>=0&&idx<courtNames.length)return courtNames[idx];}return String.fromCharCode(65+nC-court);};
   const yFor=court=>nC>1?yT+(nC-court)*((yB-yT)/(nC-1)):(yT+yB)/2;
   const gridCol=isLight?'rgba(0,0,0,0.1)':'rgba(255,255,255,0.06)';
   const axisCol=isLight?'rgba(0,0,0,0.55)':'rgba(255,255,255,0.4)';
@@ -274,7 +274,7 @@ function _buildSearchCardsHTML(q,sorted,bonusData,topCtName,mvpCount,courtNames)
       for(let bi=1;bi<rrAll.length;bi++){if(rrAll[bi].round<rrAll[bi-1].round)boundaries.push(bi);}
       const nC=Math.max(2,...rrAll.map(r=>r.court));
       const labelFor=(court)=>{
-        if(courtNames&&courtNames.length>=nC)return courtNames[nC-court]||String.fromCharCode(65+nC-court);
+        if(courtNames&&courtNames.length>0){const idx=courtNames.length-court;if(idx>=0&&idx<courtNames.length)return courtNames[idx];}
         return String.fromCharCode(65+nC-court);
       };
       // Peak court counts
@@ -608,52 +608,134 @@ function calcPartners(sessions,players){
   return Object.values(pairs).sort((a,b)=>(b.w/(b.w+b.l||1))-(a.w/(a.w+a.l||1)))}
 
 // ── Dink Rating — composite 0–100 skill score ──
-// Weights: Points% 40 · WinRate 25 · CourtAvg 15 · PointDiff 10 · PartnerAdj 10
+// D(r)ink Rating — 8-component composite 0-100 skill score
+// Components & weights:
+//   Court-Weighted Performance 25% · Opposition Quality 20% · Partner Independence 15%
+//   Point Differential 10% · Consistency 10% · Court Hold Rate 10%
+//   Recovery Rate 5% · Partner Diversity 5%
 function calcDinkRating(statsArr, sessions, players) {
   if (!statsArr || !statsArr.length) return {};
-  const allRoundPts = statsArr.flatMap(s => s.roundPts);
-  const sessAvg = allRoundPts.length ? allRoundPts.reduce((a, b) => a + b, 0) / allRoundPts.length : 8;
-  const partnerStrength = {};
-  if (sessions && players) {
+  const played = statsArr.filter(s => s.roundPts.length > 0);
+  const leagueAvg = played.length
+    ? played.reduce((a, s) => a + s.pf / s.roundPts.length, 0) / played.length : 8;
+  const ppr = {};
+  statsArr.forEach(s => { ppr[s.id] = s.roundPts.length ? s.pf / s.roundPts.length : leagueAvg; });
+  const ctx = {}; statsArr.forEach(s => { ctx[s.id] = []; });
+  const maxCourt = Math.max(1, ...statsArr.flatMap(s => s.courtHist.map(x => x.court)));
+  if (sessions) {
     sessions.forEach(sess => {
+      if (!sess || !Array.isArray(sess.rounds)) return;
       sess.rounds.forEach(round => {
-        round.courts.forEach(c => {
-          if (!c.score || c.score.t1 === null || c.score.t2 === null) return;
-          [c.team1, c.team2].forEach(team => {
-            const valid = team.filter(Boolean);
-            if (valid.length < 2) return;
-            const [p1, p2] = valid;
-            const p1stat = statsArr.find(s => s.id === p1.id);
-            const p2stat = statsArr.find(s => s.id === p2.id);
-            const p2avg = p2stat && p2stat.roundPts.length ? p2stat.pf / p2stat.roundPts.length : sessAvg;
-            const p1avg = p1stat && p1stat.roundPts.length ? p1stat.pf / p1stat.roundPts.length : sessAvg;
-            if (!partnerStrength[p1.id]) partnerStrength[p1.id] = [];
-            if (!partnerStrength[p2.id]) partnerStrength[p2.id] = [];
-            partnerStrength[p1.id].push(p2avg);
-            partnerStrength[p2.id].push(p1avg);
+        round.courts.forEach(ct => {
+          if (!ct.score || ct.score.t1 === null || ct.score.t2 === null || !ct.score.winner) return;
+          const t1 = (ct.team1 || []).filter(Boolean);
+          const t2 = (ct.team2 || []).filter(Boolean);
+          [[t1, ct.score.t1, ct.score.t2, ct.score.winner === 'A'],
+           [t2, ct.score.t2, ct.score.t1, ct.score.winner === 'B']].forEach(([myT, pf, pa, won]) => {
+            const oppT = myT === t1 ? t2 : t1;
+            const oppAvg = oppT.length ? oppT.reduce((s, p) => s + (ppr[p.id] || leagueAvg), 0) / oppT.length : leagueAvg;
+            myT.forEach(p => {
+              if (!ctx[p.id]) return;
+              const partner = myT.find(x => x.id !== p.id);
+              ctx[p.id].push({
+                partnerPPR: partner ? (ppr[partner.id] || leagueAvg) : leagueAvg,
+                partnerId: partner ? partner.id : null,
+                oppAvg, court: ct.court, won, pf, pa, diff: pf - pa
+              });
+            });
           });
         });
       });
     });
   }
-  const maxPts = Math.max(...statsArr.map(s => s.pf), 1);
-  const maxCourt = Math.max(...statsArr.flatMap(s => s.courtHist.map(x => x.court)), 1);
-  const ratings = {};
+  const allDiffs = statsArr.map(s => s.pf - s.pa);
+  const maxDiff = Math.max(...allDiffs, 1), minDiff = Math.min(...allDiffs, -1);
+  const ratings = {}, breakdown = {};
   statsArr.forEach(s => {
-    if (s.w + s.l === 0) { ratings[s.id] = null; return; }
-    const ptsPct = s.pf / maxPts;
-    const winRate = s.w / (s.w + s.l);
-    const diff = s.pf - s.pa;
-    const diffNorm = Math.max(0, Math.min(1, (diff + (maxPts * 0.4)) / (maxPts * 0.8)));
-    const ctAvg = s.courtHist.length ? (s.courtHist.reduce((a, x) => a + x.court, 0) / s.courtHist.length) / maxCourt : 0;
-    const myPartners = partnerStrength[s.id] || [];
-    const avgPartnerStr = myPartners.length ? myPartners.reduce((a, b) => a + b, 0) / myPartners.length : sessAvg;
-    const paScore = Math.max(0, Math.min(1, (sessAvg - avgPartnerStr) / (sessAvg || 1)));
-    const rating = (ptsPct * 0.40 + winRate * 0.25 + diffNorm * 0.10 + ctAvg * 0.15 + paScore * 0.10) * 100;
-    ratings[s.id] = Math.round(rating * 10) / 10;
+    const rounds = ctx[s.id] || [];
+    if (!rounds.length || s.w + s.l === 0) { ratings[s.id] = null; return; }
+    const n = rounds.length;
+    const myPPR = ppr[s.id] || leagueAvg;
+    // 1. Court-Weighted Performance (25%)
+    const cwp = rounds.reduce((a, r) => a + r.pf * (0.5 + 0.5 * r.court / maxCourt), 0) / n;
+    const maxCWP = Math.max(...played.map(x => {
+      const xr = ctx[x.id] || []; return xr.length ? xr.reduce((a, r) => a + r.pf * (0.5 + 0.5 * r.court / maxCourt), 0) / xr.length : 0;
+    }), 1);
+    const c1 = Math.min(1, cwp / maxCWP);
+    // 2. Opposition Quality (20%)
+    const oppSum = rounds.reduce((a, r) => a + (r.won ? r.oppAvg / leagueAvg : 1), 0);
+    const c2 = Math.min(1, oppSum / n);
+    // 3. Partner Independence (15%)
+    const avgPartnerPPR = rounds.reduce((a, r) => a + r.partnerPPR, 0) / n;
+    const c3 = Math.min(1, Math.max(0, 0.5 + (myPPR - avgPartnerPPR) / (leagueAvg * 2)));
+    // 4. Point Differential (10%)
+    const c4 = (s.pf - s.pa - minDiff) / (maxDiff - minDiff || 1);
+    // 5. Consistency (10%)
+    const avgD = rounds.reduce((a, r) => a + r.diff, 0) / n;
+    const stdDev = Math.sqrt(rounds.reduce((a, r) => a + (r.diff - avgD) ** 2, 0) / n);
+    const c5 = Math.max(0, 1 - stdDev / 20);
+    // 6. Court Hold Rate (10%)
+    const peakC = Math.max(...rounds.map(r => r.court));
+    const peakRs = rounds.filter(r => r.court === peakC);
+    const holdRate = peakRs.filter(r => r.won).length / peakRs.length;
+    const conf = Math.min(1, peakRs.length / 3);
+    const c6 = holdRate * conf + 0.5 * (1 - conf);
+    // 7. Recovery Rate (5%)
+    let recW = 0, recA = 0;
+    for (let i = 1; i < rounds.length; i++) { if (!rounds[i-1].won) { recA++; if (rounds[i].won) recW++; } }
+    const c7 = recA > 0 ? recW / recA : 0.5;
+    // 8. Partner Diversity (5%)
+    const uniq = new Set(rounds.map(r => r.partnerId).filter(Boolean)).size;
+    const c8 = Math.min(1, uniq / Math.max(1, n * 0.6));
+    const score = (c1*0.25 + c2*0.20 + c3*0.15 + c4*0.10 + c5*0.10 + c6*0.10 + c7*0.05 + c8*0.05) * 100;
+    ratings[s.id] = Math.round(score * 10) / 10;
+    breakdown[s.id] = {cwp:c1,oq:c2,pi:c3,diff:c4,con:c5,hold:c6,rec:c7,div:c8,score};
   });
+  calcDinkRating._breakdown = breakdown;
   return ratings;
 }
+
+// DR Legend modal
+function openDRLegend(){
+  let m=document.getElementById('drLegendModal');
+  if(!m){
+    m=document.createElement('div');m.id='drLegendModal';
+    m.style.cssText='position:fixed;inset:0;z-index:600;display:flex;align-items:flex-start;justify-content:center;padding:20px 14px;overflow-y:auto;background:rgba(0,0,0,0.82);backdrop-filter:blur(6px)';
+    m.onclick=e=>{if(e.target===m)closeDRLegend();};
+    const isL=document.body.classList.contains('hc-light');
+    const bg=isL?'#fff':'#12121e',text=isL?'#111':'#f4f4f0',muted=isL?'rgba(0,0,0,0.5)':'rgba(255,255,255,0.45)';
+    const lime=isL?'#3d6600':'#c8ff00',border=isL?'rgba(0,0,0,0.1)':'rgba(255,255,255,0.08)';
+    const rows=[
+      ['⬡','Court-Weighted Performance','25%','Points you score adjusted by the court you are on. A 15-point round on Court 1 (top) counts more than 15 points on Court 5. Top court = 1.0x, bottom court = 0.5x.'],
+      ['🎯','Opposition Quality','20%','How strong are the players you are beating? Wins against higher-rated opponents multiply your score. Beating the best players in the league matters more.'],
+      ['🤝','Partner Independence','15%','Are you carrying your team or being carried? If your partner is consistently weaker than you and you are still winning, you get a bonus. If your partner is always the stronger player, this component adjusts down.'],
+      ['📈','Point Differential','10%','Total points scored minus points allowed across the whole season. Winning 15-5 beats winning 11-10.'],
+      ['🎱','Consistency','10%','Low round-to-round variance in your score differential. A player who is +8 every round scores higher here than someone who swings +20 one round and -5 the next.'],
+      ['👑','Court Hold Rate','10%','Your win percentage at the highest court you have reached. Getting to Court 1 is impressive. Staying there proves you belong.'],
+      ['💪','Recovery Rate','5%','After a loss, how often do you win the very next round? Resilient players bounce back. This rewards mental toughness.'],
+      ['🔄','Partner Diversity','5%','Do your results hold up across many different partners, or only with one? Players who perform well with anyone score higher here.'],
+    ];
+    let html='<div style="width:100%;max-width:480px;background:'+bg+';border-radius:16px;overflow:hidden;padding:0 0 16px">';
+    html+='<div style="padding:20px 20px 14px;border-bottom:0.5px solid '+border+';display:flex;align-items:center;justify-content:space-between">';
+    html+='<div><div style="font-size:13px;font-weight:900;letter-spacing:.05em;color:'+lime+';text-transform:uppercase">⬡ D(r)ink Rating</div>';
+    html+='<div style="font-size:11px;color:'+muted+';margin-top:3px">How the score is calculated</div></div>';
+    html+='<button onclick="closeDRLegend()" style="background:rgba(255,255,255,0.07);border:none;color:'+muted+';font-size:18px;width:34px;height:34px;border-radius:50%;cursor:pointer;flex-shrink:0">✕</button></div>';
+    html+='<div style="padding:14px 20px 4px;font-size:11px;color:'+muted+';line-height:1.5">The D(r)ink Rating (DR) cuts through raw points to answer the real question: <strong style="color:'+text+'">who is actually playing the best pickleball?</strong> It combines 8 components, each weighted by how much it reveals about true individual skill.</div>';
+    rows.forEach(([icon,name,weight,desc])=>{
+      html+='<div style="margin:10px 20px 0;background:'+(isL?'rgba(0,0,0,0.03)':'rgba(255,255,255,0.04)')+';border:0.5px solid '+border+';border-radius:10px;padding:12px 14px">';
+      html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">';
+      html+='<div style="font-size:12px;font-weight:800;color:'+text+'">'+icon+' '+name+'</div>';
+      html+='<div style="font-size:11px;font-weight:900;color:'+lime+';background:'+(isL?'rgba(0,0,0,0.06)':'rgba(200,255,0,0.1)')+';border-radius:4px;padding:2px 7px">'+weight+'</div></div>';
+      html+='<div style="font-size:11px;color:'+muted+';line-height:1.5">'+desc+'</div></div>';
+    });
+    html+='<div style="margin:16px 20px 0;padding:12px 14px;background:'+(isL?'rgba(0,0,0,0.04)':'rgba(200,255,0,0.06)')+';border:0.5px solid '+(isL?'rgba(0,0,0,0.1)':'rgba(200,255,0,0.2)')+';border-radius:10px;font-size:10px;color:'+muted+';line-height:1.5">';
+    html+='<strong style="color:'+lime+'">Note:</strong> DR uses points-per-round as a skill proxy for opponents and partners, so ratings become more accurate as more rounds are played. All scores are normalised across the current league so the scale always reflects relative performance.</div>';
+    html+='</div>';
+    m.innerHTML=html;
+    document.body.appendChild(m);
+  }else{m.style.display='flex';}
+}
+function closeDRLegend(){const m=document.getElementById('drLegendModal');if(m)m.style.display='none';}
 
 // Timer
 function startTimer(){const ss=gSS();if(!ss)return;if(timer===0)timer=ss.config.roundMin*60;timerOn=true;clearInterval(timerInt);timerInt=setInterval(()=>{timer--;if(timer<=0){timer=0;timerOn=false;clearInterval(timerInt)}rTimer()},1000);render()}
@@ -826,15 +908,22 @@ async function editSessionDate(){const l=gL();const ss=gSS();if(!l||!ss)return;c
 async function editSessionTime(){const l=gL();const ss=gSS();if(!l||!ss)return;const t=prompt('Start time (HH:MM):',ss.config.startTime||'');if(t!==null){ss.config.startTime=t.trim();await save(l)}}
 async function editSessionPlace(){const l=gL();const ss=gSS();if(!l||!ss)return;const p=prompt('Location:',ss.config.place||'');if(p!==null){ss.config.place=p.trim();await save(l)}}
 // Edit handlers for ladder config that should remain editable AFTER the
-// ladder has started or finished. Court count is intentionally NOT editable
-// once started (changing it would invalidate the round assignments).
+// Court names and count are editable even after the session starts.
+// Past rounds are unaffected — only future round generation uses config.courts.
 async function editSessionCourtNames(){
   const l=gL();const ss=gSS();if(!l||!ss)return;
   const cur=ss.config.courtNames||defaultCourtNames(ss.config.courts);
-  const input=prompt('Court names (comma-separated, '+ss.config.courts+' total):',cur.join(', '));
+  const input=prompt(
+    'Court names, top to bottom (comma-separated).\nChange the count to add/remove courts — only affects future rounds.',
+    cur.join(', ')
+  );
   if(input===null)return;
   const names=input.split(',').map(s=>s.trim()).filter(Boolean);
-  if(names.length!==ss.config.courts){alert('Need exactly '+ss.config.courts+' names. You provided '+names.length+'.');return;}
+  if(names.length<2){alert('Need at least 2 courts.');return;}
+  if(ss.started&&names.length<ss.config.courts){
+    if(!confirm('Reducing from '+ss.config.courts+' to '+names.length+' courts. Past rounds are unaffected; future rounds will use '+names.length+'. Continue?'))return;
+  }
+  ss.config.courts=names.length;
   ss.config.courtNames=names;
   await save(l);
 }
@@ -1546,7 +1635,7 @@ function rStats(stats,season,l,ss){
     if(!has){h+='<p class="subtext" style="text-align:center;padding:20px">No scored games yet.</p>';return h;}
     const drSessions = ss ? [ss] : (season ? season.sessions : []);
     const drRatings = calcDinkRating(stats, drSessions, l.players);
-    h+='<div style="overflow-x:auto;margin:0 -14px;padding:0 14px"><table class="st"><thead><tr>'+['#','Player','W','L','Pts','PS','PA','+/-','Avg','Top Ct','Strk'].map(x=>'<th style="text-align:'+(x==='Player'?'left':'right')+'">'+x+'</th>').join('')+'<th class="dr-th">⬡ DR</th></tr></thead><tbody>';
+    h+='<div style="overflow-x:auto;margin:0 -14px;padding:0 14px"><table class="st"><thead><tr>'+['#','Player','W','L','Pts','PS','PA','+/-','Avg','Top Ct','Strk'].map(x=>'<th style="text-align:'+(x==='Player'?'left':'right')+'">'+x+'</th>').join('')+'<th class="dr-th" onclick="openDRLegend()" style="cursor:pointer;white-space:nowrap" title="Tap to learn how DR is calculated">⬡ DR <span style="font-size:8px;opacity:.5">ℹ</span></th></tr></thead><tbody>';
     sorted.filter(s=>s.w+s.l+s.t>0).forEach((s,i)=>{
       const d=s.pf-s.pa;const sk=s.streak;const skStr=sk>0?'W'+sk:sk<0?'L'+Math.abs(sk):'--';
       const avg=s.roundPts.length?(Math.round(s.pf/s.roundPts.length*10)/10).toFixed(1):0;
