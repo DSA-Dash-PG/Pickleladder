@@ -93,8 +93,10 @@ let tkMode='top50',tkPickerOpen=false,tkPicked=new Set(),tkChart=null;
 // Player board tab state
 let pvTab='now'; // 'now' | 'next'
 let statsInnerTab='standings';
+let statsRankMode='pts';
 let statsSearchQ='';
 function setStatsInnerTab(t){statsInnerTab=t;statsSearchQ='';render()}
+function setStatsRankMode(m){statsRankMode=m;render()}
 
 // ── Player profile modal (public-side only) ──
 // Tapping a player's name in standings/leaderboard opens a card with their
@@ -1609,25 +1611,42 @@ function rStats(stats,season,l,ss){
     if(!has){h+='<p class="subtext" style="text-align:center;padding:20px">No scored games yet.</p>';return h;}
     const drSessions = ss ? [ss] : (season ? season.sessions : []);
     const drRatings = calcDinkRating(stats, drSessions, l.players);
+    const byPts = sorted.filter(s=>s.w+s.l+s.t>0);
+    const byDr  = [...byPts].sort((a,b)=>(drRatings[b.id]??-1)-(drRatings[a.id]??-1));
+    const fsRows = statsRankMode==='dr' ? byDr : byPts;
+    const ptsRankOf = {};byPts.forEach((s,i)=>ptsRankOf[s.id]=i+1);
+    // Toggle
+    const tBtn=(m,label)=>'<button data-m="'+m+'" onclick="setStatsRankMode(this.dataset.m)" style="font-size:11px;font-weight:600;padding:4px 11px;border:none;border-radius:6px;cursor:pointer;background:'+(statsRankMode===m?'#a78bfa':'transparent')+';color:'+(statsRankMode===m?'#fff':'var(--muted)')+';transition:all .15s">'+label+'</button>';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 8px">';
+    h+='<span style="font-size:11px;color:var(--muted)">Ranked by '+(statsRankMode==='dr'?'D(r)ink Rating':'total points')+'</span>';
+    h+='<div style="display:flex;background:var(--surf2);border:0.5px solid var(--border);border-radius:8px;padding:3px;gap:2px">'+tBtn('pts','Pts rank')+tBtn('dr','DR rank')+'</div>';
+    h+='</div>';
     h+='<div style="overflow-x:auto;margin:0 -14px;padding:0 14px"><table class="st"><thead><tr>'+['#','Player','W','L','Pts','PS','PA','+/-','Avg','Top Ct','Strk'].map(x=>'<th style="text-align:'+(x==='Player'?'left':'right')+'">'+x+'</th>').join('')+'<th class="dr-th" onclick="openDRLegend()" style="cursor:pointer;white-space:nowrap" title="Tap to learn how DR is calculated">⬡ DR <span style="font-size:8px;opacity:.5">ℹ</span></th></tr></thead><tbody>';
-    sorted.filter(s=>s.w+s.l+s.t>0).forEach((s,i)=>{
+    fsRows.forEach((s,i)=>{
       const d=s.pf-s.pa;const sk=s.streak;const skStr=sk>0?'W'+sk:sk<0?'L'+Math.abs(sk):'--';
       const avg=s.roundPts.length?(Math.round(s.pf/s.roundPts.length*10)/10).toFixed(1):0;
       const tc=topCtName(s);const wins=bonusData[s.id]?.wins||0;
       const dr=drRatings[s.id];const drStr=dr!=null?dr:'—';
+      // rank delta when in DR mode
+      let deltaHtml='';
+      if(statsRankMode==='dr'&&dr!=null){
+        const mv=(ptsRankOf[s.id]||0)-(i+1);
+        if(mv>0)deltaHtml='<span style="color:var(--lime);font-size:9px;margin-left:2px">▲'+mv+'</span>';
+        else if(mv<0)deltaHtml='<span style="color:var(--loss);font-size:9px;margin-left:2px">▼'+Math.abs(mv)+'</span>';
+      }
       h+='<tr'+pClick(s.id)+' style="'+(i===0?'background:var(--lime-dim);':i%2===1?'background:var(--surf2);':'')+pCur()+'">';
-      h+='<td class="'+(i<3?'rt':'')+'" style="text-align:right">'+(["1st","2nd","3rd"][i]||(i+1))+'</td>';
+      h+='<td class="'+(i<3?'rt':'')+'" style="text-align:right">'+(["1st","2nd","3rd"][i]||(i+1))+deltaHtml+'</td>';
       h+='<td style="font-weight:600;white-space:nowrap;text-align:left">'+s.name+(wins>0?' '+crownStr(wins):'')+'</td>';
       h+='<td class="at" style="text-align:right">'+s.w+'</td>';
       h+='<td class="rdt" style="text-align:right">'+s.l+'</td>';
-      h+='<td style="text-align:right;font-weight:800;color:var(--lime)">'+s.pf+'</td>';
+      h+='<td style="text-align:right;font-weight:'+(statsRankMode==='pts'?'800':'400')+';color:'+(statsRankMode==='pts'?'var(--lime)':'var(--muted)')+'">'+s.pf+'</td>';
       h+='<td style="text-align:right;color:var(--muted)">'+s.pf+'</td>';
       h+='<td style="text-align:right;color:var(--muted)">'+s.pa+'</td>';
       h+='<td style="text-align:right;font-weight:700;color:'+(d>=0?'var(--lime)':'var(--loss)')+'">'+(d>0?'+':'')+d+'</td>';
       h+='<td style="text-align:right;color:var(--text-sec)">'+avg+'</td>';
       h+='<td style="text-align:right;color:var(--cyan);font-size:.72rem;font-weight:700">'+tc+'</td>';
       h+='<td style="text-align:right;color:'+(sk>0?'var(--lime)':sk<0?'var(--loss)':'var(--muted)')+';font-weight:600">'+skStr+'</td>';
-      h+='<td class="dr-td"><span class="dr-val">'+drStr+'</span></td></tr>';
+      h+='<td class="dr-td"><span class="dr-val" style="'+(statsRankMode==='dr'?'color:#a78bfa;font-weight:700':'')+'">'+drStr+'</span></td></tr>';
     });
     h+='</tbody></table></div>';}
 
