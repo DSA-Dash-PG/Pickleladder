@@ -174,6 +174,48 @@ function openPlayerStats(pid){playerStatsModalId=pid;playerLadderOpen=new Set([0
 function closePlayerStats(){playerStatsModalId=null;render()}
 function togglePlayerLadder(idx){if(playerLadderOpen.has(idx))playerLadderOpen.delete(idx);else playerLadderOpen.add(idx);render()}
 // Build a court-movement SVG for a single ladder's roundRes data.
+// Per-round match history cards for the player modal
+function buildPlayerRoundCards(se,playerId,isLight){
+  const textCol=isLight?'#111':'#f4f4f0';
+  const mutedCol=isLight?'rgba(0,0,0,0.45)':'rgba(255,255,255,0.4)';
+  const cardBg=isLight?'#ffffff':'#1a1a28';
+  const borderCol=isLight?'rgba(0,0,0,0.1)':'rgba(255,255,255,0.08)';
+  const winCol=isLight?'#3d6600':'#c8ff00';
+  const lossCol=isLight?'#cc2200':'#ff5c47';
+  let h='<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px">';
+  (se.rounds||[]).forEach((round,ri)=>{
+    (round.courts||[]).forEach(ct=>{
+      if(!ct.score||ct.score.t1===null||ct.score.t2===null)return;
+      const inT1=(ct.team1||[]).some(p=>p?.id===playerId);
+      const inT2=(ct.team2||[]).some(p=>p?.id===playerId);
+      if(!inT1&&!inT2)return;
+      const myTeam=inT1?ct.team1:ct.team2;
+      const oppTeam=inT1?ct.team2:ct.team1;
+      const myScore=inT1?ct.score.t1:ct.score.t2;
+      const oppScore=inT1?ct.score.t2:ct.score.t1;
+      const won=myScore>oppScore;
+      const partner=(myTeam||[]).find(p=>p?.id!==playerId);
+      const opps=(oppTeam||[]).filter(Boolean);
+      const courtLabel=cName(ct.court,se);
+      const scoreCol=won?winCol:lossCol;
+      h+='<div style="background:'+cardBg+';border:0.5px solid '+borderCol+';border-radius:8px">';
+      h+='<div style="display:grid;grid-template-columns:28px 1fr auto;align-items:center;padding:7px 10px;gap:8px">';
+      h+='<div style="font-size:9px;font-weight:500;color:'+mutedCol+';text-align:center;line-height:1.4">Rd<br><span style="font-size:12px;font-weight:700;color:'+textCol+'">'+(ri+1)+'</span></div>';
+      h+='<div>';
+      h+='<div style="font-size:10px;color:'+mutedCol+';margin-bottom:1px">Ct '+courtLabel+' &middot; w\/ <span style="color:'+textCol+';font-weight:500">'+(partner?.name||'—')+'<\/span><\/div>';
+      h+='<div style="font-size:11px;color:'+mutedCol+'">vs <span style="color:'+textCol+'">'+opps.map(p=>p.name).join(' + ')+'<\/span><\/div>';
+      h+='<\/div>';
+      h+='<div style="text-align:right">';
+      h+='<div style="font-size:16px;font-weight:700;color:'+scoreCol+';line-height:1">'+myScore+'<\/div>';
+      h+='<div style="font-size:11px;color:'+mutedCol+';margin-top:1px">– '+oppScore+'<\/div>';
+      h+='<\/div>';
+      h+='<\/div><\/div>';
+    });
+  });
+  h+='<\/div>';
+  return h;
+}
+
 // roundRes: [{round,court,won},...], courtNames: string[], nCourts: number
 function buildLadderChartSVG(roundRes,isLight,courtNames,nCourts){
   const n=roundRes.length;if(n<1)return'';
@@ -187,11 +229,19 @@ function buildLadderChartSVG(roundRes,isLight,courtNames,nCourts){
   const lineCol=isLight?'#005f70':'#00e5ff';
   const winCol=isLight?'#3d6600':'#c8ff00';
   const lossCol=isLight?'#cc2200':'#ff5c47';
-  let s='<svg viewBox="0 0 '+W+' 110" style="width:100%;height:110px;display:block">';
+  let s='<svg viewBox="0 0 '+W+' 128" style="width:100%;height:128px;display:block">';
   for(let c=1;c<=nC;c++){const y=yFor(c);s+='<line x1="'+xL+'" y1="'+y+'" x2="'+xR+'" y2="'+y+'" stroke="'+gridCol+'" stroke-dasharray="2,3"/>';s+='<text x="'+(xL-8)+'" y="'+(y+3)+'" font-size="8" fill="'+axisCol+'" text-anchor="end" font-family="Sora,sans-serif" font-weight="700">'+labelFor(c)+'</text>';}
   const pts=roundRes.map((r,i)=>(xL+i*xStep)+','+yFor(r.court)).join(' ');
   s+='<polyline fill="none" stroke="'+lineCol+'" stroke-width="1.5" points="'+pts+'"/>';
-  roundRes.forEach((r,i)=>{const x=xL+i*xStep;const y=yFor(r.court);s+='<circle cx="'+x+'" cy="'+y+'" r="2.5" fill="'+(r.won?winCol:lossCol)+'" stroke="'+(isLight?'rgba(255,255,255,0.7)':'rgba(0,0,0,0.5)')+'" stroke-width="1"/>';});
+  roundRes.forEach((r,i)=>{
+    const x=xL+i*xStep;const y=yFor(r.court);
+    const scoreCol=r.won?winCol:lossCol;
+    const scoreStr=(r.pf!=null&&r.pa!=null)?r.pf+'–'+r.pa:'';
+    const above=i%2===0;const ty=above?y-7:y+11;
+    s+='<circle cx="'+x+'" cy="'+y+'" r="2.5" fill="'+scoreCol+'" stroke="'+(isLight?'rgba(255,255,255,0.7)':'rgba(0,0,0,0.5)')+'" stroke-width="1"/>';
+    if(scoreStr)s+='<text x="'+x+'" y="'+ty+'" font-size="7.5" fill="'+scoreCol+'" text-anchor="middle" font-family="Sora,sans-serif" font-weight="700">'+scoreStr+'</text>';
+    s+='<text x="'+x+'" y="120" font-size="7" fill="'+(isLight?'rgba(0,0,0,0.3)':'rgba(255,255,255,0.3)')+'" text-anchor="middle" font-family="Sora,sans-serif">R'+(r.round||i+1)+'</text>';
+  });
   s+='</svg>';
   return s;
 }
@@ -2478,6 +2528,7 @@ function render(){
           pv+='</div>';
           if(_isOpen){
             pv+='<div style="padding:10px 12px 12px;border-top:0.5px solid '+_borderCol+'">';
+            pv+=buildPlayerRoundCards(se,playerStatsModalId,isLightM);
             pv+=buildLadderChartSVG(_rr,isLightM,_cN,_nC);
             pv+='<div style="display:flex;align-items:center;gap:10px;margin-top:6px;font-size:9px;color:'+_mutedCol+'">';
             pv+='<span><span style="display:inline-block;width:7px;height:7px;background:'+(isLightM?'#3d6600':'#c8ff00')+';border-radius:50%;vertical-align:middle;margin-right:3px"></span>Won</span>';
