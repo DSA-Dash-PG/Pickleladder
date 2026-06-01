@@ -178,7 +178,7 @@ function buildLadderChartSVG(roundRes,isLight,courtNames,nCourts){
   const nC=nCourts||Math.max(2,...roundRes.map(r=>r.court));
   const W=320,xL=22,xR=314,yT=14,yB=98;
   const xStep=n>1?(xR-xL)/(n-1):0;
-  const labelFor=court=>{if(courtNames&&courtNames.length>=nC)return courtNames[nC-court]||String.fromCharCode(65+nC-court);return String.fromCharCode(65+nC-court)};
+  const labelFor=court=>{if(courtNames&&courtNames.length>0){const idx=courtNames.length-court;if(idx>=0&&idx<courtNames.length)return courtNames[idx];}return String.fromCharCode(65+nC-court);};
   const yFor=court=>nC>1?yT+(nC-court)*((yB-yT)/(nC-1)):(yT+yB)/2;
   const gridCol=isLight?'rgba(0,0,0,0.1)':'rgba(255,255,255,0.06)';
   const axisCol=isLight?'rgba(0,0,0,0.55)':'rgba(255,255,255,0.4)';
@@ -274,7 +274,7 @@ function _buildSearchCardsHTML(q,sorted,bonusData,topCtName,mvpCount,courtNames)
       for(let bi=1;bi<rrAll.length;bi++){if(rrAll[bi].round<rrAll[bi-1].round)boundaries.push(bi);}
       const nC=Math.max(2,...rrAll.map(r=>r.court));
       const labelFor=(court)=>{
-        if(courtNames&&courtNames.length>=nC)return courtNames[nC-court]||String.fromCharCode(65+nC-court);
+        if(courtNames&&courtNames.length>0){const idx=courtNames.length-court;if(idx>=0&&idx<courtNames.length)return courtNames[idx];}
         return String.fromCharCode(65+nC-court);
       };
       // Peak court counts
@@ -608,52 +608,108 @@ function calcPartners(sessions,players){
   return Object.values(pairs).sort((a,b)=>(b.w/(b.w+b.l||1))-(a.w/(a.w+a.l||1)))}
 
 // ── Dink Rating — composite 0–100 skill score ──
-// Weights: Points% 40 · WinRate 25 · CourtAvg 15 · PointDiff 10 · PartnerAdj 10
+// 8 components: CourtPerf(25) OppoQuality(20) PartnerIndep(15) PointDiff(10) Consistency(10) CourtHold(10) Recovery(5) PartnerDiversity(5)
 function calcDinkRating(statsArr, sessions, players) {
   if (!statsArr || !statsArr.length) return {};
-  const allRoundPts = statsArr.flatMap(s => s.roundPts);
-  const sessAvg = allRoundPts.length ? allRoundPts.reduce((a, b) => a + b, 0) / allRoundPts.length : 8;
-  const partnerStrength = {};
-  if (sessions && players) {
+  const pprMap = {};
+  statsArr.forEach(s => { pprMap[s.id] = s.roundPts && s.roundPts.length ? s.pf / s.roundPts.length : 0; });
+  const allPpr = Object.values(pprMap);
+  const avgPpr = allPpr.length ? allPpr.reduce((a,b)=>a+b,0)/allPpr.length : 8;
+  const roundDetail = {};
+  if (sessions) {
     sessions.forEach(sess => {
       sess.rounds.forEach(round => {
         round.courts.forEach(c => {
           if (!c.score || c.score.t1 === null || c.score.t2 === null) return;
-          [c.team1, c.team2].forEach(team => {
+          [[c.team1, c.score.t1, c.score.t2], [c.team2, c.score.t2, c.score.t1]].forEach(([team, pf, pa]) => {
             const valid = team.filter(Boolean);
             if (valid.length < 2) return;
             const [p1, p2] = valid;
-            const p1stat = statsArr.find(s => s.id === p1.id);
-            const p2stat = statsArr.find(s => s.id === p2.id);
-            const p2avg = p2stat && p2stat.roundPts.length ? p2stat.pf / p2stat.roundPts.length : sessAvg;
-            const p1avg = p1stat && p1stat.roundPts.length ? p1stat.pf / p1stat.roundPts.length : sessAvg;
-            if (!partnerStrength[p1.id]) partnerStrength[p1.id] = [];
-            if (!partnerStrength[p2.id]) partnerStrength[p2.id] = [];
-            partnerStrength[p1.id].push(p2avg);
-            partnerStrength[p2.id].push(p1avg);
+            const opp = team === c.team1 ? c.team2 : c.team1;
+            const oppPpr = opp.filter(Boolean).reduce((a,p)=>a+(pprMap[p.id]??avgPpr),0)/Math.max(1,opp.filter(Boolean).length);
+            [p1,p2].forEach((p,i)=>{
+              if(!roundDetail[p.id])roundDetail[p.id]=[];
+              roundDetail[p.id].push({court:c.court||1,pf,pa,partnerPpr:i===0?(pprMap[p2.id]??avgPpr):(pprMap[p1.id]??avgPpr),oppoPpr:oppPpr,partnerId:i===0?p2.id:p1.id});
+            });
           });
         });
       });
     });
   }
-  const maxPts = Math.max(...statsArr.map(s => s.pf), 1);
-  const maxCourt = Math.max(...statsArr.flatMap(s => s.courtHist.map(x => x.court)), 1);
+  const maxCourt = Math.max(...statsArr.flatMap(s=>s.courtHist.map(x=>x.court)),1);
   const ratings = {};
+  calcDinkRating._breakdown = {};
   statsArr.forEach(s => {
-    if (s.w + s.l === 0) { ratings[s.id] = null; return; }
-    const ptsPct = s.pf / maxPts;
-    const winRate = s.w / (s.w + s.l);
-    const diff = s.pf - s.pa;
-    const diffNorm = Math.max(0, Math.min(1, (diff + (maxPts * 0.4)) / (maxPts * 0.8)));
-    const ctAvg = s.courtHist.length ? (s.courtHist.reduce((a, x) => a + x.court, 0) / s.courtHist.length) / maxCourt : 0;
-    const myPartners = partnerStrength[s.id] || [];
-    const avgPartnerStr = myPartners.length ? myPartners.reduce((a, b) => a + b, 0) / myPartners.length : sessAvg;
-    const paScore = Math.max(0, Math.min(1, (sessAvg - avgPartnerStr) / (sessAvg || 1)));
-    const rating = (ptsPct * 0.40 + winRate * 0.25 + diffNorm * 0.10 + ctAvg * 0.15 + paScore * 0.10) * 100;
-    ratings[s.id] = Math.round(rating * 10) / 10;
+    if (s.w+s.l===0){ratings[s.id]=null;return;}
+    const rd = roundDetail[s.id]||[];
+    const nR = rd.length||1;
+    const courtWts = rd.map(r=>r.court/maxCourt);
+    const wWins = rd.reduce((a,r,i)=>a+(r.pf>r.pa?courtWts[i]:0),0);
+    const wTotal = courtWts.reduce((a,w)=>a+w,0)||1;
+    const c1 = wWins/wTotal;
+    const avgOppo = rd.length?rd.reduce((a,r)=>a+r.oppoPpr,0)/rd.length:avgPpr;
+    const c2 = Math.min(1,avgOppo/(avgPpr*1.5||1));
+    const weakRounds = rd.filter(r=>r.partnerPpr<avgPpr);
+    const c3 = weakRounds.length?weakRounds.filter(r=>r.pf>r.pa).length/weakRounds.length:(s.w/(s.w+s.l));
+    const maxPts = Math.max(...statsArr.map(x=>x.pf),1);
+    const c4 = Math.max(0,Math.min(1,((s.pf-s.pa)+maxPts*0.4)/(maxPts*0.8)));
+    const pts = rd.map(r=>r.pf);
+    const mean = pts.length?pts.reduce((a,b)=>a+b,0)/pts.length:0;
+    const variance = pts.length?pts.reduce((a,b)=>a+Math.pow(b-mean,2),0)/pts.length:0;
+    const c5 = Math.max(0,1-Math.sqrt(variance)/(mean||1));
+    const c6 = rd.length?rd.filter(r=>r.court>maxCourt/2).length/rd.length:0;
+    let recoveries=0,recOpps=0;
+    for(let i=1;i<rd.length;i++){if(rd[i-1].pf<rd[i-1].pa){recOpps++;if(rd[i].pf>rd[i].pa)recoveries++;}}
+    const c7 = recOpps>0?recoveries/recOpps:0.5;
+    const c8 = Math.min(1,new Set(rd.map(r=>r.partnerId)).size/Math.max(nR*0.5,1));
+    ratings[s.id] = Math.round((c1*0.25+c2*0.20+c3*0.15+c4*0.10+c5*0.10+c6*0.10+c7*0.05+c8*0.05)*1000)/10;
+    calcDinkRating._breakdown[s.id] = {c1,c2,c3,c4,c5,c6,c7,c8};
   });
   return ratings;
 }
+
+// DR Legend modal
+function openDRLegend(){
+  if(document.getElementById('drLegendModal'))return;
+  const isLight=document.body.classList.contains('light');
+  const bg=isLight?'rgba(0,0,0,0.55)':'rgba(0,0,0,0.75)';
+  const surf=isLight?'#fff':'#1a1a2e';
+  const txt=isLight?'#111':'#e8e8f0';
+  const muted=isLight?'rgba(0,0,0,0.5)':'rgba(255,255,255,0.45)';
+  const border=isLight?'rgba(0,0,0,0.1)':'rgba(255,255,255,0.08)';
+  const components=[
+    {emoji:'🏆',label:'Court-Weighted Performance',weight:'25%',desc:'Win rate at each court, scaled by how prestigious that court is. Winning at the top court counts more than winning at the bottom.'},
+    {emoji:'⚔️',label:'Opposition Quality',weight:'20%',desc:'Average skill of the opponents you faced (by points per round). Beating strong opponents boosts this score.'},
+    {emoji:'🧠',label:'Partner Independence',weight:'15%',desc:'Your win rate specifically in rounds where your partner is below average. Shows how much you carry your side.'},
+    {emoji:'📈',label:'Point Differential',weight:'10%',desc:'Your net points (scored minus allowed), normalized across all players. Bigger margin wins score higher.'},
+    {emoji:'🎯',label:'Consistency',weight:'10%',desc:'Low variance in your per-round point totals. Steady performers score higher than boom-or-bust ones.'},
+    {emoji:'🔝',label:'Court Hold Rate',weight:'10%',desc:'Percentage of your rounds played on the top half of courts. Staying at high courts reflects sustained performance.'},
+    {emoji:'💪',label:'Recovery Rate',weight:'5%',desc:'How often you win the round immediately after a loss. Measures mental resilience and bounce-back ability.'},
+    {emoji:'🤝',label:'Partner Diversity',weight:'5%',desc:"How many unique partners you've played with relative to your total rounds. Adapting to different partners shows versatility."},
+  ];
+  let rows=components.map(c=>'<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid '+border+'">'
+    +'<div style="font-size:20px;line-height:1;padding-top:2px">'+c.emoji+'</div>'
+    +'<div style="flex:1">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">'
+        +'<span style="font-weight:700;font-size:13px;color:'+txt+'">'+c.label+'</span>'
+        +'<span style="background:#a78bfa;color:#fff;border-radius:20px;padding:1px 7px;font-size:10px;font-weight:700;flex-shrink:0">'+c.weight+'</span>'
+      +'</div>'
+      +'<div style="font-size:12px;color:'+muted+';line-height:1.5">'+c.desc+'</div>'
+    +'</div>'
+  +'</div>').join('');
+  const html='<div id="drLegendModal" onclick="if(event.target.id===\'drLegendModal\')closeDRLegend()" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:flex-end;justify-content:center;background:'+bg+'">'
+    +'<div style="background:'+surf+';border-radius:18px 18px 0 0;width:100%;max-width:520px;max-height:88vh;overflow-y:auto;padding:20px 18px 32px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
+        +'<div style="font-size:18px;font-weight:800;color:'+txt+'">⬡ D(r)ink Rating</div>'
+        +'<button onclick="closeDRLegend()" style="background:none;border:none;font-size:22px;cursor:pointer;color:'+muted+';padding:4px 6px;line-height:1">✕</button>'
+      +'</div>'
+      +'<div style="font-size:12px;color:'+muted+';margin-bottom:14px">A composite 0–100 skill score across 8 components. Recalculated after every round.</div>'
+      +rows
+    +'</div>'
+  +'</div>';
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+function closeDRLegend(){const m=document.getElementById('drLegendModal');if(m)m.remove();}
 
 // Timer
 function startTimer(){const ss=gSS();if(!ss)return;if(timer===0)timer=ss.config.roundMin*60;timerOn=true;clearInterval(timerInt);timerInt=setInterval(()=>{timer--;if(timer<=0){timer=0;timerOn=false;clearInterval(timerInt)}rTimer()},1000);render()}
@@ -831,10 +887,17 @@ async function editSessionPlace(){const l=gL();const ss=gSS();if(!l||!ss)return;
 async function editSessionCourtNames(){
   const l=gL();const ss=gSS();if(!l||!ss)return;
   const cur=ss.config.courtNames||defaultCourtNames(ss.config.courts);
-  const input=prompt('Court names (comma-separated, '+ss.config.courts+' total):',cur.join(', '));
+  const input=prompt(
+    'Court names, top to bottom (comma-separated).\nChange the count to add/remove courts — only affects future rounds.',
+    cur.join(', ')
+  );
   if(input===null)return;
   const names=input.split(',').map(s=>s.trim()).filter(Boolean);
-  if(names.length!==ss.config.courts){alert('Need exactly '+ss.config.courts+' names. You provided '+names.length+'.');return;}
+  if(names.length<2){alert('Need at least 2 courts.');return;}
+  if(ss.started&&names.length<ss.config.courts){
+    if(!confirm('Reducing from '+ss.config.courts+' to '+names.length+' courts. Past rounds are unaffected; future rounds will use '+names.length+'. Continue?'))return;
+  }
+  ss.config.courts=names.length;
   ss.config.courtNames=names;
   await save(l);
 }
@@ -1546,7 +1609,7 @@ function rStats(stats,season,l,ss){
     if(!has){h+='<p class="subtext" style="text-align:center;padding:20px">No scored games yet.</p>';return h;}
     const drSessions = ss ? [ss] : (season ? season.sessions : []);
     const drRatings = calcDinkRating(stats, drSessions, l.players);
-    h+='<div style="overflow-x:auto;margin:0 -14px;padding:0 14px"><table class="st"><thead><tr>'+['#','Player','W','L','Pts','PS','PA','+/-','Avg','Top Ct','Strk'].map(x=>'<th style="text-align:'+(x==='Player'?'left':'right')+'">'+x+'</th>').join('')+'<th class="dr-th">⬡ DR</th></tr></thead><tbody>';
+    h+='<div style="overflow-x:auto;margin:0 -14px;padding:0 14px"><table class="st"><thead><tr>'+['#','Player','W','L','Pts','PS','PA','+/-','Avg','Top Ct','Strk'].map(x=>'<th style="text-align:'+(x==='Player'?'left':'right')+'">'+x+'</th>').join('')+'<th class="dr-th" onclick="openDRLegend()" style="cursor:pointer;white-space:nowrap" title="Tap to learn how DR is calculated">⬡ DR <span style="font-size:8px;opacity:.5">ℹ</span></th></tr></thead><tbody>';
     sorted.filter(s=>s.w+s.l+s.t>0).forEach((s,i)=>{
       const d=s.pf-s.pa;const sk=s.streak;const skStr=sk>0?'W'+sk:sk<0?'L'+Math.abs(sk):'--';
       const avg=s.roundPts.length?(Math.round(s.pf/s.roundPts.length*10)/10).toFixed(1):0;
