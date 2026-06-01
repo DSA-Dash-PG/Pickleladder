@@ -177,10 +177,10 @@ function togglePlayerLadder(idx){if(playerLadderOpen.has(idx))playerLadderOpen.d
 // roundRes: [{round,court,won},...], courtNames: string[], nCourts: number
 function buildLadderChartSVG(roundRes,isLight,courtNames,nCourts){
   const n=roundRes.length;if(n<1)return'';
-  const nC=nCourts||Math.max(2,...roundRes.map(r=>r.court));
+  const nC=Math.max(nCourts||2,courtNames?.length||2,...roundRes.map(r=>r.court));
   const W=320,xL=22,xR=314,yT=14,yB=98;
   const xStep=n>1?(xR-xL)/(n-1):0;
-  const labelFor=court=>{if(courtNames&&courtNames.length>0){const idx=courtNames.length-court;if(idx>=0&&idx<courtNames.length)return courtNames[idx];}return String.fromCharCode(65+nC-court);};
+  const labelFor=court=>{if(courtNames&&courtNames.length>0){const idx=nC-court;if(idx>=0&&idx<courtNames.length)return courtNames[idx];}return String.fromCharCode(65+nC-court);};
   const yFor=court=>nC>1?yT+(nC-court)*((yB-yT)/(nC-1)):(yT+yB)/2;
   const gridCol=isLight?'rgba(0,0,0,0.1)':'rgba(255,255,255,0.06)';
   const axisCol=isLight?'rgba(0,0,0,0.55)':'rgba(255,255,255,0.4)';
@@ -274,9 +274,9 @@ function _buildSearchCardsHTML(q,sorted,bonusData,topCtName,mvpCount,courtNames)
     if(rrAll.length>=2){
       const boundaries=[];
       for(let bi=1;bi<rrAll.length;bi++){if(rrAll[bi].round<rrAll[bi-1].round)boundaries.push(bi);}
-      const nC=Math.max(2,...rrAll.map(r=>r.court));
+      const nC=Math.max(courtNames?.length||2,...rrAll.map(r=>r.court));
       const labelFor=(court)=>{
-        if(courtNames&&courtNames.length>0){const idx=courtNames.length-court;if(idx>=0&&idx<courtNames.length)return courtNames[idx];}
+        if(courtNames&&courtNames.length>0){const idx=nC-court;if(idx>=0&&idx<courtNames.length)return courtNames[idx];}
         return String.fromCharCode(65+nC-court);
       };
       // Peak court counts
@@ -2452,7 +2452,7 @@ function render(){
           const _pStat=_seStats.find(x=>x.id===playerStatsModalId);
           if(!_pStat||!_pStat.roundRes.length)return;
           const _rr=_pStat.roundRes;
-          const _nC=se.config?.courts||Math.max(2,..._rr.map(r=>r.court));
+          const _nC=Math.max(se.config?.courts||2,se.config?.courtNames?.length||2,..._rr.map(r=>r.court));
           const _cN=se.config?.courtNames||null;
           const _wins=_rr.filter(r=>r.won).length;
           const _losses=_rr.length-_wins;
