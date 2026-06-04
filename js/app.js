@@ -445,11 +445,15 @@ async function _applyScore(ri,ci,field,v){
   const idx=ladders.findIndex(x=>x.id===l.id);if(idx>=0)ladders[idx]=l;
   clearTimeout(scoreTimer);
   if(sc.t1!==null&&sc.t2!==null){
-    // Both scores entered — save immediately and sync all tabs
+    // Both scores entered — persist silently in the background. We deliberately
+    // do NOT re-fetch/refreshLadder() here: the local state already holds the
+    // score and render() has shown it, so a re-fetch only causes the visible
+    // "scores disappear then reappear" flicker and a wait between games. A solo
+    // operator can now enter every game with no pause; data is still saved per
+    // pair for safety. (Cross-device sync still happens via the 5 s poll.)
     scoreTimer=setTimeout(async()=>{
-      const res=await apiSave(l);
+      await apiSave(l);
       scoreTimer=null;
-      if(res)await refreshLadder();
     },500);
   }
   // Single score only: skip save until the pair is complete
@@ -2675,6 +2679,12 @@ async function refreshLadder(){
   if(!activeLadderId)return;
   if(npState)return;       // don't interrupt active score entry
   if(scoreTimer)return;    // don't overwrite a score that hasn't saved yet
+  // While an admin is on the play tab, they are the source of truth and are
+  // actively entering scores. Skip the background re-fetch so the grid never
+  // rebuilds/reorders under them mid-round (the "looks like it refreshed" jump).
+  // Fresh data still loads on any explicit action (Next Round saves+renders) or
+  // when they leave the play tab.
+  if(isAdmin&&view==='session'&&tab==='play')return;
   const now=Date.now();
   if(now-_lastRefresh<2000)return; // debounce: at most once every 2 s
   _lastRefresh=now;
