@@ -894,6 +894,22 @@ async function pullFromBench(pid){
 }
 async function addPlayer(){const l=gL();if(!l)return;const n=document.getElementById('fPN')?.value?.trim();const g=document.getElementById('fPG')?.value||'M';if(!n)return;l.players.push({id:uid(),name:n,gender:g,active:true});document.getElementById('fPN').value='';await save(l)}
 async function deactivatePlayer(pid){const l=gL();if(!l||!confirm('Deactivate this player? They will be hidden from the picker but their historical stats are preserved.'))return;const p=l.players.find(x=>x.id===pid);if(p)p.active=false;await save(l)}
+// Hard-delete a player from the league. Intended for duplicates / mistaken adds.
+// Guarded: refuses if the player appears in ANY game lineup, since removing them
+// would leave dangling references and corrupt standings/history (use Deactivate
+// for someone who has actually played). Also strips them from any session's
+// participant list so no upcoming ladder still references the deleted id.
+async function deletePlayer(pid){
+  const l=gL();if(!l)return;
+  const p=l.players.find(x=>x.id===pid);if(!p)return;
+  let refs=0;
+  (l.seasons||[]).forEach(s=>(s.sessions||[]).forEach(sess=>(sess.rounds||[]).forEach(rd=>(rd.courts||[]).forEach(ct=>{[ct.team1,ct.team2].forEach(team=>(team||[]).forEach(tp=>{if(tp&&tp.id===pid)refs++}))}))));
+  if(refs>0){alert('"'+p.name+'" appears in '+refs+' game lineup(s), so deleting would corrupt the standings and history. Use "Deactivate" instead to hide them while keeping their record.');return}
+  if(!confirm('Permanently delete "'+p.name+'"? This cannot be undone. Use this only for duplicates or players who have never played.'))return;
+  l.players=l.players.filter(x=>x.id!==pid);
+  (l.seasons||[]).forEach(s=>(s.sessions||[]).forEach(sess=>{if(sess.participants)sess.participants=sess.participants.filter(id=>id!==pid)}));
+  await save(l);
+}
 async function reactivatePlayer(pid){const l=gL();if(!l)return;const p=l.players.find(x=>x.id===pid);if(p)p.active=true;await save(l)}
 async function toggleParticipant(pid){const l=gL();const ss=gSS();if(!l||!ss)return;if(ss.started)return;if(!ss.participants)ss.participants=l.players.filter(p=>p.active!==false).map(p=>p.id);const idx=ss.participants.indexOf(pid);if(idx>=0)ss.participants.splice(idx,1);else ss.participants.push(pid);await save(l)}
 async function selectAllParticipants(){const l=gL();const ss=gSS();if(!l||!ss||ss.started)return;ss.participants=l.players.filter(p=>p.active!==false).map(p=>p.id);await save(l)}
@@ -1791,7 +1807,7 @@ function rPlayers(l){
   h+='<div class="card fu"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><h3 class="card-t" style="margin:0">Active players</h3><span class="pill ok">'+active.length+'</span></div>';
   if(!active.length)h+='<p class="subtext" style="text-align:center;padding:20px">No active players.</p>';
   else if(isAdmin){
-    h+=sortedActive.map(p=>'<div class="pr"><span style="flex:1;font-weight:600;font-size:var(--st-name,.88rem)">'+p.name+'</span><span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span><button class="edit-btn" onclick="openEditPlayer(\''+p.id+'\')">Edit</button><button class="edit-btn" style="color:var(--loss)" onclick="deactivatePlayer(\''+p.id+'\')">Deactivate</button></div>').join('');
+    h+=sortedActive.map(p=>'<div class="pr"><span style="flex:1;font-weight:600;font-size:var(--st-name,.88rem)">'+p.name+'</span><span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span><button class="edit-btn" onclick="openEditPlayer(\''+p.id+'\')">Edit</button><button class="edit-btn" style="color:var(--loss)" onclick="deactivatePlayer(\''+p.id+'\')">Deactivate</button><button class="edit-btn" style="color:var(--loss);font-weight:700" onclick="deletePlayer(\''+p.id+'\')">Delete</button></div>').join('');
   } else {
     h+=sortedActive.map((p,i)=>{
       const wins=bonusData[p.id]?.wins||0;
@@ -1811,7 +1827,7 @@ function rPlayers(l){
   h+='</div>';
   if(inactive.length&&isAdmin){
     h+='<div class="card fu"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><h3 class="card-t" style="margin:0">Inactive players</h3><span class="pill">'+inactive.length+'</span></div>';
-    h+=[...inactive].sort((a,b)=>a.name.localeCompare(b.name)).map(p=>'<div class="pr" style="opacity:.5"><span style="flex:1;font-weight:600;font-size:var(--st-name,.88rem)">'+p.name+'</span><span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span><button class="edit-btn" onclick="openEditPlayer(\''+p.id+'\')">Edit</button><button class="edit-btn" style="color:var(--lime)" onclick="reactivatePlayer(\''+p.id+'\')">Activate</button></div>').join('');
+    h+=[...inactive].sort((a,b)=>a.name.localeCompare(b.name)).map(p=>'<div class="pr" style="opacity:.5"><span style="flex:1;font-weight:600;font-size:var(--st-name,.88rem)">'+p.name+'</span><span class="gt '+(p.gender==='F'?'f':'m')+'">'+p.gender+'</span><button class="edit-btn" onclick="openEditPlayer(\''+p.id+'\')">Edit</button><button class="edit-btn" style="color:var(--lime)" onclick="reactivatePlayer(\''+p.id+'\')">Activate</button><button class="edit-btn" style="color:var(--loss);font-weight:700" onclick="deletePlayer(\''+p.id+'\')">Delete</button></div>').join('');
     h+='</div>'}
   return h}
 function timeUntil(ss){
