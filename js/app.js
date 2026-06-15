@@ -1852,6 +1852,8 @@ function rLadderInfo(l,ss){
   let badge='';
   if(ss.finished){
     badge='<span class="pill" style="background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.5);border:0.5px solid rgba(255,255,255,0.12)">Complete</span>';
+  } else if(ss.started&&ss.liveStarted===false){
+    badge='<span class="pill" style="background:rgba(255,204,0,0.12);color:#ffcc00;border:0.5px solid rgba(255,204,0,0.3)">📋 Lineups posted</span>';
   } else if(ss.started){
     badge='<span class="pill live"><span class="dot"></span>Live · Rd '+(ss.currentRound+1)+'</span>';
   } else {
@@ -1874,6 +1876,21 @@ function rLadderInfo(l,ss){
     h+='<div style="font-size:10px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.06em">'+c.l+'</div></div>';
   });
   h+='</div></div>';
+  // Starting lineup card — preview only (lineups generated, round not live yet)
+  if(ss.started&&ss.liveStarted===false&&ss.rounds&&ss.rounds[0]){
+    const r0=ss.rounds[0];const tC0=r0.totalCourts||r0.courts.length;
+    h+='<div class="card fu"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:#ffcc00;letter-spacing:.12em;text-transform:uppercase">📋 Starting lineup</div><span style="font-size:10px;color:var(--muted)">Round 1 — find your court</span></div>';
+    [...r0.courts].sort((a,b)=>b.court-a.court).forEach(ct=>{
+      const nm=cName(ct.court,ss,tC0);
+      const t1=ct.team1.filter(Boolean).map(p=>p.name).join(' &amp; ');
+      const t2=ct.team2.filter(Boolean).map(p=>p.name).join(' &amp; ');
+      h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;margin-bottom:6px;background:var(--surf2);border:0.5px solid var(--border)">';
+      h+='<div style="width:32px;height:32px;border-radius:8px;background:rgba(255,204,0,0.12);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#ffcc00;flex-shrink:0">'+nm+'</div>';
+      h+='<div style="flex:1;font-size:var(--cc-pname,13px);font-weight:600;color:var(--text)">'+t1+' <span style="opacity:.45;font-weight:500">vs</span> '+t2+'</div>';
+      h+='</div>';
+    });
+    h+='<div style="font-size:11px;color:var(--muted);margin-top:4px">Scoring starts once the host begins Round 1.</div></div>';
+  }
   // Court flow card
   const courtAccents=[
     {bg:'rgba(255,204,0,0.07)',bd:'rgba(255,204,0,0.25)',nameCol:'#ffcc00',badgeBg:'rgba(255,204,0,0.15)',badgeCol:'#ffcc00'},
@@ -1987,7 +2004,7 @@ function rNoSeason(){let h='<div class="card fu" style="text-align:center;paddin
 function rOverview(l,s,stats){const as=s.sessions.filter(x=>!x.archived);let h='<div class="card fu"><div class="overline">Current season</div><h2 class="heading" style="font-size:1.2rem;color:var(--lime)">'+s.name+'</h2><div class="subtext" style="margin-top:4px">'+as.length+' ladder'+(as.length!==1?'s':'')+' · '+l.players.filter(p=>p.active!==false).length+' active players</div></div>';
   if(stats.some(x=>x.w+x.l+x.t>0))h+='<div class="chip-grid fu">'+[{l:'Ladders',v:as.filter(x=>x.started).length},{l:'Games',v:Math.floor(stats.reduce((a,x)=>a+x.w+x.l+x.t,0)/2)},{l:'Players',v:l.players.filter(p=>p.active!==false).length},{l:'High Pts',v:stats.reduce((m,x)=>Math.max(m,x.pf),0)}].map(c=>'<div class="chip"><div class="chip-n">'+c.v+'</div><div class="chip-l">'+c.l+'</div></div>').join('')+'</div>';
   if(isAdmin)h+='<button class="bp full" onclick="go(\'newSession\')" style="margin-bottom:12px">New ladder</button>';
-  const ladderBtn=(x,dim)=>{const nParts=x.participants?x.participants.length:l.players.filter(p=>p.active!==false).length;const st=x.finished?'<span class="pill ok">Complete</span>':x.started?'<span class="pill live"><span class="dot"></span>Rd '+(x.currentRound+1)+'</span>':'<span class="pill draft">Upcoming</span>';return'<button class="sc" style="'+(dim?'opacity:.6':'')+';" onclick="openSession(\''+x.id+'\')">'+'<div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:700;font-size:var(--st-name,.9rem)">'+(x.name||fmtDate(x.date))+'</div><div class="subtext" style="font-size:var(--st-hdr,.72rem);margin-top:2px">'+fmtDate(x.date)+(x.config.startTime?' · '+fmt12(x.config.startTime):'')+' · '+nParts+' players · '+x.config.courts+' courts'+(x.config.place?' · '+x.config.place:'')+'</div></div>'+st+'</div></button>'};
+  const ladderBtn=(x,dim)=>{const nParts=x.participants?x.participants.length:l.players.filter(p=>p.active!==false).length;const st=x.finished?'<span class="pill ok">Complete</span>':(x.started&&x.liveStarted===false)?'<span class="pill" style="background:rgba(255,204,0,0.12);color:#ffcc00;border:0.5px solid rgba(255,204,0,0.3)">Lineups posted</span>':x.started?'<span class="pill live"><span class="dot"></span>Rd '+(x.currentRound+1)+'</span>':'<span class="pill draft">Upcoming</span>';return'<button class="sc" style="'+(dim?'opacity:.6':'')+';" onclick="openSession(\''+x.id+'\')">'+'<div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:700;font-size:var(--st-name,.9rem)">'+(x.name||fmtDate(x.date))+'</div><div class="subtext" style="font-size:var(--st-hdr,.72rem);margin-top:2px">'+fmtDate(x.date)+(x.config.startTime?' · '+fmt12(x.config.startTime):'')+' · '+nParts+' players · '+x.config.courts+' courts'+(x.config.place?' · '+x.config.place:'')+'</div></div>'+st+'</div></button>'};
   if(!as.length){h+='<div class="card fu"><h3 class="card-t">Ladders</h3><p class="subtext" style="text-align:center;padding:20px">No ladders scheduled yet.</p></div>'}
   else{
     const active_ls=[...as].filter(x=>!x.finished).sort((a,b)=>a.date.localeCompare(b.date));
