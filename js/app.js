@@ -1029,6 +1029,36 @@ async function cloneSession(ssid){
 
 function go(v,t){view=v;if(t)tab=t;viewingRound=-1;swapMode=null;npState=null;if(v==='newSession')formCourtCount=4;render();if(v==='newSession')setTimeout(updateCourtInputs,10)}
 function selectLadder(id){activeLadderId=id;activeSessionId=null;view='dashboard';tab='overview';viewingRound=-1;render()}
+// League tab ordering. Sort by an explicit `order` field, falling back to
+// createdAt so leagues saved before this feature keep a stable position.
+function orderedLadders(){return[...ladders].sort((a,b)=>(a.order??a.createdAt??0)-(b.order??b.createdAt??0))}
+// Move a league one slot left (dir=-1) or right (dir=1) in the tab bar.
+// Renumbers every league sequentially, swaps the adjacent pair, and persists
+// only the leagues whose order actually changed.
+async function moveLadder(id,dir){
+  const arr=orderedLadders();
+  const i=arr.findIndex(x=>x.id===id);const j=i+dir;
+  if(i<0||j<0||j>=arr.length)return;
+  const old=arr.map(l=>l.order);
+  arr.forEach((l,k)=>l.order=k);
+  const t=arr[i].order;arr[i].order=arr[j].order;arr[j].order=t;
+  const changed=arr.filter((l,k)=>l.order!==old[k]);
+  for(const l of changed){await apiSave(l)}
+  render();
+}
+// Home: the cross-league landing hub showing upcoming ladders.
+function goHome(){view='home';activeSessionId=null;viewingRound=-1;swapMode=null;npState=null;render()}
+// Open a ladder from the home page. The session may live in a league/season
+// that isn't currently active, so set the active league and point its
+// activeSeason at the season holding this session before opening it — that's
+// what gS()/gSS() resolve against. activeSeason is set in memory only (not
+// persisted) since it's just navigation state for this client.
+function openHomeLadder(lid,sid,ssid){
+  activeLadderId=lid;
+  const l=gL();
+  if(l&&l.seasons?.some(x=>x.id===sid))l.activeSeason=sid;
+  openSession(ssid);
+}
 function openSession(id){activeSessionId=id;view='session';viewingRound=-1;swapMode=null;npState=null;const ss=gSS();const finished=ss?.finished;tab=isAdmin?'play':'info';if(finished&&!isAdmin)pvTab='now';mapOpen=ss?shouldMapOpen(ss)||ss.started:false;render()}
 function setPvTab(t){pvTab=t;render()}
 
@@ -2001,6 +2031,36 @@ function rSessionAdmin(l,ss){let h='<div class="admin-bar-bottom">Ladder admin</
 function rNoLadder(){return'<div style="text-align:center;padding:60px 20px" class="fu"><div style="font-size:2.5rem;margin-bottom:12px">🥒</div><h2 class="heading" style="font-size:1.4rem;color:var(--lime);margin-bottom:8px">Pickle Friends</h2><p class="subtext" style="margin-bottom:24px;line-height:1.6;max-width:320px;margin:0 auto 24px">Pickleball ladder play — automatic lineups, live scoring, and season stats.</p>'+(isAdmin?'<button class="bp" onclick="go(\'newLadder\')" style="padding:14px 28px">Create league</button>':'<p class="subtext">No active leagues yet.</p>')+'</div>'}
 function rNoSeason(){let h='<div class="card fu" style="text-align:center;padding:32px"><h3 class="heading" style="font-size:1.1rem;margin-bottom:6px">No seasons yet</h3>'+(isAdmin?'<button class="bp" onclick="go(\'newSeason\')">Create first season</button>':'<p class="subtext">Check back soon!</p>')+'</div>';if(isAdmin){const l=gL();h+='<div class="admin-section fu" style="margin-top:12px"><div class="admin-section-t">League settings</div><div class="cfg-row"><span class="subtext">Name</span><span style="font-weight:600">'+(l?.name||'')+' <button class="edit-btn" onclick="renameLadder()">Edit</button></span></div><div style="display:flex;gap:6px;margin-top:10px"><button class="bp" style="flex:1" onclick="go(\'newLadder\')">New league</button><button class="bd" style="flex:1" onclick="deleteLadderAction()">Delete</button></div></div>'}return h}
 
+// ══ HOME ══
+// Cross-league landing hub. Aggregates every non-archived, not-yet-finished
+// ladder (session) across all leagues + seasons, soonest-first, and offers a
+// vertical league list (admin can reorder here). Replaces the old horizontally
+// scrolling league tab bar as the primary way to navigate between leagues.
+function rHome(){
+  const today=new Date();today.setHours(0,0,0,0);
+  const relDay=(d)=>{try{const dt=new Date(d+'T12:00:00');dt.setHours(0,0,0,0);const diff=Math.round((dt-today)/86400000);if(diff===0)return'Today';if(diff===1)return'Tomorrow';if(diff>1&&diff<7)return dt.toLocaleDateString('en-US',{weekday:'long'});return null}catch{return null}};
+
+  const items=[];
+  ladders.forEach(L=>{(L.seasons||[]).filter(se=>!se.archived).forEach(se=>{(se.sessions||[]).filter(ss=>!ss.archived&&!ss.finished).forEach(ss=>{items.push({L,se,ss})})})});
+  items.sort((a,b)=>((a.ss.date||'').localeCompare(b.ss.date||''))||((a.ss.config?.startTime||'').localeCompare(b.ss.config?.startTime||'')));
+
+  let h='<div class="card fu"><div class="overline">Pickleballers</div><h2 class="heading" style="font-size:1.3rem;color:var(--lime)">Upcoming Ladders</h2><div class="subtext" style="margin-top:4px">'+(items.length?items.length+' ladder'+(items.length!==1?'s':'')+' across '+ladders.length+' league'+(ladders.length!==1?'s':''):'Nothing on the schedule right now')+'</div></div>';
+
+  if(!ladders.length){
+    h+='<div style="text-align:center;padding:40px 20px" class="fu"><div style="font-size:2.5rem;margin-bottom:12px">🥒</div>'+(isAdmin?'<button class="bp" onclick="go(\'newLadder\')" style="padding:14px 28px">Create league</button>':'<p class="subtext">No leagues yet. Check back soon!</p>')+'</div>';
+    return h;
+  }
+
+  const homeCard=(it)=>{const x=it.ss,L=it.L;const nParts=x.participants?x.participants.length:L.players.filter(p=>p.active!==false).length;const st=(x.started&&x.liveStarted===false)?'<span class="pill" style="background:rgba(255,204,0,0.12);color:#ffcc00;border:0.5px solid rgba(255,204,0,0.3)">Lineups posted</span>':x.started?'<span class="pill live"><span class="dot"></span>Rd '+(x.currentRound+1)+'</span>':'<span class="pill draft">Upcoming</span>';const rd=relDay(x.date);const rdTag=rd?'<span style="display:inline-block;background:var(--lime-dim);color:var(--lime);border:0.5px solid var(--lime-bd);border-radius:6px;font-size:10px;font-weight:800;padding:1px 7px;margin-right:6px">'+rd+'</span>':'';return'<button class="sc" onclick="openHomeLadder(\''+L.id+'\',\''+it.se.id+'\',\''+x.id+'\')"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="min-width:0"><div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">'+L.name+'</div><div style="font-weight:700;font-size:var(--st-name,.92rem)">'+rdTag+(x.name||fmtDate(x.date))+'</div><div class="subtext" style="font-size:var(--st-hdr,.72rem);margin-top:3px">'+fmtDate(x.date)+(x.config?.startTime?' · '+fmt12(x.config.startTime):'')+' · '+nParts+' players · '+(x.config?.courts||0)+' courts'+(x.config?.place?' · '+x.config.place:'')+'</div></div>'+st+'</div></button>'};
+
+  if(!items.length)h+='<div class="card fu"><p class="subtext" style="text-align:center;padding:20px">No upcoming ladders scheduled. Pick a league below to view standings and past results.</p></div>';
+  else h+='<div class="card fu"><h3 class="card-t">Schedule</h3>'+items.map(homeCard).join('')+'</div>';
+
+  const ol=orderedLadders();
+  h+='<div class="card fu"><h3 class="card-t">Leagues</h3>'+ol.map((L,i)=>{const arrowBtn=(dir,dis,gly)=>'<button onclick="event.stopPropagation();moveLadder(\''+L.id+'\','+dir+')" '+(dis?'disabled':'')+' style="border:1px solid var(--border-s);background:var(--surf1);color:'+(dis?'var(--border-s)':'var(--muted)')+';border-radius:6px;width:30px;height:24px;cursor:'+(dis?'default':'pointer')+';font-size:.7rem;line-height:1;padding:0">'+gly+'</button>';let row='<div style="display:flex;align-items:stretch;gap:6px;margin-bottom:8px">';row+='<button class="sc" style="flex:1;margin:0" onclick="selectLadder(\''+L.id+'\')"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:var(--st-name,.9rem)">'+L.name+'</span><span class="subtext" style="font-size:.7rem">View →</span></div></button>';if(isAdmin)row+='<div style="display:flex;flex-direction:column;gap:2px;justify-content:center">'+arrowBtn(-1,i===0,'▲')+arrowBtn(1,i===ol.length-1,'▼')+'</div>';return row+'</div>'}).join('')+'</div>';
+  return h;
+}
+
 function rOverview(l,s,stats){const as=s.sessions.filter(x=>!x.archived);let h='<div class="card fu"><div class="overline">Current season</div><h2 class="heading" style="font-size:1.2rem;color:var(--lime)">'+s.name+'</h2><div class="subtext" style="margin-top:4px">'+as.length+' ladder'+(as.length!==1?'s':'')+' · '+l.players.filter(p=>p.active!==false).length+' active players</div></div>';
   if(stats.some(x=>x.w+x.l+x.t>0))h+='<div class="chip-grid fu">'+[{l:'Ladders',v:as.filter(x=>x.started).length},{l:'Games',v:Math.floor(stats.reduce((a,x)=>a+x.w+x.l+x.t,0)/2)},{l:'Players',v:l.players.filter(p=>p.active!==false).length},{l:'High Pts',v:stats.reduce((m,x)=>Math.max(m,x.pf),0)}].map(c=>'<div class="chip"><div class="chip-n">'+c.v+'</div><div class="chip-l">'+c.l+'</div></div>').join('')+'</div>';
   if(isAdmin)h+='<button class="bp full" onclick="go(\'newSession\')" style="margin-bottom:12px">New ladder</button>';
@@ -2312,8 +2372,9 @@ function render(){
   h+='<header class="hdr">';
   h+='<div class="hdr-accent-bar"></div>';
   h+='<div class="hdr-row"><div class="hdr-left">';
-  h+='<div class="hdr-logo"><span class="hdr-logo-text">DS</span></div>';
-  h+='<div><h1 class="hdr-title">'+(l?.name||'Dink Society')+'</h1>'+(s?'<div class="hdr-sub">'+s.name+'</div>':'')+'</div>';
+  h+='<div class="hdr-logo" onclick="goHome()" style="cursor:pointer" title="Home"><span class="hdr-logo-text">DS</span></div>';
+  const onHome=view==='home';
+  h+='<div'+(onHome?'':' onclick="goHome()" style="cursor:pointer"')+'><h1 class="hdr-title">'+(onHome?'Dink Society':(l?.name||'Dink Society'))+'</h1>'+((s&&!onHome)?'<div class="hdr-sub">'+s.name+'</div>':'')+'</div>';
   h+='</div>';
   // ── Header right: admin badge + accessibility button ──
   h+='<div class="hdr-right">';
@@ -2383,11 +2444,22 @@ function render(){
   }
   h+='</header><div class="content">';
 
-  if(view==='dashboard'&&ladders.length>1)h+='<div style="display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;padding-bottom:2px">'+ladders.map(x=>'<button onclick="selectLadder(\''+x.id+'\')" style="padding:7px 14px;border-radius:var(--rx);border:1.5px solid '+(x.id===activeLadderId?'var(--lime-bd)':'var(--border-s)')+';background:'+(x.id===activeLadderId?'var(--lime-dim)':'var(--surf1)')+';color:'+(x.id===activeLadderId?'var(--lime)':'var(--muted)')+';font-family:\'Sora\',sans-serif;font-size:.76rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">'+x.name+'</button>').join('')+'</div>';
+  // League switcher — compact and mobile-friendly. A Home button returns to the
+  // cross-league hub; a native dropdown (uses the OS picker on mobile) switches
+  // leagues without a horizontally scrolling tab strip. League reordering now
+  // lives on the Home page's Leagues list.
+  if(view==='dashboard'){
+    h+='<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">';
+    h+='<button onclick="goHome()" style="flex-shrink:0;display:flex;align-items:center;gap:5px;padding:8px 12px;border-radius:var(--rx);border:1.5px solid var(--border-s);background:var(--surf1);color:var(--muted);font-family:\'Sora\',sans-serif;font-size:.76rem;font-weight:700;cursor:pointer;white-space:nowrap">← Home</button>';
+    if(ladders.length>1)h+='<select onchange="selectLadder(this.value)" style="flex:1;min-width:0;padding:8px 12px;border-radius:var(--rx);border:1.5px solid var(--lime-bd);background:var(--lime-dim);color:var(--lime);font-family:\'Sora\',sans-serif;font-size:.78rem;font-weight:700;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url(\'data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23c8ff00%22 stroke-width=%223%22><path d=%22M6 9l6 6 6-6%22/></svg>\');background-repeat:no-repeat;background-position:right 10px center;padding-right:30px">'+orderedLadders().map(x=>'<option value="'+x.id+'"'+(x.id===activeLadderId?' selected':'')+'>'+x.name+'</option>').join('')+'</select>';
+    else h+='<div style="flex:1;font-family:\'Sora\',sans-serif;font-size:.85rem;font-weight:800;color:var(--lime);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(gL()?.name||'')+'</div>';
+    h+='</div>';
+  }
 
   if(view==='newLadder')h+=rNewLadder();
   else if(view==='newSeason')h+=rNewSeason();
   else if(view==='newSession')h+=rNewSession();
+  else if(view==='home')h+=rHome();
   else if(!l)h+=rNoLadder();
   else if(view==='dashboard'){
     if(!s)h+=rNoSeason();
@@ -2697,6 +2769,7 @@ async function init(){
     const data=await res.json();
     ladders=data.ladders||[];
     if(ladders.length){activeLadderId=ladders[0].id;const l=gL();if(l?.activeSeason)tab='overview'}
+    view='home';   // land on the cross-league upcoming-ladders hub
     render();
   }catch(e){
     console.error('Init failed:',e);
