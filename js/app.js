@@ -429,6 +429,77 @@ async function apiVerifyPin(pin){try{const r=await fetch('/api?action=verify-pin
 function gL(){return ladders.find(l=>l.id===activeLadderId)||null}
 function gS(){const l=gL();if(!l)return null;if(l.activeSeason){const s=l.seasons.find(x=>x.id===l.activeSeason);if(s)return s}return l.seasons.find(x=>!x.archived)||null}
 function gSS(){const s=gS();return s?.sessions.find(ss=>ss.id===activeSessionId)||null}
+
+// ── URL hash routing ───────────────────────────────────────────────
+// Mirrors the in-memory nav state (view / league / season / session / tab)
+// into location.hash so individual pages are shareable and bookmarkable, and
+// reads it back on first load + browser back/forward. Hash-based on purpose:
+// needs no Netlify rewrite rules and never 404s on refresh.
+//
+// Hash shapes:
+//   #home
+//   #l/<ladderId>/<page>            (league dashboard; page = ladders|leaderboard|kitchen|rules|players|admin)
+//   #l/<ladderId>/s/<sessionId>/<page>   (a single ladder night; page = info|ladder|pickleballers|stats|play|admin)
+// Friendly page names are used in the URL and mapped to the internal tab keys.
+const DASH_TAB_TO_HASH={overview:'ladders',ladders:'ladders',stats:'leaderboard',leaderboard:'kitchen',rules:'rules',players:'players',admin:'admin'};
+const HASH_TO_DASH_TAB={ladders:'ladders',leaderboard:'stats',kitchen:'leaderboard',rules:'rules',players:'players',admin:'admin'};
+const SESS_TAB_TO_HASH={info:'info',courtboard:'ladder',ladder:'ladder',roster:'pickleballers',stats:'stats',play:'play',admin:'admin'};
+const HASH_TO_SESS_TAB={info:'info',ladder:'courtboard',pickleballers:'roster',stats:'stats',play:'play',admin:'admin'};
+
+// Build the hash string (no leading #) that represents the current state.
+function buildHash(){
+  if(view==='home')return'home';
+  if(view==='session'&&activeLadderId&&activeSessionId)
+    return'l/'+activeLadderId+'/s/'+activeSessionId+'/'+(SESS_TAB_TO_HASH[tab]||'info');
+  if(view==='dashboard'&&activeLadderId)
+    return'l/'+activeLadderId+'/'+(DASH_TAB_TO_HASH[tab]||'ladders');
+  return''; // transient views (newLadder/newSeason/newSession) aren't deep-linked
+}
+
+// Push current state into the URL. No-op when the URL already matches, so it's
+// safe to call on every render.
+function syncHash(){
+  const h=buildHash();
+  if(!h)return;
+  if(location.hash==='#'+h)return;
+  location.hash='#'+h;
+}
+
+// Parse the URL hash and set nav state. Returns true if it resolved to a real
+// destination, false if the hash was empty/unknown (caller falls back to home).
+function applyHash(){
+  const raw=(location.hash||'').replace(/^#/,'').trim();
+  if(!raw||raw==='home'){view='home';activeSessionId=null;return true}
+  const p=raw.split('/');
+  if(p[0]==='l'&&p[1]){
+    const l=ladders.find(x=>x.id===p[1]);
+    if(!l)return false;
+    activeLadderId=p[1];
+    if(p[2]==='s'&&p[3]){
+      const season=(l.seasons||[]).find(s=>(s.sessions||[]).some(ss=>ss.id===p[3]));
+      if(season)l.activeSeason=season.id;
+      activeSessionId=p[3];
+      view='session';
+      tab=HASH_TO_SESS_TAB[p[4]]||'info';
+      const ss=gSS();
+      mapOpen=ss?(shouldMapOpen(ss)||ss.started):false;
+      return true;
+    }
+    activeSessionId=null;
+    view='dashboard';
+    tab=HASH_TO_DASH_TAB[p[2]]||'overview';
+    return true;
+  }
+  return false;
+}
+
+// Browser back/forward, or a pasted/edited link. Ignore changes that already
+// match current state (those came from our own syncHash). If the hash points
+// nowhere valid, restore the URL to the current state rather than blanking it.
+window.addEventListener('hashchange',()=>{
+  if(location.hash==='#'+buildHash())return;
+  if(applyHash())render();else syncHash();
+});
 function gParts(ss,l){if(!ss||!l)return[];if(!ss.participants||!ss.participants.length)return l.players.filter(p=>p.active!==false&&!p.subbedOut);return ss.participants.map(id=>l.players.find(p=>p.id===id)).filter(p=>p&&p.active!==false&&!p.subbedOut)}
 async function save(l,skipRender){const i=ladders.findIndex(x=>x.id===l.id);if(i>=0)ladders[i]=l;else ladders.push(l);const r=await apiSave(l);if(r&&!skipRender)render();return r}
 
@@ -2317,15 +2388,19 @@ function rFullStats(stats,season,l){
   const podCol=['#ffcc00','#c0c0c0','#cd7f32'];
   const podBg=['rgba(255,204,0,0.08)','rgba(180,180,180,0.06)','rgba(205,127,50,0.08)'];
   // Add a Dink Rating column on the right. New grid: rank, delta, player, W, L, Diff, Bonus, Total, DR
-  const cols='28px 24px 1fr 24px 24px 36px 38px 42px 38px';
+  const cols='28px 24px 1fr 24px 24px 36px 38px 42px 48px';
   // Composite skill rating per player — same calc used in the Full Stats table.
   const drRatings=calcDinkRating(stats,season.sessions,l.players);
   h+='<div style="background:var(--surf1);border:0.5px solid var(--border);border-radius:10px;overflow:hidden">';
   h+='<div style="display:grid;grid-template-columns:'+cols+';gap:5px;padding:7px 12px;background:var(--surf2);border-bottom:1px solid var(--border);font-size:var(--st-hdr,8px);font-weight:700;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">';
   ['#','\u0394','Player','W','L','Diff','Bonus','Total','DR'].forEach((c,j)=>{
     const align=j===2?'left':j===1?'center':'right';
-    const extra=c==='DR'?';color:#a78bfa;border-left:1px solid rgba(167,139,250,0.25);padding-left:4px':'';
-    h+='<div style="text-align:'+align+extra+'">'+c+'</div>';
+    if(c==='DR'){
+      // Tappable header that opens the same legend as the Full Stats table.
+      h+='<div onclick="event.stopPropagation();openDRLegend()" title="Tap to learn how DR is calculated" style="text-align:right;color:#a78bfa;border-left:1px solid rgba(167,139,250,0.25);padding-left:4px;cursor:pointer;white-space:nowrap">\u2b21 DR <span style="font-size:8px;opacity:.5">\u2139</span></div>';
+    } else {
+      h+='<div style="text-align:'+align+'">'+c+'</div>';
+    }
   });
   h+='</div>';
 
@@ -2751,7 +2826,8 @@ function render(){
       else if(e.key==='Escape'){if(!_tied)npCancel();}
     };
     document.addEventListener('keydown',window._npKeyHandler);
-  } else {document.removeEventListener('keydown',window._npKeyHandler);window._npKeyHandler=null;}}
+  } else {document.removeEventListener('keydown',window._npKeyHandler);window._npKeyHandler=null;}
+  syncHash();}
 
 async function init(){
   applyTextSize();
@@ -2769,7 +2845,9 @@ async function init(){
     const data=await res.json();
     ladders=data.ladders||[];
     if(ladders.length){activeLadderId=ladders[0].id;const l=gL();if(l?.activeSeason)tab='overview'}
-    view='home';   // land on the cross-league upcoming-ladders hub
+    // Honor a deep link in the URL (#l/.../leaderboard etc.); otherwise land on
+    // the cross-league upcoming-ladders hub.
+    if(!applyHash())view='home';
     render();
   }catch(e){
     console.error('Init failed:',e);
