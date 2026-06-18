@@ -2387,13 +2387,14 @@ function rFullStats(stats,season,l){
   const podLabel=['1st','2nd','3rd'];
   const podCol=['#ffcc00','#c0c0c0','#cd7f32'];
   const podBg=['rgba(255,204,0,0.08)','rgba(180,180,180,0.06)','rgba(205,127,50,0.08)'];
-  // Add a Dink Rating column on the right. New grid: rank, delta, player, W, L, Diff, Bonus, Total, DR
-  const cols='28px 24px 1fr 24px 24px 36px 38px 42px 48px';
+  // Grid: rank, delta, player, W, L, Diff, Pts (scored, pre-bonus), Bonus, Total, DR.
+  // Widths trimmed slightly to fit the extra Pts column on narrow screens.
+  const cols='26px 22px 1fr 22px 22px 32px 34px 34px 40px 46px';
   // Composite skill rating per player — same calc used in the Full Stats table.
   const drRatings=calcDinkRating(stats,season.sessions,l.players);
   h+='<div style="background:var(--surf1);border:0.5px solid var(--border);border-radius:10px;overflow:hidden">';
   h+='<div style="display:grid;grid-template-columns:'+cols+';gap:5px;padding:7px 12px;background:var(--surf2);border-bottom:1px solid var(--border);font-size:var(--st-hdr,8px);font-weight:700;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">';
-  ['#','\u0394','Player','W','L','Diff','Bonus','Total','DR'].forEach((c,j)=>{
+  ['#','\u0394','Player','W','L','Diff','Pts','Bonus','Total','DR'].forEach((c,j)=>{
     const align=j===2?'left':j===1?'center':'right';
     if(c==='DR'){
       // Tappable header that opens the same legend as the Full Stats table.
@@ -2421,6 +2422,7 @@ function rFullStats(stats,season,l){
     h+='<div style="text-align:right;font-size:var(--st-stat,12px);font-weight:700;color:var(--lime)">'+s.w+'</div>';
     h+='<div style="text-align:right;font-size:var(--st-stat,12px);color:var(--muted)">'+s.l+'</div>';
     h+='<div style="text-align:right;font-size:var(--st-rank,11px);font-weight:'+(d>=0?'700':'400')+';color:'+(d>0?'var(--lime)':d<0?'#ff5c47':'var(--muted)')+'">'+(d>0?'+':'')+d+'</div>';
+    h+='<div style="text-align:right;font-size:var(--st-rank,11px);font-weight:700;color:var(--text-sec)">'+s.pf+'</div>';
     h+='<div style="text-align:right;font-size:var(--st-rank,11px);font-weight:800;color:'+(bonus>0?'var(--lime)':'var(--muted-lt)')+'">'+(bonus>0?'+'+bonus:'\u2014')+'</div>';
     h+='<div style="text-align:right;font-size:var(--st-stat,13px);font-weight:900;color:'+totalColor+'">'+total+'</div>';
     const dr=drRatings[s.id];const drStr=dr!=null?dr:'\u2014';
